@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "4Ventas",
+    "slug": "4ventas",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0C2ABF"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.fourventas.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0C2ABF"
+      },
+      "package": "com.fourventas.app"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "5174a310-8108-4ccd-8e54-4fb75f8cca96"
+      }
+    }
+  }
+}

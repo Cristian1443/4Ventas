@@ -1,0 +1,819 @@
+/**
+ * Ver Nota Screen - COPIA COMPLETA DEL WEB
+ * Layout exacto: 2 columnas (669px izquierda + 351px derecha)
+ */
+
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert
+} from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import { useApp } from '../../context/AppContext';
+import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
+import { imprimirNotaVenta, exportarNotaTXT, copiarNotaTexto, NotaImpresion } from '../../services/printer.matricial.service';
+
+export default function VerNotaScreen() {
+  const navigation = useNavigation<any>();
+  const route = useRoute<any>();
+  const { updateNotaVenta } = useApp();
+  
+  const ventaData = route.params?.ventaData;
+
+  if (!ventaData) {
+    return (
+      <ScreenWithSidebar currentScreen="VerNota" scrollable={false}>
+        <View style={styles.container}>
+          <Text style={styles.errorText}>No se encontró información de la venta</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Text style={styles.backLink}>← Volver</Text>
+          </TouchableOpacity>
+        </View>
+      </ScreenWithSidebar>
+    );
+  }
+
+  // Datos del cliente
+  const cliente = ventaData.cliente && typeof ventaData.cliente === 'object' 
+    ? ventaData.cliente 
+    : {
+        codigo: ventaData.clienteId || '',
+        nombre: ventaData.cliente || 'Cliente',
+        razonSocial: ventaData.cliente?.empresa || '',
+        nif: ventaData.cliente?.nif || '',
+        direccion: ventaData.cliente?.direccion || '',
+        telefono: ventaData.cliente?.telefono || '',
+        email: ventaData.cliente?.email || ''
+      };
+
+  // Artículos
+  const articulos = ventaData.articulos || ventaData.items || [];
+
+  // Totales
+  const totales = ventaData.totales || {
+    descuentos: '0,00',
+    porcentajeDescuento: '0',
+    iva: '0,00',
+    total: ventaData.precio?.replace('€', '').trim() || '0,00'
+  };
+
+  const tipoNota = ventaData.tipoNota || 'Serie P (Oficiales)';
+  const formaPago = ventaData.formaPago || 'Efectivo';
+
+  const handleModificar = () => {
+    navigation.navigate('NuevaVenta', { ventaData });
+  };
+
+  const handleImprimir = async () => {
+    Alert.alert(
+      'Imprimir Nota',
+      'Selecciona el formato de impresión',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'PDF (Imprimir)',
+          onPress: async () => {
+            try {
+              const notaImpresion: NotaImpresion = {
+                id: ventaData.id,
+                cliente: {
+                  codigo: cliente.codigo || cliente.id || ventaData.clienteId || '',
+                  nombre: cliente.nombre || cliente.empresa || 'Cliente',
+                  razonSocial: cliente.razonSocial || cliente.empresa,
+                  nif: cliente.nif,
+                  direccion: cliente.direccion,
+                  telefono: cliente.telefono
+                },
+                articulos: articulos.map((art: any) => ({
+                  nombre: art.nombre,
+                  cantidad: art.cantidad,
+                  precioUnitario: art.precioUnitario,
+                  descuento: art.descuento || 0,
+                  tipoDescuento: art.tipoDescuento || 'porcentaje',
+                  nota: art.nota
+                })),
+                totales: {
+                  descuentos: totales.descuentos || '0,00',
+                  porcentajeDescuento: totales.porcentajeDescuento || '0',
+                  iva: totales.iva || '0,00',
+                  total: totales.total || '0,00'
+                },
+                tipoNota,
+                formaPago,
+                fecha: ventaData.fecha || new Date().toLocaleString('es-ES')
+              };
+              
+              await imprimirNotaVenta(notaImpresion);
+              Alert.alert('Éxito', 'Nota enviada para impresión');
+            } catch (error: any) {
+              console.error('Error imprimiendo:', error);
+              Alert.alert('Error', `No se pudo imprimir: ${error?.message || 'Error desconocido'}`);
+            }
+          }
+        },
+        {
+          text: 'TXT (Matricial)',
+          onPress: async () => {
+            try {
+              const notaImpresion: NotaImpresion = {
+                id: ventaData.id,
+                cliente: {
+                  codigo: cliente.codigo || cliente.id || ventaData.clienteId || '',
+                  nombre: cliente.nombre || cliente.empresa || 'Cliente',
+                  razonSocial: cliente.razonSocial || cliente.empresa,
+                  nif: cliente.nif,
+                  direccion: cliente.direccion,
+                  telefono: cliente.telefono
+                },
+                articulos: articulos.map((art: any) => ({
+                  nombre: art.nombre,
+                  cantidad: art.cantidad,
+                  precioUnitario: art.precioUnitario,
+                  descuento: art.descuento || 0,
+                  tipoDescuento: art.tipoDescuento || 'porcentaje',
+                  nota: art.nota
+                })),
+                totales: {
+                  descuentos: totales.descuentos || '0,00',
+                  porcentajeDescuento: totales.porcentajeDescuento || '0',
+                  iva: totales.iva || '0,00',
+                  total: totales.total || '0,00'
+                },
+                tipoNota,
+                formaPago,
+                fecha: ventaData.fecha || new Date().toLocaleString('es-ES')
+              };
+              
+              await exportarNotaTXT(notaImpresion);
+              Alert.alert('Éxito', 'Archivo TXT generado y listo para compartir');
+            } catch (error: any) {
+              console.error('Error exportando TXT:', error);
+              Alert.alert('Error', `No se pudo exportar: ${error?.message || 'Error desconocido'}`);
+            }
+          }
+        },
+        {
+          text: 'Copiar Texto',
+          onPress: async () => {
+            try {
+              const notaImpresion: NotaImpresion = {
+                id: ventaData.id,
+                cliente: {
+                  codigo: cliente.codigo || cliente.id || ventaData.clienteId || '',
+                  nombre: cliente.nombre || cliente.empresa || 'Cliente',
+                  razonSocial: cliente.razonSocial || cliente.empresa,
+                  nif: cliente.nif,
+                  direccion: cliente.direccion,
+                  telefono: cliente.telefono
+                },
+                articulos: articulos.map((art: any) => ({
+                  nombre: art.nombre,
+                  cantidad: art.cantidad,
+                  precioUnitario: art.precioUnitario,
+                  descuento: art.descuento || 0,
+                  tipoDescuento: art.tipoDescuento || 'porcentaje',
+                  nota: art.nota
+                })),
+                totales: {
+                  descuentos: totales.descuentos || '0,00',
+                  porcentajeDescuento: totales.porcentajeDescuento || '0',
+                  iva: totales.iva || '0,00',
+                  total: totales.total || '0,00'
+                },
+                tipoNota,
+                formaPago,
+                fecha: ventaData.fecha || new Date().toLocaleString('es-ES')
+              };
+              
+              await copiarNotaTexto(notaImpresion);
+              Alert.alert('Éxito', 'Texto copiado al portapapeles');
+            } catch (error: any) {
+              console.error('Error copiando texto:', error);
+              Alert.alert('Error', `No se pudo copiar: ${error?.message || 'Error desconocido'}`);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleAnular = () => {
+    Alert.alert(
+      'Anular Venta',
+      '¿Estás seguro de que deseas anular esta venta?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Anular',
+          style: 'destructive',
+          onPress: async () => {
+            await updateNotaVenta(ventaData.id, 'anulada');
+            Alert.alert('Éxito', 'Venta anulada correctamente');
+            navigation.goBack();
+          }
+        }
+      ]
+    );
+  };
+
+  const handleCerrar = () => {
+    Alert.alert(
+      'Cerrar Operación',
+      '¿Confirmar el cierre de esta venta?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Cerrar',
+          onPress: async () => {
+            await updateNotaVenta(ventaData.id, 'cerrada');
+            Alert.alert('Éxito', 'Venta cerrada correctamente');
+            navigation.goBack();
+          }
+        }
+      ]
+    );
+  };
+
+  // Calcular valor del artículo
+  const calcularValorArticulo = (articulo: any) => {
+    const subtotal = articulo.precioUnitario * articulo.cantidad;
+    let descuentoAplicado = 0;
+    if (articulo.descuento > 0) {
+      if (articulo.tipoDescuento === 'porcentaje') {
+        descuentoAplicado = (subtotal * articulo.descuento) / 100;
+      } else {
+        descuentoAplicado = articulo.descuento * articulo.cantidad;
+      }
+    }
+    return (subtotal - descuentoAplicado).toFixed(2).replace('.', ',');
+  };
+
+  // Calcular porcentaje de descuento del artículo
+  const calcularPorcentajeArticulo = (articulo: any) => {
+    if (articulo.descuento > 0 && articulo.tipoDescuento === 'porcentaje') {
+      return `${articulo.descuento}%`;
+    }
+    const subtotal = articulo.precioUnitario * articulo.cantidad;
+    if (subtotal > 0 && articulo.descuento > 0) {
+      const desc = articulo.tipoDescuento === 'pesos' 
+        ? (articulo.descuento * articulo.cantidad) 
+        : 0;
+      return desc > 0 ? `${((desc / subtotal) * 100).toFixed(0)}%` : '0%';
+    }
+    return '0%';
+  };
+
+  return (
+    <ScreenWithSidebar currentScreen="VerNota" scrollable={false}>
+      <View style={styles.container}>
+        {/* Header Sticky */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Resumen Nota</Text>
+        </View>
+
+        {/* Content - 2 Columnas */}
+        <ScrollView 
+          horizontal
+          contentContainerStyle={styles.scrollContent}
+          showsHorizontalScrollIndicator={false}
+        >
+          <View style={styles.mainLayout}>
+            {/* COLUMNA IZQUIERDA - Nota de Venta Card (669px) */}
+            <View style={styles.leftColumn}>
+              <View style={styles.notaCard}>
+                {/* Header de la nota */}
+                <View style={styles.notaHeader}>
+                  <Text style={styles.notaTitle}>Nota de Venta</Text>
+
+                  {/* Cliente */}
+                  <View style={styles.clienteRow}>
+                    <View style={styles.clienteCodigo}>
+                      <Text style={styles.clienteCodigoText}>
+                        {cliente.codigo || cliente.id || ventaData.clienteId || ''}
+                      </Text>
+                    </View>
+                    <Text style={styles.clienteNombre}>
+                      {cliente.nombre || cliente.empresa || 'Cliente'}
+                    </Text>
+                  </View>
+
+                  {/* Razón Social y NIF */}
+                  <View style={styles.infoRow}>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>Razón Social:</Text>
+                      <Text style={styles.infoValue}>
+                        {cliente.razonSocial || cliente.empresa || '-'}
+                      </Text>
+                    </View>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>NIF:</Text>
+                      <Text style={styles.infoValue}>{cliente.nif || '-'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Dirección */}
+                  <View style={styles.infoRowSingle}>
+                    <Text style={styles.infoLabel}>Dirección:</Text>
+                    <Text style={styles.infoValue}>{cliente.direccion || '-'}</Text>
+                  </View>
+
+                  {/* Teléfono y Email */}
+                  <View style={styles.infoRow}>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>Teléfono:</Text>
+                      <Text style={styles.infoValue}>{cliente.telefono || '-'}</Text>
+                    </View>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>E-mail:</Text>
+                      <Text style={styles.infoValue}>{cliente.email || '-'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Tipo de Nota y Forma de Pago */}
+                  <View style={styles.badgesRow}>
+                    <View style={styles.badgeAzul}>
+                      <Text style={styles.badgeText}>
+                        Tipo de Nota: <Text style={styles.badgeTextLight}>{tipoNota}</Text>
+                      </Text>
+                    </View>
+                    <View style={styles.badgeAzul}>
+                      <Text style={styles.badgeText}>Forma de Pago: {formaPago}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Lista de artículos */}
+                <ScrollView style={styles.articulosContainer} nestedScrollEnabled>
+                  {articulos.map((articulo: any, index: number) => (
+                    <View key={articulo.id || index} style={styles.articuloRow}>
+                      {/* Artículo */}
+                      <View style={styles.articuloCol}>
+                        <Text style={styles.articuloLabel}>Artículo</Text>
+                        <View style={styles.articuloBox}>
+                          <Text style={styles.articuloText}>{articulo.nombre}</Text>
+                        </View>
+                      </View>
+
+                      {/* Cantidad */}
+                      <View style={styles.cantidadCol}>
+                        <Text style={styles.articuloLabel}>Cantidad</Text>
+                        <View style={styles.articuloBox}>
+                          <Text style={[styles.articuloText, { textAlign: 'center' }]}>
+                            {String(articulo.cantidad || 0).padStart(2, '0')}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Valor */}
+                      <View style={styles.valorCol}>
+                        <Text style={styles.articuloLabel}>Valor</Text>
+                        <View style={styles.articuloBox}>
+                          <Text style={styles.articuloText}>
+                            {calcularValorArticulo(articulo)} €
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Descuento */}
+                      <View style={styles.descuentoCol}>
+                        <Text style={styles.articuloLabel}>Descuento</Text>
+                        <View style={styles.descuentoBox}>
+                          <Text style={styles.articuloText}>
+                            {articulo.descuento > 0 
+                              ? `${articulo.descuento}${articulo.tipoDescuento === 'porcentaje' ? '%' : '€'}`
+                              : '-'}
+                          </Text>
+                          {articulo.descuento > 0 && (
+                            <Text style={styles.descuentoPorcentaje}>
+                              {calcularPorcentajeArticulo(articulo)}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+
+                      {/* Icono documento */}
+                      <View style={styles.iconoCol}>
+                        <Text style={styles.iconoDoc}>📄</Text>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+
+            {/* COLUMNA DERECHA - Botones y Totales (351px) */}
+            <View style={styles.rightColumn}>
+              {/* Botón Modificar */}
+              <TouchableOpacity style={styles.actionButton} onPress={handleModificar}>
+                <LinearGradient
+                  colors={['#092090', '#0C2ABF']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.actionButtonGradient}
+                >
+                  <Text style={styles.actionIcon}>✏️</Text>
+                  <Text style={styles.actionButtonText}>Modificar</Text>
+                  <View style={{ width: 16 }} />
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* Botón Imprimir */}
+              <TouchableOpacity style={styles.actionButton} onPress={handleImprimir}>
+                <LinearGradient
+                  colors={['#092090', '#0C2ABF']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.actionButtonGradient}
+                >
+                  <Text style={styles.actionIcon}>🖨️</Text>
+                  <Text style={styles.actionButtonText}>Imprimir</Text>
+                  <View style={{ width: 16 }} />
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* Botón Anular */}
+              <TouchableOpacity style={styles.actionButtonSecondary} onPress={handleAnular}>
+                <Text style={styles.actionIconSecondary}>✕</Text>
+                <Text style={styles.actionButtonSecondaryText}>Anular</Text>
+                <View style={{ width: 16 }} />
+              </TouchableOpacity>
+
+              {/* Separador */}
+              <View style={styles.separator} />
+
+              {/* Botón Cerrar Operación */}
+              <TouchableOpacity style={styles.actionButtonCerrar} onPress={handleCerrar}>
+                <LinearGradient
+                  colors={['#8bd600', '#c4ff57']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.actionButtonGradient}
+                >
+                  <Text style={styles.actionIconCerrar}>✓</Text>
+                  <Text style={styles.actionButtonCerrarText}>Cerrar Operación</Text>
+                  <View style={{ width: 16 }} />
+                </LinearGradient>
+              </TouchableOpacity>
+
+              {/* Panel de Totales */}
+              <View style={styles.totalesPanel}>
+                {/* Descuentos */}
+                <View style={styles.totalItem}>
+                  <Text style={styles.totalLabel}>Descuentos:</Text>
+                  <Text style={styles.totalValue}>
+                    {totales.descuentos} € ({totales.porcentajeDescuento || '0'}%)
+                  </Text>
+                </View>
+
+                {/* IVA o RE */}
+                <View style={styles.totalItem}>
+                  <Text style={styles.totalLabel}>IVA o RE</Text>
+                  <Text style={styles.totalValue}>{totales.iva} €</Text>
+                </View>
+
+                {/* Subtotal */}
+                <View style={styles.subtotalPill}>
+                  <Text style={styles.subtotalLabel}>Subtotal:</Text>
+                  <Text style={styles.subtotalValue}>{totales.total} €</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
+    </ScreenWithSidebar>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#ffffff'
+  },
+  header: {
+    height: 62,
+    backgroundColor: '#ffffff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a'
+  },
+  scrollContent: {
+    minWidth: 1020
+  },
+  mainLayout: {
+    flexDirection: 'row',
+    padding: 34,
+    paddingHorizontal: 60,
+    gap: 60,
+    minWidth: 1020
+  },
+  // COLUMNA IZQUIERDA
+  leftColumn: {
+    width: 669,
+    flexShrink: 0
+  },
+  notaCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    overflow: 'hidden'
+  },
+  notaHeader: {
+    padding: 34,
+    paddingTop: 22,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0'
+  },
+  notaTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 30,
+    color: '#0C2ABF'
+  },
+  clienteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16
+  },
+  clienteCodigo: {
+    backgroundColor: '#0C2ABF',
+    borderRadius: 5,
+    paddingVertical: 3,
+    paddingHorizontal: 5
+  },
+  clienteCodigoText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#ffffff',
+    lineHeight: 10
+  },
+  clienteNombre: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    flex: 1
+  },
+  infoRow: {
+    flexDirection: 'row',
+    gap: 16,
+    alignItems: 'center',
+    marginBottom: 10,
+    flexWrap: 'wrap'
+  },
+  infoRowSingle: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+    marginBottom: 10
+  },
+  infoItem: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center'
+  },
+  infoLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0C2ABF'
+  },
+  infoValue: {
+    fontSize: 16,
+    color: '#697b92'
+  },
+  badgesRow: {
+    flexDirection: 'row',
+    gap: 16,
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 10
+  },
+  badgeAzul: {
+    backgroundColor: '#0C2ABF',
+    borderRadius: 5,
+    paddingVertical: 5,
+    paddingHorizontal: 10
+  },
+  badgeText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+    lineHeight: 14
+  },
+  badgeTextLight: {
+    fontWeight: '400'
+  },
+  articulosContainer: {
+    maxHeight: 367,
+    padding: 34,
+    paddingVertical: 20
+  },
+  articuloRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    alignItems: 'flex-start'
+  },
+  articuloCol: {
+    width: 279
+  },
+  cantidadCol: {
+    width: 60
+  },
+  valorCol: {
+    width: 93
+  },
+  descuentoCol: {
+    width: 115
+  },
+  iconoCol: {
+    width: 20,
+    alignItems: 'flex-end',
+    paddingTop: 15
+  },
+  articuloLabel: {
+    fontSize: 8,
+    fontWeight: '600',
+    color: '#0C2ABF',
+    marginBottom: 12,
+    paddingLeft: 8
+  },
+  articuloBox: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 5,
+    padding: 15,
+    paddingHorizontal: 8
+  },
+  articuloText: {
+    fontSize: 14,
+    color: '#697b92',
+    lineHeight: 14
+  },
+  descuentoBox: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 5,
+    padding: 15,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
+  },
+  descuentoPorcentaje: {
+    fontSize: 12,
+    color: '#07bc13',
+    lineHeight: 12
+  },
+  iconoDoc: {
+    fontSize: 16
+  },
+  // COLUMNA DERECHA
+  rightColumn: {
+    width: 351,
+    flexShrink: 0,
+    gap: 16
+  },
+  actionButton: {
+    borderRadius: 30,
+    overflow: 'hidden'
+  },
+  actionButtonGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 15
+  },
+  actionIcon: {
+    fontSize: 16,
+    width: 16,
+    height: 16
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff',
+    lineHeight: 14
+  },
+  actionButtonSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 15,
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: '#092090',
+    backgroundColor: '#ffffff'
+  },
+  actionIconSecondary: {
+    fontSize: 16,
+    width: 16,
+    height: 16,
+    color: '#092090'
+  },
+  actionButtonSecondaryText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#092090',
+    lineHeight: 14
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#e2e8f0',
+    marginVertical: 10
+  },
+  actionButtonCerrar: {
+    borderRadius: 30,
+    overflow: 'hidden'
+  },
+  actionIconCerrar: {
+    fontSize: 12,
+    width: 12,
+    height: 16,
+    color: '#1a1a1a'
+  },
+  actionButtonCerrarText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    lineHeight: 14
+  },
+  totalesPanel: {
+    backgroundColor: '#f3f7fd',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 34,
+    marginTop: 40
+  },
+  totalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#697b92',
+    lineHeight: 18
+  },
+  totalValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#697b92',
+    lineHeight: 18
+  },
+  subtotalPill: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    paddingHorizontal: 18,
+    borderRadius: 50,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+    marginTop: 10
+  },
+  subtotalLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0C2ABF',
+    lineHeight: 18
+  },
+  subtotalValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0C2ABF',
+    lineHeight: 18
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#ef4444',
+    textAlign: 'center',
+    marginTop: 40
+  },
+  backLink: {
+    fontSize: 16,
+    color: '#0C2ABF',
+    textAlign: 'center',
+    marginTop: 20
+  }
+});
