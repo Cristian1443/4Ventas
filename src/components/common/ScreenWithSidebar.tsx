@@ -24,8 +24,6 @@ export default function ScreenWithSidebar({
   // COMPORTAMIENTO 1: MÓVIL (Sin Sidebar)
   if (!showSidebar) {
     return (
-      // IMPORTANTE: Este View externo con flex: 1 es lo que faltaba.
-      // Sin él, el ScrollView hijo no sabe qué altura tener.
       <View style={styles.masterContainer}>
         {scrollable ? (
           <ScrollView 
@@ -66,8 +64,7 @@ export default function ScreenWithSidebar({
               {children}
             </ScrollView>
           ) : (
-            // Si la pantalla (como Nueva Venta) maneja su propio scroll,
-            // le damos un contenedor flex: 1 limpio para que ella lo gestione.
+            // Contenedor fijo para pantallas con su propio scroll (como NuevaVenta)
             <View style={styles.fixedContentContainer}>
               {children}
             </View>
@@ -80,45 +77,43 @@ export default function ScreenWithSidebar({
 }
 
 const styles = StyleSheet.create({
-  // EL CONTENEDOR MAESTRO: La clave de todo.
   masterContainer: {
     flex: 1,
     backgroundColor: '#fff',
     width: '100%',
+    // CRÍTICO PARA WEB: Forzar altura de la ventana
+    // En móvil usa '100%', en web usa '100vh'
+    height: (Platform.OS === 'web' ? '100vh' : '100%') as any,
+    overflow: 'hidden', 
   },
   flexOne: {
     flex: 1,
-    minHeight: 0, // CRÍTICO: Permite que flex funcione correctamente con ScrollView
+    minHeight: 0, // Permite al flex encogerse si es necesario
   },
-  
-  // Layout dividido
   splitLayout: {
     flex: 1,
     flexDirection: 'row',
-    minHeight: 0, // CRÍTICO: Permite que flex funcione correctamente
+    height: '100%', // Asegura que ocupe todo el alto del padre
+    overflow: 'hidden',
   },
-  
   sidebarBox: {
-    flexShrink: 0, // No se encoge
+    flexShrink: 0,
     borderRightWidth: 1,
     borderColor: '#e2e8f0',
     backgroundColor: '#fff',
     zIndex: 10,
-    alignSelf: 'stretch', // Ocupa toda la altura disponible
-    minHeight: 0, // CRÍTICO: Permite que flex funcione correctamente
+    height: '100%', // Altura completa
   },
-  
   contentBox: {
     flex: 1,
     backgroundColor: '#fff',
-    minHeight: 0, // CRÍTICO: Permite que el scroll interno funcione
-    // Sin height: '100%' ni overflow: 'hidden' para permitir scroll interno
+    height: '100%', // Altura completa
+    overflow: 'hidden',
   },
-  
   fixedContentContainer: {
     flex: 1,
-    minHeight: 0, // CRÍTICO: Permite que ScrollView interno funcione
+    height: '100%', // Altura completa
     width: '100%',
-    // Sin overflow: 'hidden' para permitir scroll interno
+    overflow: 'hidden', // Importante para que el hijo maneje el scroll
   }
 });

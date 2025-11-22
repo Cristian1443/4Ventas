@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,9 +7,7 @@ import {
   ScrollView,
   TextInput,
   Alert,
-  Modal,
-  Platform,
-  Dimensions
+  Modal
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -33,7 +31,6 @@ interface ArticuloVenta {
 export default function NuevaVentaScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const insets = useSafeAreaInsets();
   const { addNotaVenta, clientes, articulos } = useApp();
 
   // --- ESTADOS ---
@@ -119,10 +116,10 @@ export default function NuevaVentaScreen() {
           const venta = {
             id: `N${Date.now().toString().slice(-6)}`,
             cliente: clienteSeleccionado.nombre,
-        clienteId: clienteSeleccionado.id,
+            clienteId: clienteSeleccionado.id,
             fecha: new Date().toISOString(),
             precio: `${totales.total.toFixed(2)} €`,
-        estado: estadoPago === 'pagado' ? 'cerrada' : 'pendiente',
+            estado: estadoPago === 'pagado' ? 'cerrada' : 'pendiente',
             tipoNota, formaPago, items: carrito, totalesNumericos: totales
           };
           await addNotaVenta(venta as any);
@@ -139,77 +136,75 @@ export default function NuevaVentaScreen() {
         <Text style={styles.headerTitle}>Nueva Venta</Text>
       </View>
 
-      {/* CONTENEDOR PRINCIPAL DIVIDIDO - FLEX 1 CRÍTICO */}
+      {/* CONTENEDOR PRINCIPAL DIVIDIDO */}
       <View style={styles.mainContent}>
         
-        {/* PANEL IZQUIERDO - FORMULARIO */}
+        {/* PANEL IZQUIERDO - FORMULARIO SCROLLEABLE */}
         <View style={styles.leftPanel}>
-          {/* Wrapper del ScrollView con flex: 1 y overflow hidden */}
-          <View style={styles.scrollWrapper}>
-            <ScrollView 
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollInner}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={true}
-            >
+          <ScrollView 
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollInner}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={true}
+          >
             {/* Cliente */}
-              <View style={[styles.field, { zIndex: 20 }]}>
-                <Text style={styles.label}>Cliente *</Text>
-                <TouchableOpacity style={styles.select} onPress={() => setModalCliente(true)}>
-                  <Text style={{ color: clienteSeleccionado ? '#1e293b' : '#94a3b8' }}>
-                    {clienteSeleccionado?.nombre || 'Seleccionar Cliente...'}
-                  </Text>
+            <View style={[styles.field, { zIndex: 20 }]}>
+              <Text style={styles.label}>Cliente *</Text>
+              <TouchableOpacity style={styles.select} onPress={() => setModalCliente(true)}>
+                <Text style={{ color: clienteSeleccionado ? '#1e293b' : '#94a3b8' }}>
+                  {clienteSeleccionado?.nombre || 'Seleccionar Cliente...'}
+                </Text>
+                <Text>▼</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Estado */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Estado inicial</Text>
+              <View style={styles.switchRow}>
+                {['pagado', 'pendiente'].map((est) => (
+                  <TouchableOpacity
+                    key={est}
+                    style={[styles.switchBtn, estadoPago === est && (est === 'pagado' ? styles.bgWhite : styles.bgBlue)]}
+                    onPress={() => setEstadoPago(est as any)}
+                  >
+                    <Text style={[styles.switchTxt, estadoPago === est && (est === 'pagado' ? styles.txtBlue : styles.txtWhite)]}>
+                      {est.charAt(0).toUpperCase() + est.slice(1)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Tipo y Forma Pago */}
+            <View style={[styles.row, { zIndex: 15 }]}>
+              <View style={[styles.col, { zIndex: 16 }]}>
+                <Text style={styles.label}>Tipo Doc.</Text>
+                <TouchableOpacity style={styles.select} onPress={() => { setDropdownTipo(!dropdownTipo); setDropdownPago(false); }}>
+                  <Text numberOfLines={1}>{tipoNota}</Text>
                   <Text>▼</Text>
                 </TouchableOpacity>
-              </View>
-
-              {/* Estado */}
-              <View style={styles.field}>
-                <Text style={styles.label}>Estado</Text>
-                <View style={styles.switchRow}>
-                  {['pagado', 'pendiente'].map((est) => (
-                <TouchableOpacity
-                      key={est}
-                      style={[styles.switchBtn, estadoPago === est && (est === 'pagado' ? styles.bgWhite : styles.bgBlue)]}
-                      onPress={() => setEstadoPago(est as any)}
-                >
-                      <Text style={[styles.switchTxt, estadoPago === est && (est === 'pagado' ? styles.txtBlue : styles.txtWhite)]}>
-                        {est.charAt(0).toUpperCase() + est.slice(1)}
-                  </Text>
-                </TouchableOpacity>
-                  ))}
-                </View>
-            </View>
-
-              {/* Tipo y Forma Pago */}
-              <View style={[styles.row, { zIndex: 15 }]}>
-                <View style={[styles.col, { zIndex: 16 }]}>
-                  <Text style={styles.label}>Tipo Doc.</Text>
-                  <TouchableOpacity style={styles.select} onPress={() => { setDropdownTipo(!dropdownTipo); setDropdownPago(false); }}>
-                    <Text numberOfLines={1}>{tipoNota}</Text>
-                    <Text>▼</Text>
-                </TouchableOpacity>
-                  {dropdownTipo && (
-                    <View style={styles.dropdown}>
-                      {['Serie P (Oficiales)', 'Serie X', 'Pedido'].map(t => (
-                        <TouchableOpacity key={t} style={styles.dropItem} onPress={() => { setTipoNota(t); setDropdownTipo(false); }}>
-                          <Text>{t}</Text>
+                {dropdownTipo && (
+                  <View style={styles.dropdown}>
+                    {['Serie P (Oficiales)', 'Serie X', 'Pedido'].map(t => (
+                      <TouchableOpacity key={t} style={styles.dropItem} onPress={() => { setTipoNota(t); setDropdownTipo(false); }}>
+                        <Text>{t}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 )}
               </View>
-                <View style={[styles.col, { zIndex: 15 }]}>
-                  <Text style={styles.label}>Forma Pago</Text>
-                  <TouchableOpacity style={styles.select} onPress={() => { setDropdownPago(!dropdownPago); setDropdownTipo(false); }}>
-                    <Text numberOfLines={1}>{formaPago}</Text>
-                    <Text>▼</Text>
+              <View style={[styles.col, { zIndex: 15 }]}>
+                <Text style={styles.label}>Forma Pago</Text>
+                <TouchableOpacity style={styles.select} onPress={() => { setDropdownPago(!dropdownPago); setDropdownTipo(false); }}>
+                  <Text numberOfLines={1}>{formaPago}</Text>
+                  <Text>▼</Text>
                 </TouchableOpacity>
-                  {dropdownPago && (
-                    <View style={styles.dropdown}>
-                      {['Efectivo', 'Tarjeta', 'Bizum'].map(p => (
-                        <TouchableOpacity key={p} style={styles.dropItem} onPress={() => { setFormaPago(p); setDropdownPago(false); }}>
-                          <Text>{p}</Text>
+                {dropdownPago && (
+                  <View style={styles.dropdown}>
+                    {['Efectivo', 'Tarjeta', 'Bizum'].map(p => (
+                      <TouchableOpacity key={p} style={styles.dropItem} onPress={() => { setFormaPago(p); setDropdownPago(false); }}>
+                        <Text>{p}</Text>
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -217,56 +212,58 @@ export default function NuevaVentaScreen() {
               </View>
             </View>
 
-              <View style={styles.divider} />
-              <Text style={styles.secTitle}>Añadir Línea</Text>
+            <View style={styles.divider} />
+            <Text style={styles.secTitle}>Añadir Línea</Text>
 
             {/* Artículo */}
-              <View style={[styles.field, { zIndex: 10 }]}>
-                <Text style={styles.label}>Artículo *</Text>
-                <TouchableOpacity style={styles.select} onPress={() => setModalArticulo(true)}>
-                  <Text style={{ color: articuloSeleccionado ? '#1e293b' : '#94a3b8' }}>
-                    {articuloSeleccionado?.nombre || 'Buscar en catálogo...'}
-                  </Text>
-                  <Text>🔍</Text>
-                </TouchableOpacity>
+            <View style={[styles.field, { zIndex: 10 }]}>
+              <Text style={styles.label}>Artículo *</Text>
+              <TouchableOpacity style={styles.select} onPress={() => setModalArticulo(true)}>
+                <Text style={{ color: articuloSeleccionado ? '#1e293b' : '#94a3b8' }}>
+                  {articuloSeleccionado?.nombre || 'Buscar en catálogo...'}
+                </Text>
+                <Text>🔍</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Cantidad y Precio */}
-              <View style={styles.row}>
-                <View style={styles.col}>
+            <View style={styles.row}>
+              <View style={styles.col}>
                 <Text style={styles.label}>Cant.</Text>
-                  <TextInput style={styles.input} value={cant} onChangeText={setCant} keyboardType="numeric" selectTextOnFocus />
-                </View>
-                <View style={styles.col}>
-                  <Text style={styles.label}>Precio</Text>
-                  <TextInput style={styles.input} value={precio} onChangeText={setPrecio} keyboardType="numeric" placeholder="0.00" />
-                </View>
+                <TextInput style={styles.input} value={cant} onChangeText={setCant} keyboardType="numeric" selectTextOnFocus />
+              </View>
+              <View style={styles.col}>
+                <Text style={styles.label}>Precio Unit.</Text>
+                <TextInput style={styles.input} value={precio} onChangeText={setPrecio} keyboardType="numeric" placeholder="0.00" />
+              </View>
             </View>
 
             {/* Descuento */}
-              <View style={styles.field}>
-                <Text style={styles.label}>Descuento</Text>
-                <View style={{ flexDirection: 'row' }}>
-                  <TextInput style={[styles.input, { flex: 1, borderRightWidth: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }]} value={desc} onChangeText={setDesc} keyboardType="numeric" placeholder="0" />
-                  <TouchableOpacity style={styles.suffixBtn} onPress={() => setTipoDesc(t => t === 'porcentaje' ? 'pesos' : 'porcentaje')}>
-                    <Text style={{ fontWeight: 'bold', color: '#092090' }}>{tipoDesc === 'porcentaje' ? '%' : '€'}</Text>
-                  </TouchableOpacity>
-                </View>
+            <View style={styles.field}>
+              <Text style={styles.label}>Descuento</Text>
+              <View style={{ flexDirection: 'row' }}>
+                <TextInput style={[styles.input, { flex: 1, borderRightWidth: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }]} value={desc} onChangeText={setDesc} keyboardType="numeric" placeholder="0" />
+                <TouchableOpacity style={styles.suffixBtn} onPress={() => setTipoDesc(t => t === 'porcentaje' ? 'pesos' : 'porcentaje')}>
+                  <Text style={{ fontWeight: 'bold', color: '#092090' }}>{tipoDesc === 'porcentaje' ? '%' : '€'}</Text>
+                </TouchableOpacity>
               </View>
-
-              {/* Nota */}
-              <View style={styles.field}>
-                <Text style={styles.label}>Nota</Text>
-                <TextInput style={[styles.input, { height: 60, textAlignVertical: 'top', paddingTop: 8 }]} multiline value={notaItem} onChangeText={setNotaItem} placeholder="Detalle opcional..." />
-              </View>
-
-              <TouchableOpacity style={styles.addBtn} onPress={agregarAlCarrito}>
-                <LinearGradient colors={['#092090', '#0C2ABF']} style={styles.gradBtn}><Text style={styles.txtBtn}>+ AÑADIR AL CARRITO</Text></LinearGradient>
-              </TouchableOpacity>
-            </ScrollView>
             </View>
 
-          {/* Footer Izquierdo Fijo */}
+            {/* Nota */}
+            <View style={styles.field}>
+              <Text style={styles.label}>Nota (opcional)</Text>
+              <TextInput style={[styles.input, { height: 60, textAlignVertical: 'top', paddingTop: 8 }]} multiline value={notaItem} onChangeText={setNotaItem} placeholder="Detalle opcional..." />
+            </View>
+
+            <TouchableOpacity style={styles.addBtn} onPress={agregarAlCarrito}>
+              <LinearGradient colors={['#092090', '#0C2ABF']} style={styles.gradBtn}><Text style={styles.txtBtn}>+ AÑADIR AL CARRITO</Text></LinearGradient>
+            </TouchableOpacity>
+            
+            {/* Espacio extra al final para que no se corte lo último */}
+            <View style={{ height: 40 }} />
+          </ScrollView>
+
+          {/* Footer Izquierdo Fijo (Historial / Crear Nota) */}
           <View style={styles.panelFooter}>
             <TouchableOpacity style={styles.btnSec} onPress={() => setModalHistorial(true)}><Text style={{color:'#64748b', fontWeight:'600'}}>Historial</Text></TouchableOpacity>
             <TouchableOpacity style={styles.btnPri} onPress={guardarVenta}>
@@ -280,7 +277,10 @@ export default function NuevaVentaScreen() {
           <Text style={styles.secTitle}>Resumen ({carrito.length})</Text>
           <View style={{flex: 1, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, marginBottom: 10}}>
             {carrito.length === 0 ? (
-               <View style={{flex:1, alignItems:'center', justifyContent:'center', opacity:0.5}}><Text style={{fontSize:40}}>🛒</Text><Text>Vacío</Text></View>
+               <View style={{flex:1, alignItems:'center', justifyContent:'center', opacity:0.5}}>
+                 <Text style={{fontSize:40}}>🛒</Text>
+                 <Text style={{marginTop: 10, color: '#64748b'}}>Carrito Vacío</Text>
+               </View>
             ) : (
               <ScrollView style={{ flex: 1 }} contentContainerStyle={{padding: 0}}>
                 {carrito.map(i => (
@@ -288,13 +288,13 @@ export default function NuevaVentaScreen() {
                     <View style={{ flex: 1 }}>
                         <Text style={{fontWeight:'600', color: '#1e293b'}}>{i.nombre}</Text>
                         <Text style={{fontSize:12, color: '#64748b'}}>x{i.cantidad}  {i.descuento > 0 ? `(-${i.descuento})` : ''}</Text>
-              </View>
+                    </View>
                     <Text style={{ fontWeight:'bold', color: '#1e293b' }}>{(i.precioUnitario * i.cantidad).toFixed(2)} €</Text>
                     <TouchableOpacity onPress={() => eliminarDelCarrito(i.id)} style={{marginLeft:12, padding: 4}}><Text style={{color:'#ef4444', fontSize: 18}}>×</Text></TouchableOpacity>
-                </View>
-              ))}
-            </ScrollView>
-          )}
+                  </View>
+                ))}
+              </ScrollView>
+            )}
           </View>
           
           <View style={styles.totalBox}>
@@ -332,11 +332,12 @@ const styles = StyleSheet.create({
   header: { height: 60, justifyContent: 'center', paddingHorizontal: 20, borderBottomWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#1e293b' },
   
-  // LAYOUT PRINCIPAL
+  // LAYOUT PRINCIPAL - CORREGIDO
   mainContent: { 
     flex: 1,
     flexDirection: 'row',
-    minHeight: 0, // CRÍTICO: Permite que flex funcione correctamente
+    height: '100%', // Asegurar altura completa
+    overflow: 'hidden' // Evitar desbordamiento
   },
   
   // PANEL IZQUIERDO
@@ -346,19 +347,18 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     backgroundColor: '#f8fafc', 
     flexDirection: 'column',
-    flexShrink: 0, // No se encoge
-    alignSelf: 'stretch', // Ocupa toda la altura disponible
-  },
-  scrollWrapper: {
-    flex: 1,
-    minHeight: 0, // CRÍTICO: Permite que ScrollView calcule su altura
+    flexShrink: 0,
+    height: '100%',
+    // Eliminado overflow: 'hidden' para que el scroll funcione natural
   },
   scrollView: {
     flex: 1,
   },
   scrollInner: {
     padding: 20,
-    paddingBottom: 150, // Espacio extra para que el scroll funcione y no quede tapado por el footer
+    // No es necesario paddingBottom gigante si la estructura flex es correcta,
+    // pero un poco de aire al final siempre es bueno.
+    paddingBottom: 20 
   },
   
   // PANEL DERECHO
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: '#fff',
     flexDirection: 'column',
-    minHeight: 0, // CRÍTICO: Permite que flex funcione correctamente
+    height: '100%'
   },
 
   // UI Components
@@ -395,20 +395,20 @@ const styles = StyleSheet.create({
   
   suffixBtn: { width: 46, borderWidth: 1, borderColor: '#cbd5e1', borderLeftWidth: 0, borderTopRightRadius: 8, borderBottomRightRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f1f5f9' },
   
-  addBtn: { marginTop: 10, borderRadius: 8, overflow: 'hidden', marginBottom: 20 },
+  addBtn: { marginTop: 10, borderRadius: 8, overflow: 'hidden', marginBottom: 10 },
   gradBtn: { padding: 14, alignItems: 'center' },
   txtBtn: { color: '#fff', fontWeight: '700', fontSize: 14 },
   txtBtnBlack: { color: '#1a1a1a', fontWeight: '800', fontSize: 14 },
   
   panelFooter: { 
     padding: 16, 
-    paddingBottom: 20,
     borderTopWidth: 1, 
     borderColor: '#e2e8f0', 
     flexDirection: 'row', 
     gap: 12, 
-    backgroundColor: '#fff', 
-    flexShrink: 0, // No se encoge, siempre visible
+    backgroundColor: '#fff',
+    // Asegurar que se quede abajo pero visible
+    zIndex: 10
   },
   btnSec: { flex: 1, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, justifyContent: 'center', alignItems: 'center', height: 48, backgroundColor: '#f8fafc' },
   btnPri: { flex: 2, borderRadius: 8, overflow: 'hidden', height: 48 },

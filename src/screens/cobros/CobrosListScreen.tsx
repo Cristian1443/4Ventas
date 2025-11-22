@@ -1,16 +1,17 @@
 /**
- * Cobros List Screen - EXACTAMENTE IGUAL A LA WEB
- * Lista de cobros con búsqueda, ordenamiento y estadísticas
+ * Cobros List Screen
+ * Muestra lista de CLIENTES con deuda pendiente agrupada.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  TextInput
+  TextInput,
+  Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -23,11 +24,11 @@ export default function CobrosListScreen() {
   const { cobros, clientes } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState<'nombre' | 'monto' | 'fecha'>('nombre');
+  const [sortBy, setSortBy] = useState<'nombre' | 'monto' | 'notas'>('nombre');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [showModal, setShowModal] = useState(false);
 
-  // Calcular totales
+  // 1. Calcular totales globales
   const cobradoTotal = cobros
     .filter(c => c.estado === 'pagado')
     .reduce((sum, cobro) => {
@@ -42,69 +43,83 @@ export default function CobrosListScreen() {
 
   const porcentaje = totalGeneral > 0 ? Math.round((cobradoTotal / totalGeneral) * 100) : 0;
 
-  // Filtrar clientes con cobros pendientes
-  const clientesConCobrosPendientes = clientes
+  // 2. Agrupar Cobros Pendientes por Cliente
+  const clientesPendientes = useMemo(() => {
+    // Filtramos solo los cobros pendientes
+    const cobrosPendientesRaw = cobros.filter(c => c.estado === 'pendiente');
+
+    // Mapeamos los clientes y calculamos sus totales
+    const listaAgrupada = clientes
+      .map(cliente => {
+        // Buscar notas asociadas a este cliente
+        const susCobros = cobrosPendientesRaw.filter(cobro => 
+          (cobro.clienteId === cliente.id) ||
+          (cobro.cliente && cobro.cliente.includes(cliente.nombre)) ||
+          (cobro.cliente && cobro.cliente.includes(cliente.empresa))
+        );
+
+        if (susCobros.length === 0) return null;
+
+        // Calcular total de deuda del cliente
+        const deudaTotal = susCobros.reduce((sum, cobro) => {
+           const monto = parseFloat(cobro.monto.replace(',', '.').replace('€', '').trim() || '0');
+           return sum + monto;
+        }, 0);
+
+        return {
+          ...cliente,
+          notasPendientesCount: susCobros.length,
+          deudaTotal: deudaTotal
+        };
+      })
+      .filter(c => c !== null) as any[]; // Eliminar clientes sin deuda
+
+    return listaAgrupada;
+  }, [cobros, clientes]);
+
+  // 3. Filtrar y Ordenar la lista agrupada
+  const clientesFiltrados = clientesPendientes
     .filter(cliente =>
-      cobros.some(cobro =>
-        cobro.estado === 'pendiente' &&
-        (cobro.clienteId === cliente.id ||
-          cobro.cliente.includes(cliente.nombre) ||
-          cobro.cliente.includes(cliente.empresa))
-      )
-    )
-    .map(cliente => {
-      const cobroPendiente = cobros.find(cobro =>
-        cobro.estado === 'pendiente' &&
-        (cobro.clienteId === cliente.id ||
-          cobro.cliente.includes(cliente.nombre) ||
-          cobro.cliente.includes(cliente.empresa))
-      );
-      const montoPendiente = cobroPendiente
-        ? parseFloat(cobroPendiente.monto.replace(',', '.').replace('€', '').trim() || '0')
-        : 0;
-
-      return {
-        ...cliente,
-        montoPendiente,
-        cobroId: cobroPendiente?.id
-      };
-    });
-
-  // Transformar cobros a formato para mostrar
-  const cobrosConFormato = cobros.map(cobro => {
-    const monto = parseFloat(cobro.monto.replace(',', '.').replace('€', '').trim() || '0');
-    return {
-      id: cobro.id,
-      nombre: cobro.cliente,
-      empresa: cobro.cliente,
-      fecha: cobro.fecha,
-      monto: monto,
-      estado: cobro.estado,
-      estadoTexto: cobro.estado === 'pendiente' ? 'Pendiente' : 'Pagado',
-      estadoColor: cobro.estado === 'pendiente' ? '#F59F0A' : '#07BC13'
-    };
-  });
-
-  // Filtrar y ordenar cobros
-  const cobrosFiltrados = cobrosConFormato
-    .filter(cobro =>
-      cobro.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cobro.empresa.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      cobro.id.toLowerCase().includes(searchTerm.toLowerCase())
+      cliente.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cliente.empresa.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cliente.id.toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => {
+      let comparison = 0;
       if (sortBy === 'nombre') {
-        return sortOrder === 'asc' ? a.nombre.localeCompare(b.nombre) : b.nombre.localeCompare(a.nombre);
+        comparison = a.nombre.localeCompare(b.nombre);
       } else if (sortBy === 'monto') {
-        return sortOrder === 'asc' ? a.monto - b.monto : b.monto - a.monto;
-      } else if (sortBy === 'fecha') {
-        return sortOrder === 'asc' ? a.fecha.localeCompare(b.fecha) : b.fecha.localeCompare(a.fecha);
+        comparison = a.deudaTotal - b.deudaTotal;
+      } else if (sortBy === 'notas') {
+        comparison = a.notasPendientesCount - b.notasPendientesCount;
       }
-      return 0;
+      return sortOrder === 'asc' ? comparison : -comparison;
     });
 
+  // Función de impresión (Simulada)
+  const handlePrintOptions = () => {
+    Alert.alert(
+      'Imprimir Listado de Cobros',
+      'Seleccione una opción:',
+      [
+        {
+          text: 'Listado Total (Todos)',
+          onPress: () => Alert.alert('Imprimiendo', 'Imprimiendo listado general de pendientes...')
+        },
+        {
+          text: 'Cancelar',
+          style: 'cancel'
+        }
+      ]
+    );
+  };
+
+  const handlePrintCliente = (cliente: any) => {
+    Alert.alert('Imprimir', `Imprimiendo extracto de pendientes para: ${cliente.nombre}`);
+  };
+
   return (
-    <ScreenWithSidebar currentScreen="Cobros" scrollable={false}>
+    <ScreenWithSidebar currentScreen="CobrosList" scrollable={false}>
       <View style={styles.container}>
         <ScrollView
           style={styles.scrollView}
@@ -115,30 +130,39 @@ export default function CobrosListScreen() {
           <View style={styles.header}>
             <View style={styles.headerLeft}>
               <Text style={styles.headerIcon}>📄</Text>
-              <Text style={styles.headerTitle}>Cobros</Text>
+              {/* Cambio de título solicitado */}
+              <Text style={styles.headerTitle}>Cobros Pendientes</Text>
             </View>
-            <TouchableOpacity
-              style={styles.newCobranzaButton}
-              onPress={() => setShowModal(true)}
-            >
-              <LinearGradient
-                colors={['#092090', '#0C2ABF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.newCobranzaGradient}
-              >
-                <Text style={styles.newCobranzaIcon}>+</Text>
-                <Text style={styles.newCobranzaText}>Nueva Cobranza</Text>
-                {clientesConCobrosPendientes.length > 0 && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{clientesConCobrosPendientes.length}</Text>
-                  </View>
-                )}
-              </LinearGradient>
-            </TouchableOpacity>
+            
+            <View style={styles.headerActions}>
+                {/* Botón de Impresión General */}
+                <TouchableOpacity
+                  style={styles.printButtonHeader}
+                  onPress={handlePrintOptions}
+                >
+                  <Text style={styles.printIcon}>🖨️</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.newCobranzaButton}
+                  onPress={() => setShowModal(true)}
+                >
+                  <LinearGradient
+                    colors={['#092090', '#0C2ABF']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.newCobranzaGradient}
+                  >
+                    <Text style={styles.newCobranzaIcon}>+</Text>
+                    <Text style={styles.newCobranzaText}>Nueva Cobranza</Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+            </View>
           </View>
 
-          <Text style={styles.subtitle}>Gestioná tus cobros.</Text>
+          <Text style={styles.subtitle}>
+            Clientes con facturas pendientes de cobro.
+          </Text>
 
           {/* Total bar */}
           <View style={styles.totalBar}>
@@ -170,7 +194,7 @@ export default function CobrosListScreen() {
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Buscar cliente"
+              placeholder="Buscar cliente..."
               placeholderTextColor="#697b92"
               value={searchTerm}
               onChangeText={setSearchTerm}
@@ -194,16 +218,16 @@ export default function CobrosListScreen() {
               <TouchableOpacity
                 style={styles.sortButton}
                 onPress={() => {
-                  if (sortBy === 'fecha') {
+                  if (sortBy === 'notas') {
                     setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
                   } else {
-                    setSortBy('fecha');
-                    setSortOrder('asc');
+                    setSortBy('notas');
+                    setSortOrder('desc'); // Default desc para ver quien tiene mas notas
                   }
                 }}
               >
-                <Text style={[styles.sortIcon, sortBy === 'fecha' && styles.sortIconActive]}>
-                  📅
+                <Text style={[styles.sortIcon, sortBy === 'notas' && styles.sortIconActive]}>
+                  🔢
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -213,7 +237,7 @@ export default function CobrosListScreen() {
                     setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
                   } else {
                     setSortBy('monto');
-                    setSortOrder('desc');
+                    setSortOrder('desc'); // Default desc para ver mayor deuda
                   }
                 }}
               >
@@ -224,57 +248,64 @@ export default function CobrosListScreen() {
             </View>
           </View>
 
-          {/* Cobros list */}
-          {cobrosFiltrados.length === 0 ? (
+          {/* Lista agrupada por clientes */}
+          {clientesFiltrados.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>🔍</Text>
-              <Text style={styles.emptyTitle}>No se encontraron cobros</Text>
+              <Text style={styles.emptyIcon}>✅</Text>
+              <Text style={styles.emptyTitle}>Todo al día</Text>
               <Text style={styles.emptyText}>
-                {searchTerm ? 'Intenta con otros términos de búsqueda' : 'No hay cobros registrados'}
+                {searchTerm ? 'No se encontraron clientes con esa búsqueda' : 'No hay clientes con cobros pendientes'}
               </Text>
             </View>
           ) : (
             <View style={styles.cobrosList}>
-              {cobrosFiltrados.map((cobro, index) => (
+              {clientesFiltrados.map((cliente) => (
                 <TouchableOpacity
-                  key={cobro.id}
+                  key={cliente.id}
                   style={styles.cobroCard}
                   onPress={() => {
-                    // Buscar el cliente completo en la lista de clientes
-                    const clienteCompleto = clientes.find(c => 
-                      c.id === cobro.id || 
-                      c.nombre === cobro.nombre || 
-                      c.empresa === cobro.empresa
-                    ) || { nombre: cobro.nombre, empresa: cobro.empresa, id: cobro.id };
-                    
+                    // Navegar al detalle para ver el desglose y cobrar
                     navigation.navigate('Cobros', {
-                      clienteSeleccionado: clienteCompleto
+                      clienteSeleccionado: cliente
                     });
                   }}
                   activeOpacity={0.7}
                 >
                   <View style={styles.cobroHeader}>
-                    <Text style={styles.cobroIcon}>👤</Text>
+                    <View style={styles.iconBadge}>
+                         <Text style={styles.cobroIcon}>👤</Text>
+                    </View>
+                   
                     <View style={styles.cobroInfo}>
-                      <Text style={styles.cobroTitle}>
-                        {cobro.id} — {cobro.nombre}
-                      </Text>
-                      <Text style={styles.cobroFecha}>Fecha: {cobro.fecha}</Text>
+                        <View style={styles.titleRow}>
+                            <Text style={styles.clienteCodigo}>{cliente.id}</Text>
+                            <Text style={styles.cobroTitle} numberOfLines={1}>
+                                {cliente.empresa || cliente.nombre}
+                            </Text>
+                        </View>
+                        <Text style={styles.clienteNombreReal}>{cliente.nombre}</Text>
                     </View>
                   </View>
 
                   <View style={styles.cobroRight}>
                     <Text style={styles.cobroMonto}>
-                      {cobro.monto.toFixed(2).replace('.', ',')} €
+                      {cliente.deudaTotal.toFixed(2).replace('.', ',')} €
                     </Text>
-                    <View style={[
-                      styles.estadoBadge,
-                      cobro.estado === 'pendiente' ? styles.estadoBadgePendiente : styles.estadoBadgePagado
-                    ]}>
-                      <View style={[styles.estadoDot, { backgroundColor: cobro.estadoColor }]} />
-                      <Text style={[styles.estadoText, { color: cobro.estadoColor }]}>
-                        {cobro.estadoTexto}
-                      </Text>
+                    <View style={styles.badgeContainer}>
+                        <View style={styles.estadoBadgePendiente}>
+                        <View style={styles.estadoDot} />
+                        <Text style={styles.estadoText}>
+                            {cliente.notasPendientesCount} Nota{cliente.notasPendientesCount > 1 ? 's' : ''}
+                        </Text>
+                        </View>
+                        
+                        {/* Botón rápido de imprimir solo este cliente */}
+                        <TouchableOpacity 
+                            style={styles.miniPrintButton}
+                            onPress={() => handlePrintCliente(cliente)}
+                        >
+                             <Text style={{fontSize: 14}}>🖨️</Text>
+                        </TouchableOpacity>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -284,7 +315,7 @@ export default function CobrosListScreen() {
         </ScrollView>
       </View>
 
-      {/* Modal para nueva cobranza */}
+      {/* Modal para nueva cobranza manual */}
       <SeleccionarClienteModal
         visible={showModal}
         onClose={() => setShowModal(false)}
@@ -292,7 +323,7 @@ export default function CobrosListScreen() {
           setShowModal(false);
           navigation.navigate('Cobros', { clienteSeleccionado: cliente });
         }}
-        clientes={clientesConCobrosPendientes}
+        clientes={clientesPendientes}
       />
     </ScreenWithSidebar>
   );
@@ -322,6 +353,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12
+  },
   headerIcon: {
     fontSize: 20
   },
@@ -330,6 +366,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1a1a1a',
     lineHeight: 24
+  },
+  printButtonHeader: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
+  },
+  printIcon: {
+      fontSize: 18
   },
   newCobranzaButton: {
     borderRadius: 30,
@@ -340,8 +389,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 15,
-    paddingHorizontal: 24
+    paddingVertical: 10,
+    paddingHorizontal: 20
   },
   newCobranzaIcon: {
     fontSize: 16,
@@ -352,30 +401,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#ffffff'
   },
-  badge: {
-    position: 'absolute',
-    top: -8,
-    right: -8,
-    backgroundColor: '#F59F0A',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#ffffff'
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#ffffff'
-  },
   subtitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '400',
-    lineHeight: 28.8,
     color: '#697b92',
-    marginBottom: 44
+    marginBottom: 24
   },
   totalBar: {
     marginBottom: 32
@@ -438,7 +468,8 @@ const styles = StyleSheet.create({
     color: '#697B92'
   },
   sortIconActive: {
-    color: '#0C2ABF'
+    color: '#0C2ABF',
+    fontWeight: 'bold'
   },
   cobrosList: {
     gap: 12
@@ -448,15 +479,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 10,
-    padding: 24,
-    minHeight: 116,
-    position: 'relative'
+    padding: 20,
+    minHeight: 100,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center'
   },
   cobroHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 8
+    alignItems: 'center',
+    gap: 12,
+    flex: 1
+  },
+  iconBadge: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: '#f0f4ff',
+      alignItems: 'center',
+      justifyContent: 'center'
   },
   cobroIcon: {
     fontSize: 18
@@ -464,53 +505,70 @@ const styles = StyleSheet.create({
   cobroInfo: {
     flex: 1
   },
+  titleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginBottom: 4
+  },
+  clienteCodigo: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: '#092090',
+      backgroundColor: '#e0e7ff',
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 4
+  },
   cobroTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    lineHeight: 20,
+    fontWeight: '700',
     color: '#1a1a1a',
-    marginBottom: 8
+    flex: 1
   },
-  cobroFecha: {
-    fontSize: 12,
-    lineHeight: 16,
+  clienteNombreReal: {
+    fontSize: 13,
     color: '#697b92'
   },
   cobroRight: {
-    position: 'absolute',
-    right: 24,
-    top: 24,
-    alignItems: 'flex-end'
+    alignItems: 'flex-end',
+    marginLeft: 10
   },
   cobroMonto: {
-    fontSize: 24,
-    fontWeight: '600',
-    lineHeight: 28,
+    fontSize: 20,
+    fontWeight: '700',
     color: '#092090',
-    marginBottom: 8
+    marginBottom: 6
   },
-  estadoBadge: {
+  badgeContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8
+  },
+  estadoBadgePendiente: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingVertical: 4,
-    paddingHorizontal: 12,
-    borderRadius: 20
-  },
-  estadoBadgePendiente: {
+    paddingHorizontal: 10,
+    borderRadius: 20,
     backgroundColor: '#FEF3C7'
   },
-  estadoBadgePagado: {
-    backgroundColor: '#D1FAE5'
-  },
   estadoDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#F59F0A'
   },
   estadoText: {
-    fontSize: 12,
-    fontWeight: '600'
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#F59F0A'
+  },
+  miniPrintButton: {
+      padding: 6,
+      borderRadius: 6,
+      backgroundColor: '#f1f5f9'
   },
   emptyState: {
     backgroundColor: '#ffffff',
@@ -518,7 +576,7 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     borderRadius: 10,
     padding: 60,
-    paddingVertical: 24,
+    paddingVertical: 40,
     alignItems: 'center'
   },
   emptyIcon: {

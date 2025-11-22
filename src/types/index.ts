@@ -83,11 +83,15 @@ export interface Articulo {
   precio?: string;
   stockMinimo?: number;
   proveedor?: string;
+  imagen?: string;
+  codigoCorto?: string;
 }
 
 export interface Cliente {
   id: string;
+  codigo?: string;
   nombre: string;
+  nombreComercial?: string;
   empresa: string;
   direccion: string;
   telefono?: string;

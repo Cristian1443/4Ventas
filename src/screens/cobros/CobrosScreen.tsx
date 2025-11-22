@@ -1,16 +1,18 @@
 /**
- * Cobros Screen - EXACTAMENTE IGUAL A LA WEB
- * Formulario de cobro con dos columnas (formulario izquierda, notas pendientes derecha)
+ * Cobros Screen
+ * Selección de notas pendientes y confirmación de pago.
+ * Incluye opción para generar recibo impreso.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Alert
+  Alert,
+  Switch
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -20,13 +22,16 @@ import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 export default function CobrosScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { notasVenta, updateNotaVenta, addCobro, updateCobro, cobros } = useApp();
+  const { notasVenta, updateNotaVenta, addCobro, cobros } = useApp();
 
   const clienteSeleccionado = route.params?.clienteSeleccionado;
 
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
   const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
   const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
+  
+  // Nuevo estado para la opción de imprimir
+  const [imprimirRecibo, setImprimirRecibo] = useState(true);
 
   const paymentMethods = [
     'Efectivo',
@@ -36,18 +41,17 @@ export default function CobrosScreen() {
     'Transferencia Bancaria'
   ];
 
-  // Obtener las notas pendientes del cliente seleccionado
+  // Filtrar notas pendientes del cliente
   const pendingNotes = clienteSeleccionado
     ? notasVenta
         .filter(nota => {
           if (nota.estado !== 'pendiente') return false;
           
-          // Buscar por ID del cliente
+          // Coincidencia por ID o Nombre
           if (nota.clienteId && clienteSeleccionado.id && nota.clienteId === clienteSeleccionado.id) {
             return true;
           }
           
-          // Buscar por nombre o empresa
           const nombreCliente = clienteSeleccionado.nombre?.toLowerCase().trim() || '';
           const empresaCliente = clienteSeleccionado.empresa?.toLowerCase().trim() || '';
           const nombreNota = nota.cliente?.toLowerCase().trim() || '';
@@ -61,7 +65,8 @@ export default function CobrosScreen() {
           id: nota.id,
           client: nota.cliente,
           date: nota.fecha,
-          amount: parseFloat(nota.precio.replace(/[^\d,]/g, '').replace(',', '.')) || 0
+          amount: parseFloat(nota.precio.replace(/[^\d,]/g, '').replace(',', '.')) || 0,
+          originalNota: nota // Guardamos la referencia completa
         }))
     : [];
 
@@ -73,7 +78,7 @@ export default function CobrosScreen() {
     }
   };
 
-  // Calcular subtotal basado en las notas seleccionadas
+  // Calcular subtotal
   const subtotal = selectedNotes.reduce((sum, noteIndex) => {
     const note = pendingNotes[parseInt(noteIndex)];
     return sum + (note?.amount || 0);
@@ -81,47 +86,26 @@ export default function CobrosScreen() {
 
   const handleConfirmarCobro = async () => {
     if (!clienteSeleccionado || selectedNotes.length === 0 || !selectedPaymentMethod) {
-      Alert.alert('Error', 'Completa todos los campos requeridos');
+      Alert.alert('Faltan datos', 'Por favor selecciona un método de pago y al menos una nota para cobrar.');
       return;
     }
 
     try {
-      // Buscar si existe un cobro pendiente para este cliente
-      const cobroPendiente = cobros.find(c =>
-        c.estado === 'pendiente' &&
-        (c.clienteId === clienteSeleccionado.id ||
-          c.cliente.includes(clienteSeleccionado.empresa) ||
-          c.cliente.includes(clienteSeleccionado.nombre))
-      );
+      // 1. Registrar el Cobro en el sistema
+      const nuevoCobro = {
+        id: `C${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`, // ID único
+        cliente: clienteSeleccionado.empresa || clienteSeleccionado.nombre,
+        clienteId: clienteSeleccionado.id,
+        monto: `${subtotal.toFixed(2).replace('.', ',')} €`,
+        fecha: new Date().toLocaleString('es-ES'),
+        estado: 'pagado' as const,
+        formaPago: selectedPaymentMethod,
+        notasPagadasIds: selectedNotes.map(idx => pendingNotes[parseInt(idx)].id) // Referencia a notas
+      };
+      
+      await addCobro(nuevoCobro);
 
-      if (cobroPendiente) {
-        // ACTUALIZAR el cobro existente de 'pendiente' a 'pagado'
-        await updateCobro(cobroPendiente.id, 'pagado');
-      } else {
-        // Si no existe cobro pendiente, crear uno nuevo como pagado
-        const nuevoCobro = {
-          id: `C${String(Math.floor(Math.random() * 1000)).padStart(3, '0')}`,
-          cliente: clienteSeleccionado.empresa || clienteSeleccionado.nombre,
-          clienteId: clienteSeleccionado.id,
-          monto: `${subtotal.toFixed(2).replace('.', ',')} €`,
-          fecha: new Date().toLocaleDateString('es-ES', { 
-            day: '2-digit', 
-            month: '2-digit', 
-            year: 'numeric' 
-          }),
-          estado: 'pagado' as const,
-          formaPago: selectedPaymentMethod
-        };
-        await addCobro(nuevoCobro);
-      }
-
-      // Obtener las notas seleccionadas con sus datos completos
-      const notasSeleccionadas = selectedNotes.map(index => {
-        const nota = pendingNotes[parseInt(index)];
-        return nota;
-      }).filter(Boolean);
-
-      // Actualizar el estado de las notas de venta a 'cerrada'
+      // 2. Actualizar estado de las notas a 'cerrada'
       for (const index of selectedNotes) {
         const nota = pendingNotes[parseInt(index)];
         if (nota) {
@@ -129,19 +113,24 @@ export default function CobrosScreen() {
         }
       }
 
-      // Preparar datos para la pantalla de confirmación
-      const cobranzaData = {
+      // 3. Preparar datos para la pantalla de Recibo/Impresión
+      const notasCobradas = selectedNotes.map(index => pendingNotes[parseInt(index)]).filter(Boolean);
+      
+      const datosRecibo = {
+        cobroId: nuevoCobro.id,
         cliente: clienteSeleccionado,
-        notas: notasSeleccionadas,
+        notas: notasCobradas,
         metodoPago: selectedPaymentMethod,
-        formaPago: selectedPaymentMethod,
-        subtotal: subtotal
+        totalCobrado: subtotal,
+        fecha: new Date(),
+        autoPrint: imprimirRecibo // Pasamos la preferencia de impresión
       };
 
-      // Navegar directamente a confirmación con los datos
-      navigation.navigate('CobrosConfirmacion', { cobranzaActual: cobranzaData });
+      // 4. Navegar a la pantalla de Impresión/Confirmación
+      navigation.replace('CobrosConfirmacion', { cobranzaActual: datosRecibo });
+
     } catch (error: any) {
-      Alert.alert('Error', `No se pudo confirmar el cobro: ${error?.message || 'Error desconocido'}`);
+      Alert.alert('Error', `Ocurrió un error al procesar el cobro: ${error?.message}`);
     }
   };
 
@@ -149,44 +138,39 @@ export default function CobrosScreen() {
     <ScreenWithSidebar currentScreen="Cobros" scrollable={false}>
       <View style={styles.container}>
         <View style={styles.mainContent}>
-          {/* Left side - Form */}
+          
+          {/* COLUMNA IZQUIERDA - Formulario de Pago */}
           <View style={styles.leftColumn}>
-            <Text style={styles.sectionLabel}>Cliente</Text>
+            <View style={styles.headerLeft}>
+                 {/* Botón Volver sutil */}
+                <TouchableOpacity onPress={() => navigation.goBack()} style={{marginBottom: 10}}>
+                    <Text style={{color: '#697b92'}}>← Volver a lista</Text>
+                </TouchableOpacity>
+                <Text style={styles.sectionLabel}>Cliente</Text>
+            </View>
 
-            {/* Client Selector */}
-            <TouchableOpacity
-              style={styles.clientSelector}
-              onPress={() => navigation.navigate('CobrosList')}
-            >
-              <Text style={[
-                styles.clientText,
-                !clienteSeleccionado && styles.clientTextPlaceholder
-              ]}>
+            {/* Selector de Cliente (Visualización) */}
+            <View style={styles.clientCard}>
+              <Text style={styles.clientName}>
                 {clienteSeleccionado ? (clienteSeleccionado.empresa || clienteSeleccionado.nombre) : 'Seleccione un cliente'}
               </Text>
-              {clienteSeleccionado && clienteSeleccionado.direccion && (
-                <Text style={styles.clientAddress}>{clienteSeleccionado.direccion}</Text>
+              {clienteSeleccionado && (
+                <Text style={styles.clientDetail}>{clienteSeleccionado.direccion}</Text>
               )}
-              {!clienteSeleccionado && (
-                <Text style={styles.clientSelectorHint}>Toca para seleccionar cliente</Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Cambiar cliente button */}
+            </View>
+            
             {clienteSeleccionado && (
-              <TouchableOpacity
-                style={styles.changeClientButton}
-                onPress={() => navigation.navigate('CobrosList')}
-              >
-                <Text style={styles.changeClientIcon}>↻</Text>
-                <Text style={styles.changeClientText}>Cambiar Cliente</Text>
-              </TouchableOpacity>
+                <TouchableOpacity 
+                    style={styles.changeClientLink}
+                    onPress={() => navigation.navigate('CobrosList')}
+                >
+                    <Text style={styles.changeClientText}>↻ Cambiar Cliente</Text>
+                </TouchableOpacity>
             )}
 
-            {/* Payment Method Label */}
-            <Text style={styles.sectionLabel}>Forma de Pago</Text>
+            <Text style={[styles.sectionLabel, {marginTop: 30}]}>Forma de Pago</Text>
 
-            {/* Payment Method Selector */}
+            {/* Selector Método de Pago */}
             <View style={styles.paymentSelectorContainer}>
               <TouchableOpacity
                 style={styles.paymentSelector}
@@ -206,10 +190,7 @@ export default function CobrosScreen() {
                   {paymentMethods.map((method, index) => (
                     <TouchableOpacity
                       key={index}
-                      style={[
-                        styles.paymentOption,
-                        index < paymentMethods.length - 1 && styles.paymentOptionBorder
-                      ]}
+                      style={styles.paymentOption}
                       onPress={() => {
                         setSelectedPaymentMethod(method);
                         setShowPaymentDropdown(false);
@@ -222,7 +203,18 @@ export default function CobrosScreen() {
               )}
             </View>
 
-            {/* Confirm Button */}
+            {/* Opción Imprimir Recibo */}
+            <View style={styles.printOptionContainer}>
+                <Text style={styles.printOptionLabel}>🖨️ Generar Recibo para Cliente</Text>
+                <Switch
+                    trackColor={{ false: "#e2e8f0", true: "#0C2ABF" }}
+                    thumbColor={imprimirRecibo ? "#ffffff" : "#f4f3f4"}
+                    onValueChange={setImprimirRecibo}
+                    value={imprimirRecibo}
+                />
+            </View>
+
+            {/* Botón Confirmar */}
             <TouchableOpacity
               style={[
                 styles.confirmButton,
@@ -236,87 +228,81 @@ export default function CobrosScreen() {
                 colors={
                   (!clienteSeleccionado || selectedNotes.length === 0 || !selectedPaymentMethod)
                     ? ['#d4d4d4', '#e2e2e2']
-                    : ['#8bd600', '#c4ff57']
+                    : ['#092090', '#0C2ABF']
                 }
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.confirmButtonGradient}
               >
-                <Text style={styles.confirmButtonIcon}>📄</Text>
+                <Text style={styles.confirmButtonIcon}>✅</Text>
                 <Text style={styles.confirmButtonText}>Confirmar Cobro</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
 
-          {/* Right side - Pending Notes */}
+          {/* COLUMNA DERECHA - Notas Pendientes */}
           <View style={styles.rightColumn}>
-            {/* Header */}
             <View style={styles.notesHeader}>
               <Text style={styles.notesHeaderIcon}>📄</Text>
               <Text style={styles.notesHeaderTitle}>Marcar Notas Pendientes</Text>
             </View>
 
-            {/* Notes List */}
             <ScrollView style={styles.notesList} contentContainerStyle={styles.notesListContent}>
               {!clienteSeleccionado ? (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateIcon}>👤</Text>
-                  <Text style={styles.emptyStateTitle}>No hay cliente seleccionado</Text>
-                  <Text style={styles.emptyStateText}>
-                    Selecciona un cliente para ver sus notas pendientes
-                  </Text>
+                  <Text style={styles.emptyStateText}>Selecciona un cliente para ver sus notas</Text>
                 </View>
               ) : pendingNotes.length === 0 ? (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateIcon}>📄</Text>
-                  <Text style={styles.emptyStateTitle}>No hay notas pendientes</Text>
-                  <Text style={styles.emptyStateText}>
-                    Este cliente no tiene notas pendientes de cobro
-                  </Text>
+                  <Text style={styles.emptyStateTitle}>Todo al día</Text>
+                  <Text style={styles.emptyStateText}>Este cliente no tiene deudas pendientes.</Text>
                 </View>
               ) : (
-                pendingNotes.map((note, index) => (
-                  <View key={index} style={styles.noteCard}>
-                    <View style={styles.noteHeader}>
-                      <View style={styles.noteIdBadge}>
-                        <Text style={styles.noteIdText}>{note.id}</Text>
-                      </View>
-                      <Text style={styles.noteClient}>{note.client}</Text>
-                    </View>
-
-                    <View style={styles.noteDateRow}>
-                      <Text style={styles.noteDateLabel}>Fecha:</Text>
-                      <Text style={styles.noteDateValue}>{note.date}</Text>
-                    </View>
-
-                    <Text style={styles.noteAmount}>
-                      {note.amount.toFixed(2)} €
-                    </Text>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.noteCheckbox,
-                        selectedNotes.includes(index.toString()) && styles.noteCheckboxSelected
-                      ]}
-                      onPress={() => toggleNote(index.toString())}
+                pendingNotes.map((note, index) => {
+                   const isSelected = selectedNotes.includes(index.toString());
+                   return (
+                    <TouchableOpacity 
+                        key={index} 
+                        style={[styles.noteCard, isSelected && styles.noteCardSelected]}
+                        onPress={() => toggleNote(index.toString())}
+                        activeOpacity={0.9}
                     >
-                      {selectedNotes.includes(index.toString()) && (
-                        <Text style={styles.noteCheckmark}>✓</Text>
-                      )}
+                        <View style={styles.noteHeader}>
+                        <View style={styles.noteIdBadge}>
+                            <Text style={styles.noteIdText}>{note.id}</Text>
+                        </View>
+                        <Text style={styles.noteClient}>{note.client}</Text>
+                        </View>
+
+                        <View style={styles.noteDateRow}>
+                        <Text style={styles.noteDateLabel}>Fecha:</Text>
+                        <Text style={styles.noteDateValue}>{note.date}</Text>
+                        </View>
+
+                        <Text style={styles.noteAmount}>
+                        {note.amount.toFixed(2).replace('.', ',')} €
+                        </Text>
+
+                        <View style={[
+                            styles.checkbox,
+                            isSelected && styles.checkboxSelected
+                        ]}>
+                        {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                        </View>
                     </TouchableOpacity>
-                  </View>
-                ))
+                  );
+                })
               )}
             </ScrollView>
 
-            {/* Footer */}
             <View style={styles.notesFooter}>
               <View style={styles.subtotalContainer}>
-                <Text style={styles.subtotalLabel}>Subtotal:</Text>
-                <Text style={styles.subtotalValue}>{subtotal.toFixed(2)} €</Text>
+                <Text style={styles.subtotalLabel}>Total a Cobrar:</Text>
+                <Text style={styles.subtotalValue}>{subtotal.toFixed(2).replace('.', ',')} €</Text>
               </View>
             </View>
           </View>
+
         </View>
       </View>
     </ScreenWithSidebar>
@@ -331,94 +317,72 @@ const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
     flexDirection: 'row',
-    padding: 80,
-    paddingHorizontal: 60,
-    gap: 60
+    padding: 40,
+    gap: 40
   },
+  // Left Column
   leftColumn: {
     width: 400,
-    paddingTop: 20
+    paddingTop: 20,
+    flexShrink: 0
+  },
+  headerLeft: {
+      marginBottom: 10
   },
   sectionLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1a1a1a',
-    marginBottom: 24
+    marginBottom: 12
   },
-  clientSelector: {
+  clientCard: {
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 5,
-    padding: 18,
-    marginBottom: 12,
-    minHeight: 56
+    borderRadius: 8,
+    padding: 20,
+    marginBottom: 8
   },
-  clientSelectorHint: {
-    fontSize: 12,
-    color: '#0C2ABF',
-    marginTop: 4,
-    fontStyle: 'italic'
-  },
-  clientText: {
-    fontSize: 14,
+  clientName: {
+    fontSize: 16,
+    fontWeight: '700',
     color: '#1a1a1a',
-    fontWeight: '600'
+    marginBottom: 4
   },
-  clientTextPlaceholder: {
-    color: '#697b92',
-    fontWeight: '400'
+  clientDetail: {
+    fontSize: 13,
+    color: '#697b92'
   },
-  clientAddress: {
-    fontSize: 12,
-    color: '#697b92',
-    marginTop: 4
-  },
-  changeClientButton: {
-    width: '100%',
-    padding: 10,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 5,
-    marginBottom: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6
-  },
-  changeClientIcon: {
-    fontSize: 14,
-    color: '#0C2ABF'
+  changeClientLink: {
+      alignSelf: 'flex-start',
+      paddingVertical: 8
   },
   changeClientText: {
-    fontSize: 12,
-    color: '#0C2ABF',
-    fontWeight: '600'
+      fontSize: 13,
+      color: '#0C2ABF',
+      fontWeight: '600'
   },
   paymentSelectorContainer: {
     position: 'relative',
-    marginBottom: 60
+    marginBottom: 30,
+    zIndex: 10 // Ensure dropdown appears on top
   },
   paymentSelector: {
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 5,
-    padding: 18,
+    borderRadius: 8,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 56
+    justifyContent: 'space-between'
   },
   paymentText: {
     fontSize: 14,
-    color: '#1a1a1a',
-    fontWeight: '600'
+    color: '#1a1a1a'
   },
   paymentTextPlaceholder: {
-    color: '#697b92',
-    fontWeight: '400'
+    color: '#94a3b8'
   },
   dropdownIcon: {
     fontSize: 12,
@@ -430,100 +394,105 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#ffffff',
-    borderRadius: 5,
+    borderRadius: 8,
     marginTop: 4,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    zIndex: 10,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 6,
+    shadowRadius: 8,
     elevation: 5
   },
   paymentOption: {
-    paddingVertical: 14,
-    paddingHorizontal: 18,
+    padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0'
-  },
-  paymentOptionBorder: {
-    borderBottomWidth: 1
+    borderBottomColor: '#f1f5f9'
   },
   paymentOptionText: {
     fontSize: 14,
-    color: '#697b92'
+    color: '#1a1a1a'
+  },
+  printOptionContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: '#f8fafc',
+      padding: 16,
+      borderRadius: 8,
+      marginBottom: 30,
+      borderWidth: 1,
+      borderColor: '#e2e8f0'
+  },
+  printOptionLabel: {
+      fontSize: 14,
+      color: '#1a1a1a',
+      fontWeight: '500'
   },
   confirmButton: {
     width: '100%',
     borderRadius: 30,
-    overflow: 'hidden'
+    overflow: 'hidden',
+    marginTop: 'auto' // Push to bottom if space allows
   },
   confirmButtonDisabled: {
-    opacity: 0.6
+    opacity: 0.5
   },
   confirmButtonGradient: {
-    paddingVertical: 15,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8
-  },
-  confirmButtonIcon: {
-    fontSize: 12
-  },
-  confirmButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a'
-  },
-  rightColumn: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 20,
-    overflow: 'hidden',
-    maxHeight: 720,
-    flexDirection: 'column'
-  },
-  notesHeader: {
-    backgroundColor: '#ffffff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    padding: 32,
-    paddingVertical: 28,
+    paddingVertical: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10
   },
+  confirmButtonIcon: {
+    fontSize: 16
+  },
+  confirmButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff'
+  },
+  
+  // Right Column
+  rightColumn: {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 16,
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column'
+  },
+  notesHeader: {
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e2e8f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#ffffff'
+  },
   notesHeaderIcon: {
     fontSize: 20
   },
   notesHeaderTitle: {
-    fontSize: 24,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#1a1a1a'
   },
   notesList: {
-    flex: 1
+    flex: 1,
+    backgroundColor: '#f8fafc'
   },
   notesListContent: {
-    padding: 26,
-    paddingVertical: 32
+    padding: 24
   },
   emptyState: {
-    flex: 1,
+    padding: 40,
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 40
-  },
-  emptyStateIcon: {
-    fontSize: 64,
-    marginBottom: 20,
-    opacity: 0.3
+    justifyContent: 'center'
   },
   emptyStateTitle: {
     fontSize: 18,
@@ -533,19 +502,20 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 14,
-    color: '#697b92',
-    textAlign: 'center'
+    color: '#697b92'
   },
   noteCard: {
     backgroundColor: '#ffffff',
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 18,
-    paddingVertical: 31,
+    padding: 16,
     marginBottom: 12,
-    minHeight: 112,
     position: 'relative'
+  },
+  noteCardSelected: {
+      borderColor: '#0C2ABF',
+      backgroundColor: '#f0f7ff'
   },
   noteHeader: {
     flexDirection: 'row',
@@ -554,27 +524,28 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   noteIdBadge: {
-    paddingVertical: 3,
-    paddingHorizontal: 5,
     backgroundColor: '#91e600',
-    borderRadius: 5
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4
   },
   noteIdText: {
     fontSize: 10,
+    fontWeight: '700',
     color: '#1a1a1a'
   },
   noteClient: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     color: '#697b92'
   },
   noteDateRow: {
     flexDirection: 'row',
-    gap: 4
+    gap: 6
   },
   noteDateLabel: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#092090'
   },
   noteDateValue: {
@@ -583,58 +554,58 @@ const styles = StyleSheet.create({
   },
   noteAmount: {
     position: 'absolute',
-    right: 18,
-    top: 49,
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#0c1c8d'
+    top: 16,
+    right: 16,
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1a1a1a'
   },
-  noteCheckbox: {
+  checkbox: {
     position: 'absolute',
-    right: 18,
-    bottom: 18,
-    width: 19,
-    height: 19,
-    backgroundColor: '#ffffff',
-    borderWidth: 0.559,
-    borderColor: '#092090',
-    borderRadius: 5.588,
+    bottom: 16,
+    right: 16,
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#e2e8f0',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 2.794
+    backgroundColor: '#ffffff'
   },
-  noteCheckboxSelected: {
+  checkboxSelected: {
+    borderColor: '#0C2ABF',
     backgroundColor: '#0C2ABF'
   },
-  noteCheckmark: {
-    fontSize: 10,
+  checkmark: {
     color: '#ffffff',
+    fontSize: 14,
     fontWeight: 'bold'
   },
   notesFooter: {
-    backgroundColor: '#f3f7fd',
+    padding: 24,
+    backgroundColor: '#ffffff',
     borderTopWidth: 1,
-    borderTopColor: '#e2e8f0',
-    padding: 40,
-    paddingVertical: 32
+    borderTopColor: '#e2e8f0'
   },
   subtotalContainer: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 50,
-    padding: 24,
-    paddingVertical: 18,
     flexDirection: 'row',
-    justifyContent: 'space-between'
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f0f7ff',
+    padding: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#dbeafe'
   },
   subtotalLabel: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#092090'
+    color: '#1e293b'
   },
   subtotalValue: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 24,
+    fontWeight: '700',
     color: '#092090'
   }
 });

@@ -116,6 +116,58 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   });
 
   // ============================================================================
+  // DATOS INICIALES
+  // ============================================================================
+
+  const initialClientes: Cliente[] = [
+    {
+      id: 'c1',
+      codigo: '430001',
+      nombre: 'Floristería El Jardín',
+      nombreComercial: 'El Jardín del Centro',
+      empresa: 'Floristería El Jardín S.L.',
+      telefono: '600123456',
+      email: 'contacto@eljardin.com',
+      direccion: 'Calle Mayor 123, Madrid',
+      codigoPostal: '28001',
+      provincia: 'Madrid'
+    },
+    {
+      id: 'c2',
+      codigo: '430005',
+      nombre: 'Eventos y Bodas SL',
+      empresa: 'Eventos y Bodas SL',
+      telefono: '600999888',
+      email: 'info@eventosbodas.com',
+      direccion: 'Av. América 45, Madrid',
+      codigoPostal: '28028',
+      provincia: 'Madrid'
+    },
+    {
+      id: 'c3',
+      codigo: '430010',
+      nombre: 'Distribuciones Rivera S.L.',
+      empresa: 'Distribuciones Rivera S.L.',
+      telefono: '985123456',
+      email: 'info@rivera.com',
+      direccion: 'Calle Industrial 12, Oviedo',
+      codigoPostal: '33001',
+      provincia: 'Asturias'
+    },
+    {
+      id: 'c4',
+      codigo: '430015',
+      nombre: 'Almacenes López S.A.',
+      empresa: 'Almacenes López S.A.',
+      telefono: '985234567',
+      email: 'ventas@lopez.com',
+      direccion: 'Av. Principal 8, Gijón',
+      codigoPostal: '33201',
+      provincia: 'Asturias'
+    }
+  ];
+
+  // ============================================================================
   // INICIALIZACIÓN
   // ============================================================================
 
@@ -169,7 +221,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       if (savedCobros) setCobros(savedCobros);
       if (savedDocumentos) setDocumentos(savedDocumentos);
       if (savedArticulos) setArticulos(savedArticulos);
-      if (savedClientes) setClientes(savedClientes);
+      if (savedClientes) {
+        setClientes(savedClientes);
+      } else {
+        // Si no hay clientes guardados, usar los iniciales
+        setClientes(initialClientes);
+        await storageService.setItem('clientes', initialClientes);
+      }
       if (savedNotasAlmacen) setNotasAlmacen(savedNotasAlmacen);
       
       console.log('✅ Datos locales cargados');
@@ -229,6 +287,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setDocumentos([
       { id: 'DOC001', nombre: 'Catálogo Alimentación 2024.pdf', categoria: 'Catálogos', fecha: '15/10/2024', tamano: '2.4 MB', tipo: 'pdf' }
     ]);
+    
+    // Cargar clientes iniciales
+    setClientes(initialClientes);
   };
 
   // ============================================================================
