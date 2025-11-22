@@ -1,8 +1,3 @@
-/**
- * Nueva Venta Screen - VERSIÓN FINAL COMPATIBLE
- * Estructura: Header (Fijo) - Body (Flex 1 con Scroll) - Footer (Fijo)
- */
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -12,7 +7,9 @@ import {
   ScrollView,
   TextInput,
   Alert,
-  Modal
+  Modal,
+  Platform,
+  Dimensions
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -21,6 +18,7 @@ import { useApp } from '../../context/AppContext';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 import SeleccionarArticuloModal from '../../components/SeleccionarArticuloModal';
 
+// --- TIPOS ---
 interface ArticuloVenta {
   id: string;
   articuloId: string;
@@ -38,531 +36,389 @@ export default function NuevaVentaScreen() {
   const insets = useSafeAreaInsets();
   const { addNotaVenta, clientes, articulos } = useApp();
 
-  const clienteInicial = route.params?.clienteSeleccionado;
-
-  // --- Estados ---
-  const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(clienteInicial || null);
-  const [tipoNotaSeleccionado, setTipoNotaSeleccionado] = useState('Serie P (Oficiales)');
-  const [formaPagoSeleccionado, setFormaPagoSeleccionado] = useState('Efectivo');
+  // --- ESTADOS ---
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(route.params?.clienteSeleccionado || null);
   const [estadoPago, setEstadoPago] = useState<'pagado' | 'pendiente'>('pagado');
-  const [tieneDescuentoDocumento, setTieneDescuentoDocumento] = useState(false);
+  const [tipoNota, setTipoNota] = useState('Serie P (Oficiales)');
+  const [formaPago, setFormaPago] = useState('Efectivo');
   
+  // Estados de Artículo
   const [articuloSeleccionado, setArticuloSeleccionado] = useState<any>(null);
-  const [articuloCantidad, setArticuloCantidad] = useState('1');
-  const [articuloPrecio, setArticuloPrecio] = useState('');
-  const [articuloDescuento, setArticuloDescuento] = useState('');
-  const [tipoDescuentoArticulo, setTipoDescuentoArticulo] = useState<'porcentaje' | 'pesos'>('porcentaje');
-  const [articuloNota, setArticuloNota] = useState('');
-  
-  const [articulosVenta, setArticulosVenta] = useState<ArticuloVenta[]>([]);
-  
-  // UI State
-  const [showClienteModal, setShowClienteModal] = useState(false);
-  const [showArticuloModal, setShowArticuloModal] = useState(false);
-  const [showHistorialModal, setShowHistorialModal] = useState(false);
-  const [showTipoDropdown, setShowTipoDropdown] = useState(false);
-  const [showPagoDropdown, setShowPagoDropdown] = useState(false);
+  const [cant, setCant] = useState('1');
+  const [precio, setPrecio] = useState('');
+  const [desc, setDesc] = useState('');
+  const [tipoDesc, setTipoDesc] = useState<'porcentaje' | 'pesos'>('porcentaje');
+  const [notaItem, setNotaItem] = useState('');
 
-  const tiposNota = ['Serie P (Oficiales)', 'Serie X (No oficiales)', 'Pedido', 'Presupuesto'];
-  const formasPago = ['Efectivo', 'Tarjeta de Débito', 'Tarjeta de Crédito', 'Bizum', 'Transferencia'];
+  const [carrito, setCarrito] = useState<ArticuloVenta[]>([]);
+  const [modalCliente, setModalCliente] = useState(false);
+  const [modalArticulo, setModalArticulo] = useState(false);
+  const [modalHistorial, setModalHistorial] = useState(false);
+  const [dropdownTipo, setDropdownTipo] = useState(false);
+  const [dropdownPago, setDropdownPago] = useState(false);
 
-  useEffect(() => {
-      if (clienteInicial) setClienteSeleccionado(clienteInicial);
-  }, [clienteInicial]);
-
-  const resetFormulario = () => {
-    setClienteSeleccionado(null);
-    setArticulosVenta([]);
-    resetCamposArticulo();
-    setEstadoPago('pagado');
+  // --- LÓGICA ---
+  const resetArticuloForm = () => {
+    setArticuloSeleccionado(null);
+    setCant('1');
+    setPrecio('');
+    setDesc('');
+    setNotaItem('');
   };
 
-  const resetCamposArticulo = () => {
-    setArticuloSeleccionado(null);
-    setArticuloCantidad('1');
-    setArticuloPrecio('');
-    setArticuloDescuento('');
-    setArticuloNota('');
+  const handleSelectArticulo = (art: any) => {
+    setArticuloSeleccionado(art);
+    setPrecio(art.precio?.toString().replace(/[€\s]/g, '').replace(',', '.') || '');
+    setModalArticulo(false);
+  };
+
+  const agregarAlCarrito = () => {
+    if (!articuloSeleccionado) return Alert.alert('Atención', 'Selecciona un artículo.');
+    const c = parseFloat(cant.replace(',', '.')) || 0;
+    const p = parseFloat(precio.replace(',', '.')) || 0;
+    const d = parseFloat(desc.replace(',', '.')) || 0;
+    if (c <= 0) return Alert.alert('Error', 'Cantidad inválida');
+
+    setCarrito([...carrito, {
+      id: Date.now().toString(),
+      articuloId: articuloSeleccionado.id,
+      nombre: articuloSeleccionado.nombre,
+      cantidad: c,
+      precioUnitario: p,
+      descuento: d,
+      tipoDescuento: tipoDesc,
+      nota: notaItem
+    }]);
+    resetArticuloForm();
+  };
+
+  const eliminarDelCarrito = (id: string) => {
+    setCarrito(carrito.filter(i => i.id !== id));
   };
 
   const calcularTotales = () => {
     let subtotal = 0;
-    let totalDescuentos = 0;
-    articulosVenta.forEach(articulo => {
-      const subtotalArt = articulo.precioUnitario * articulo.cantidad;
-      subtotal += subtotalArt;
-      if (articulo.descuento > 0) {
-        if (articulo.tipoDescuento === 'porcentaje') {
-          totalDescuentos += (subtotalArt * articulo.descuento) / 100;
-        } else {
-          totalDescuentos += articulo.descuento * articulo.cantidad;
-        }
+    let totalDesc = 0;
+    carrito.forEach(item => {
+      const st = item.precioUnitario * item.cantidad;
+      subtotal += st;
+      if (item.descuento > 0) {
+        totalDesc += item.tipoDescuento === 'porcentaje' ? (st * item.descuento) / 100 : item.descuento * item.cantidad;
       }
     });
-    const baseImponible = subtotal - totalDescuentos;
-    const iva = baseImponible * 0.21;
-    const total = baseImponible + iva;
-    return { subtotal, descuentos: totalDescuentos, baseImponible, iva, total };
+    const base = subtotal - totalDesc;
+    return { subtotal, descuentos: totalDesc, base, iva: base * 0.21, total: base * 1.21 };
   };
-
   const totales = calcularTotales();
 
-  const handleSelectArticulo = (articulo: any) => {
-    setArticuloSeleccionado(articulo);
-    setArticuloPrecio(articulo.precio?.toString().replace(/[€\s]/g, '').replace(',', '.') || '');
-    setShowArticuloModal(false);
-  };
-
-  const handleAddArticulo = () => {
-    if (!articuloSeleccionado) return Alert.alert('Atención', 'Selecciona un artículo primero.');
-
-    const cantidad = parseFloat(articuloCantidad.replace(',', '.'));
-    const precio = parseFloat(articuloPrecio.replace(',', '.'));
-    const descuento = parseFloat(articuloDescuento.replace(',', '.')) || 0;
-
-    if (isNaN(cantidad) || cantidad <= 0) return Alert.alert('Error', 'Cantidad inválida');
-    if (isNaN(precio) || precio < 0) return Alert.alert('Error', 'Precio inválido');
-
-    const nuevoArticulo: ArticuloVenta = {
-      id: Date.now().toString(),
-      articuloId: articuloSeleccionado.id,
-      nombre: articuloSeleccionado.nombre,
-      cantidad,
-      precioUnitario: precio,
-      descuento,
-      tipoDescuento: tipoDescuentoArticulo,
-      nota: articuloNota
-    };
-
-    setArticulosVenta([...articulosVenta, nuevoArticulo]);
-    resetCamposArticulo();
-  };
-
-  const handleDeleteArticulo = (id: string) => {
-    setArticulosVenta(articulosVenta.filter(a => a.id !== id));
-  };
-
-  const handleGuardarVenta = async () => {
-    if (articulosVenta.length === 0) return Alert.alert('Faltan datos', 'Añade artículos.');
-    if (!clienteSeleccionado) return Alert.alert('Faltan datos', 'Selecciona cliente.');
-
-    Alert.alert('Confirmar Venta', `Total: ${totales.total.toFixed(2)} €`, [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-            text: 'Guardar', 
-            onPress: async () => {
-                try {
-                    const nuevaNotaData = {
-                      id: `N${Date.now().toString().slice(-6)}`,
-        cliente: clienteSeleccionado.nombre || clienteSeleccionado.empresa,
+  const guardarVenta = async () => {
+    if (carrito.length === 0 || !clienteSeleccionado) return Alert.alert('Error', 'Faltan datos.');
+    Alert.alert('Confirmar', `Total: ${totales.total.toFixed(2)} €`, [{
+      text: 'Guardar', onPress: async () => {
+        try {
+          const venta = {
+            id: `N${Date.now().toString().slice(-6)}`,
+            cliente: clienteSeleccionado.nombre,
         clienteId: clienteSeleccionado.id,
-                      fecha: new Date().toISOString(),
-                      precio: `${totales.total.toFixed(2).replace('.', ',')} €`,
-                      estado: (estadoPago === 'pagado' ? 'cerrada' : 'pendiente') as 'cerrada' | 'pendiente',
-        tipoNota: tipoNotaSeleccionado,
-        formaPago: formaPagoSeleccionado,
-                      items: articulosVenta,
-                      totalesNumericos: totales
-                    };
-                    await addNotaVenta(nuevaNotaData);
-                    resetFormulario();
-                    navigation.navigate('VerNota', { ventaData: nuevaNotaData });
-                } catch (error) {
-                    Alert.alert('Error', 'No se pudo guardar.');
-                }
-            }
-        }
-    ]);
+            fecha: new Date().toISOString(),
+            precio: `${totales.total.toFixed(2)} €`,
+        estado: estadoPago === 'pagado' ? 'cerrada' : 'pendiente',
+            tipoNota, formaPago, items: carrito, totalesNumericos: totales
+          };
+          await addNotaVenta(venta as any);
+          navigation.navigate('VerNota', { ventaData: venta });
+        } catch (e) { Alert.alert('Error', 'No se guardó'); }
+      }
+    }, { text: 'Cancelar' }]);
   };
 
   return (
     <ScreenWithSidebar currentScreen="NuevaVenta" scrollable={false}>
-      <View style={styles.rootContainer}>
-        
-        {/* 1. HEADER FIJO */}
+      {/* Header Superior */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Nueva Venta</Text>
       </View>
 
-        {/* 2. CUERPO PRINCIPAL (Split View) */}
-        <View style={styles.bodyContainer}>
-          
-          {/* === PANEL IZQUIERDO (Formulario) === */}
+      {/* CONTENEDOR PRINCIPAL DIVIDIDO - FLEX 1 CRÍTICO */}
+      <View style={styles.mainContent}>
+        
+        {/* PANEL IZQUIERDO - FORMULARIO */}
         <View style={styles.leftPanel}>
-            
-            {/* 2a. ZONA DE SCROLL (Ocupa todo el espacio disponible entre header y footer) */}
-            <View style={styles.scrollWrapper}>
-                <ScrollView 
-                  style={styles.scrollViewStyle}
-                  contentContainerStyle={styles.scrollContent}
-                  showsVerticalScrollIndicator={true}
-                  keyboardShouldPersistTaps="handled"
-                  nestedScrollEnabled={true}
-                >
-                  {/* CLIENTE */}
-                  <View style={[styles.formGroup, { zIndex: 300 }]}>
-                    <Text style={styles.label}>Cliente *</Text>
-                    <TouchableOpacity style={styles.dropdown} onPress={() => setShowClienteModal(true)}>
-                      <Text style={[styles.dropdownText, !clienteSeleccionado && styles.placeholderText]} numberOfLines={1}>
-                        {clienteSeleccionado ? (clienteSeleccionado.nombre) : 'Seleccionar Cliente...'}
-                </Text>
-                <Text style={styles.dropdownIcon}>▼</Text>
-              </TouchableOpacity>
-            </View>
-
-                  {/* ESTADO PAGO */}
-            <View style={styles.formGroup}>
-                    <Text style={styles.label}>Estado inicial</Text>
-              <View style={styles.toggleButtons}>
-                <TouchableOpacity
-                        style={[styles.toggleButton, estadoPago === 'pagado' && styles.toggleBgWhite]}
-                        onPress={() => setEstadoPago('pagado')}>
-                        <Text style={[styles.toggleText, estadoPago === 'pagado' && styles.textBlue]}>Pagado</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                        style={[styles.toggleButton, estadoPago === 'pendiente' && styles.toggleBgBlue]}
-                        onPress={() => setEstadoPago('pendiente')}>
-                        <Text style={[styles.toggleText, estadoPago === 'pendiente' && styles.textWhite]}>Pendiente</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-                  {/* TIPO Y FORMA PAGO */}
-                  <View style={[styles.twoColumns, { zIndex: 200 }]}>
-              <View style={[styles.formGroup, { flex: 1 }]}>
-                      <Text style={styles.label}>Tipo Doc.</Text>
-                      <TouchableOpacity style={styles.dropdown} onPress={() => { setShowTipoDropdown(!showTipoDropdown); setShowPagoDropdown(false); }}>
-                  <Text style={styles.dropdownText} numberOfLines={1}>{tipoNotaSeleccionado}</Text>
-                  <Text style={styles.dropdownIcon}>▼</Text>
-                </TouchableOpacity>
-                {showTipoDropdown && (
-                        <View style={styles.dropdownMenuAbs}>
-                            {tiposNota.map(t => (
-                              <TouchableOpacity key={t} style={styles.dropdownItem} onPress={() => { setTipoNotaSeleccionado(t); setShowTipoDropdown(false); }}>
-                                <Text style={styles.dropdownItemText}>{t}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-              </View>
-              <View style={[styles.formGroup, { flex: 1 }]}>
-                      <Text style={styles.label}>Forma Pago</Text>
-                      <TouchableOpacity style={styles.dropdown} onPress={() => { setShowPagoDropdown(!showPagoDropdown); setShowTipoDropdown(false); }}>
-                  <Text style={styles.dropdownText} numberOfLines={1}>{formaPagoSeleccionado}</Text>
-                  <Text style={styles.dropdownIcon}>▼</Text>
-                </TouchableOpacity>
-                {showPagoDropdown && (
-                        <View style={styles.dropdownMenuAbs}>
-                            <ScrollView style={{maxHeight: 200}} nestedScrollEnabled={true}>
-                            {formasPago.map(f => (
-                              <TouchableOpacity key={f} style={styles.dropdownItem} onPress={() => { setFormaPagoSeleccionado(f); setShowPagoDropdown(false); }}>
-                                <Text style={styles.dropdownItemText}>{f}</Text>
-                      </TouchableOpacity>
-                    ))}
-                            </ScrollView>
-                  </View>
-                )}
-              </View>
-            </View>
-
-                  <View style={styles.divider} />
-                  
-                  {/* --- SECCIÓN AÑADIR LÍNEA --- */}
-                  <Text style={styles.sectionTitle}>Añadir Línea</Text>
-
-            <View style={styles.formGroup}>
-                    <Text style={styles.label}>Artículo *</Text>
-                    <TouchableOpacity style={styles.searchInput} onPress={() => setShowArticuloModal(true)}>
-                      <Text style={[styles.searchText, !articuloSeleccionado && styles.placeholderText]}>
-                        {articuloSeleccionado ? articuloSeleccionado.nombre : 'Buscar en catálogo...'}
+          {/* Wrapper del ScrollView con flex: 1 y overflow hidden */}
+          <View style={styles.scrollWrapper}>
+            <ScrollView 
+              style={styles.scrollView}
+              contentContainerStyle={styles.scrollInner}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+            >
+            {/* Cliente */}
+              <View style={[styles.field, { zIndex: 20 }]}>
+                <Text style={styles.label}>Cliente *</Text>
+                <TouchableOpacity style={styles.select} onPress={() => setModalCliente(true)}>
+                  <Text style={{ color: clienteSeleccionado ? '#1e293b' : '#94a3b8' }}>
+                    {clienteSeleccionado?.nombre || 'Seleccionar Cliente...'}
                   </Text>
-                  <Text style={styles.searchIcon}>🔍</Text>
+                  <Text>▼</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Estado */}
+              <View style={styles.field}>
+                <Text style={styles.label}>Estado</Text>
+                <View style={styles.switchRow}>
+                  {['pagado', 'pendiente'].map((est) => (
+                <TouchableOpacity
+                      key={est}
+                      style={[styles.switchBtn, estadoPago === est && (est === 'pagado' ? styles.bgWhite : styles.bgBlue)]}
+                      onPress={() => setEstadoPago(est as any)}
+                >
+                      <Text style={[styles.switchTxt, estadoPago === est && (est === 'pagado' ? styles.txtBlue : styles.txtWhite)]}>
+                        {est.charAt(0).toUpperCase() + est.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+                  ))}
+                </View>
+            </View>
+
+              {/* Tipo y Forma Pago */}
+              <View style={[styles.row, { zIndex: 15 }]}>
+                <View style={[styles.col, { zIndex: 16 }]}>
+                  <Text style={styles.label}>Tipo Doc.</Text>
+                  <TouchableOpacity style={styles.select} onPress={() => { setDropdownTipo(!dropdownTipo); setDropdownPago(false); }}>
+                    <Text numberOfLines={1}>{tipoNota}</Text>
+                    <Text>▼</Text>
+                </TouchableOpacity>
+                  {dropdownTipo && (
+                    <View style={styles.dropdown}>
+                      {['Serie P (Oficiales)', 'Serie X', 'Pedido'].map(t => (
+                        <TouchableOpacity key={t} style={styles.dropItem} onPress={() => { setTipoNota(t); setDropdownTipo(false); }}>
+                          <Text>{t}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+                <View style={[styles.col, { zIndex: 15 }]}>
+                  <Text style={styles.label}>Forma Pago</Text>
+                  <TouchableOpacity style={styles.select} onPress={() => { setDropdownPago(!dropdownPago); setDropdownTipo(false); }}>
+                    <Text numberOfLines={1}>{formaPago}</Text>
+                    <Text>▼</Text>
+                </TouchableOpacity>
+                  {dropdownPago && (
+                    <View style={styles.dropdown}>
+                      {['Efectivo', 'Tarjeta', 'Bizum'].map(p => (
+                        <TouchableOpacity key={p} style={styles.dropItem} onPress={() => { setFormaPago(p); setDropdownPago(false); }}>
+                          <Text>{p}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
+
+              <View style={styles.divider} />
+              <Text style={styles.secTitle}>Añadir Línea</Text>
+
+            {/* Artículo */}
+              <View style={[styles.field, { zIndex: 10 }]}>
+                <Text style={styles.label}>Artículo *</Text>
+                <TouchableOpacity style={styles.select} onPress={() => setModalArticulo(true)}>
+                  <Text style={{ color: articuloSeleccionado ? '#1e293b' : '#94a3b8' }}>
+                    {articuloSeleccionado?.nombre || 'Buscar en catálogo...'}
+                  </Text>
+                  <Text>🔍</Text>
                 </TouchableOpacity>
             </View>
 
-            <View style={styles.twoColumns}>
-              <View style={[styles.formGroup, { flex: 1 }]}>
+            {/* Cantidad y Precio */}
+              <View style={styles.row}>
+                <View style={styles.col}>
                 <Text style={styles.label}>Cant.</Text>
-                      <TextInput style={styles.input} value={articuloCantidad} onChangeText={setArticuloCantidad} keyboardType="numeric" selectTextOnFocus />
-              </View>
-                    <View style={[styles.formGroup, { flex: 1.5 }]}>
-                      <Text style={styles.label}>Precio Unit.</Text>
-                      <TextInput style={styles.input} value={articuloPrecio} onChangeText={setArticuloPrecio} keyboardType="decimal-pad" selectTextOnFocus placeholder="0.00" />
-            </View>
+                  <TextInput style={styles.input} value={cant} onChangeText={setCant} keyboardType="numeric" selectTextOnFocus />
+                </View>
+                <View style={styles.col}>
+                  <Text style={styles.label}>Precio</Text>
+                  <TextInput style={styles.input} value={precio} onChangeText={setPrecio} keyboardType="numeric" placeholder="0.00" />
+                </View>
             </View>
 
-                  <View style={styles.formGroup}>
+            {/* Descuento */}
+              <View style={styles.field}>
                 <Text style={styles.label}>Descuento</Text>
-                    <View style={styles.discountRow}>
-                <TextInput
-                          style={[styles.input, { flex: 1, borderTopRightRadius: 0, borderBottomRightRadius: 0 }]}
-                  value={articuloDescuento}
-                  onChangeText={setArticuloDescuento}
-                  keyboardType="decimal-pad"
-                          placeholder="0"
-                />
-              <TouchableOpacity 
-                        style={styles.discountToggle}
-                onPress={() => setTipoDescuentoArticulo(t => t === 'porcentaje' ? 'pesos' : 'porcentaje')}
-              >
-                        <Text style={styles.discountToggleText}>{tipoDescuentoArticulo === 'porcentaje' ? '%' : '€'}</Text>
+                <View style={{ flexDirection: 'row' }}>
+                  <TextInput style={[styles.input, { flex: 1, borderRightWidth: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }]} value={desc} onChangeText={setDesc} keyboardType="numeric" placeholder="0" />
+                  <TouchableOpacity style={styles.suffixBtn} onPress={() => setTipoDesc(t => t === 'porcentaje' ? 'pesos' : 'porcentaje')}>
+                    <Text style={{ fontWeight: 'bold', color: '#092090' }}>{tipoDesc === 'porcentaje' ? '%' : '€'}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Nota */}
+              <View style={styles.field}>
+                <Text style={styles.label}>Nota</Text>
+                <TextInput style={[styles.input, { height: 60, textAlignVertical: 'top', paddingTop: 8 }]} multiline value={notaItem} onChangeText={setNotaItem} placeholder="Detalle opcional..." />
+              </View>
+
+              <TouchableOpacity style={styles.addBtn} onPress={agregarAlCarrito}>
+                <LinearGradient colors={['#092090', '#0C2ABF']} style={styles.gradBtn}><Text style={styles.txtBtn}>+ AÑADIR AL CARRITO</Text></LinearGradient>
               </TouchableOpacity>
-                    </View>
+            </ScrollView>
             </View>
 
-            <View style={styles.formGroup}>
-                    <Text style={styles.label}>Nota (opcional)</Text>
-              <TextInput
-                style={styles.textArea}
-                value={articuloNota}
-                onChangeText={setArticuloNota}
-                multiline
-                numberOfLines={3}
-                      placeholder="Detalles..."
-                placeholderTextColor="#94a3b8"
-              />
-            </View>
-
-                  {/* BOTÓN AÑADIR */}
-                  <TouchableOpacity style={styles.addButton} onPress={handleAddArticulo}>
-                    <LinearGradient colors={['#092090', '#0C2ABF']} style={styles.addButtonGradient}>
-                      <Text style={styles.addButtonText}>+ AÑADIR AL CARRITO</Text>
-              </LinearGradient>
-            </TouchableOpacity>
-
-          </ScrollView>
-            </View>
-
-            {/* 2b. FOOTER FIJO (Fuera del Scroll) */}
-            <View style={[styles.footerStatic, { paddingBottom: Math.max(16, insets.bottom + 10) }]}>
-              <TouchableOpacity style={styles.footerButtonSecundary} onPress={() => setShowHistorialModal(true)}>
-                <Text style={{fontWeight:'600', color:'#475569'}}>Historial</Text>
-            </TouchableOpacity>
-
-              <TouchableOpacity style={styles.footerButtonPrimary} onPress={handleGuardarVenta}>
-                <LinearGradient colors={['#8bd600', '#c4ff57']} style={styles.footerButtonGradient}>
-                  <Text style={styles.footerButtonText}>✅ CREAR NOTA</Text>
-              </LinearGradient>
+          {/* Footer Izquierdo Fijo */}
+          <View style={styles.panelFooter}>
+            <TouchableOpacity style={styles.btnSec} onPress={() => setModalHistorial(true)}><Text style={{color:'#64748b', fontWeight:'600'}}>Historial</Text></TouchableOpacity>
+            <TouchableOpacity style={styles.btnPri} onPress={guardarVenta}>
+               <LinearGradient colors={['#8bd600', '#c4ff57']} style={styles.gradBtn}><Text style={styles.txtBtnBlack}>✅ CREAR NOTA</Text></LinearGradient>
             </TouchableOpacity>
           </View>
-
         </View>
 
-          {/* === PANEL DERECHO (Resumen) === */}
-          <View style={[styles.rightPanel, { paddingBottom: insets.bottom }]}>
-          <View style={styles.notaHeader}>
-              <Text style={styles.notaTitle}>Resumen ({articulosVenta.length} items)</Text>
-          </View>
-
-          {articulosVenta.length === 0 ? (
-            <View style={styles.emptyState}>
-                <Text style={{ fontSize: 40 }}>🛒</Text>
-                <Text style={styles.emptyTitle}>Carrito Vacío</Text>
-            </View>
-          ) : (
-              <View style={styles.carritoContainer}>
-              <View style={styles.tableHeader}>
-                  <Text style={[styles.th, { flex: 3 }]}>Item</Text>
-                  <Text style={[styles.th, { flex: 1, textAlign: 'center' }]}>Cnt</Text>
-                  <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Total</Text>
-                  <View style={{ width: 30 }} />
+        {/* PANEL DERECHO - RESUMEN */}
+        <View style={styles.rightPanel}>
+          <Text style={styles.secTitle}>Resumen ({carrito.length})</Text>
+          <View style={{flex: 1, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, marginBottom: 10}}>
+            {carrito.length === 0 ? (
+               <View style={{flex:1, alignItems:'center', justifyContent:'center', opacity:0.5}}><Text style={{fontSize:40}}>🛒</Text><Text>Vacío</Text></View>
+            ) : (
+              <ScrollView style={{ flex: 1 }} contentContainerStyle={{padding: 0}}>
+                {carrito.map(i => (
+                  <View key={i.id} style={styles.rowItem}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={{fontWeight:'600', color: '#1e293b'}}>{i.nombre}</Text>
+                        <Text style={{fontSize:12, color: '#64748b'}}>x{i.cantidad}  {i.descuento > 0 ? `(-${i.descuento})` : ''}</Text>
               </View>
-                <ScrollView style={{ flex: 1 }}>
-                  {articulosVenta.map((item) => (
-                      <View key={item.id} style={styles.tableRow}>
-                  <View style={{ flex: 3 }}>
-                          <Text style={styles.tdMain}>{item.nombre}</Text>
-                          {item.descuento > 0 && <Text style={styles.tdDiscount}>Desc: {item.descuento}</Text>}
-                  </View>
-                        <Text style={[styles.td, { flex: 1, textAlign: 'center' }]}>{item.cantidad}</Text>
-                        <Text style={[styles.tdBold, { flex: 1.5, textAlign: 'right' }]}>
-                          {(item.precioUnitario * item.cantidad).toFixed(2)} €
-                  </Text>
-                        <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteArticulo(item.id)}>
-                          <Text style={styles.deleteIcon}>×</Text>
-                    </TouchableOpacity>
+                    <Text style={{ fontWeight:'bold', color: '#1e293b' }}>{(i.precioUnitario * i.cantidad).toFixed(2)} €</Text>
+                    <TouchableOpacity onPress={() => eliminarDelCarrito(i.id)} style={{marginLeft:12, padding: 4}}><Text style={{color:'#ef4444', fontSize: 18}}>×</Text></TouchableOpacity>
                 </View>
               ))}
             </ScrollView>
-              </View>
           )}
-
-          <View style={styles.totalsPanel}>
-            <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Base:</Text>
-                <Text style={styles.totalValue}>{totales.baseImponible.toFixed(2)} €</Text>
+          </View>
+          
+          <View style={styles.totalBox}>
+            <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 5}}>
+               <Text style={{color:'#64748b'}}>Base</Text><Text>{totales.base.toFixed(2)} €</Text>
             </View>
-            <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>IVA (21%):</Text>
-                <Text style={styles.totalValue}>{totales.iva.toFixed(2)} €</Text>
+            <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 10}}>
+               <Text style={{color:'#64748b'}}>IVA (21%)</Text><Text>{totales.iva.toFixed(2)} €</Text>
             </View>
-              <View style={styles.separator} />
-              <View style={styles.totalFinalRow}>
-                <Text style={styles.totalFinalLabel}>TOTAL</Text>
-                <Text style={styles.totalFinalValue}>{totales.total.toFixed(2)} €</Text>
+            <View style={{height:1, backgroundColor:'#cbd5e1', marginBottom: 10}}/>
+            <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
+               <Text style={{fontSize: 16, fontWeight:'800', color: '#0f172a'}}>TOTAL</Text>
+               <Text style={{fontSize: 20, fontWeight:'800', color: '#0C2ABF'}}>{totales.total.toFixed(2)} €</Text>
             </View>
           </View>
         </View>
       </View>
 
-        {/* MODALES */}
-        <Modal visible={showClienteModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Seleccionar Cliente</Text>
-              <ScrollView style={{ maxHeight: 300 }}>
-                {clientes.map(c => (
-                  <TouchableOpacity key={c.id} style={styles.modalItem} onPress={() => { setClienteSeleccionado(c); setShowClienteModal(false); }}>
-                    <Text style={{fontWeight: '600'}}>{c.nombre}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShowClienteModal(false)}>
-                <Text>Cerrar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+      {/* MODALES */}
+      <Modal visible={modalCliente} transparent animationType="fade"><View style={styles.modalBg}><View style={styles.modalCard}>
+        <Text style={styles.modalTitle}>Clientes</Text>
+        <ScrollView style={{maxHeight: 300}}>{clientes.map(c => <TouchableOpacity key={c.id} style={styles.modalItem} onPress={() => {setClienteSeleccionado(c); setModalCliente(false)}}><Text style={{fontSize:16}}>{c.nombre}</Text></TouchableOpacity>)}</ScrollView>
+        <TouchableOpacity style={styles.closeBtn} onPress={() => setModalCliente(false)}><Text>Cerrar</Text></TouchableOpacity>
+      </View></View></Modal>
 
-      <SeleccionarArticuloModal
-        visible={showArticuloModal}
-        onClose={() => setShowArticuloModal(false)}
-        articulos={articulos}
-        onSelect={handleSelectArticulo}
-      />
-        <Modal visible={showHistorialModal} transparent><View style={styles.modalOverlay}><View style={styles.modalContent}><Text>Historial</Text><TouchableOpacity onPress={() => setShowHistorialModal(false)}><Text>Cerrar</Text></TouchableOpacity></View></View></Modal>
+      <SeleccionarArticuloModal visible={modalArticulo} onClose={() => setModalArticulo(false)} articulos={articulos} onSelect={handleSelectArticulo} />
+      
+      <Modal visible={modalHistorial} transparent animationType="fade"><View style={styles.modalBg}><View style={styles.modalCard}><Text style={{textAlign:'center', margin: 20}}>Sin historial reciente.</Text><TouchableOpacity style={styles.closeBtn} onPress={() => setModalHistorial(false)}><Text>Cerrar</Text></TouchableOpacity></View></View></Modal>
 
-      </View>
     </ScreenWithSidebar>
   );
 }
 
 const styles = StyleSheet.create({
+  header: { height: 60, justifyContent: 'center', paddingHorizontal: 20, borderBottomWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#1e293b' },
+  
   // LAYOUT PRINCIPAL
-  rootContainer: { 
-    flex: 1, 
-    backgroundColor: '#fff', 
-    flexDirection: 'column',
-    width: '100%',
-    height: '100%',
-  },
-  bodyContainer: { 
-    flex: 1, 
+  mainContent: { 
+    flex: 1,
     flexDirection: 'row',
-    width: '100%',
     minHeight: 0, // CRÍTICO: Permite que flex funcione correctamente
   },
   
-  // HEADER
-  header: { 
-    backgroundColor: '#fff', 
-    borderBottomWidth: 1, 
-    borderColor: '#e2e8f0', 
-    padding: 16, 
-    height: 60, 
-    justifyContent: 'center',
-    width: '100%',
-  },
-  headerTitle: { 
-    fontFamily: 'Inter', 
-    fontWeight: '700', 
-    fontSize: 20, 
-    color: '#1e293b' 
-  },
-
   // PANEL IZQUIERDO
   leftPanel: {
     width: 420, 
-    backgroundColor: '#f8fafc', 
     borderRightWidth: 1,
     borderColor: '#e2e8f0',
+    backgroundColor: '#f8fafc', 
     flexDirection: 'column',
     flexShrink: 0, // No se encoge
-    flexGrow: 0, // No crece
     alignSelf: 'stretch', // Ocupa toda la altura disponible
   },
+  scrollWrapper: {
+    flex: 1,
+    minHeight: 0, // CRÍTICO: Permite que ScrollView calcule su altura
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollInner: {
+    padding: 20,
+    paddingBottom: 150, // Espacio extra para que el scroll funcione y no quede tapado por el footer
+  },
   
-  // WRAPPER DEL FORMULARIO (FLEX 1 ES LA CLAVE)
-  scrollWrapper: { 
-    flex: 1,
-    width: '100%',
-    minHeight: 0, // CRÍTICO: Permite que flex funcione con ScrollView
-  },
-  scrollViewStyle: {
-    flex: 1,
-    width: '100%',
-  },
-  scrollContent: { 
-    padding: 24,
-    paddingBottom: 150, // Padding extra para que el scroll baje más y no quede tapado por el footer
-  },
-
-  // FOOTER
-  footerStatic: { backgroundColor: '#fff', borderTopWidth: 1, borderColor: '#e2e8f0', padding: 16, flexDirection: 'row', gap: 12, elevation: 8, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, shadowOffset: {width:0, height: -2} },
-
   // PANEL DERECHO
-  rightPanel: { flex: 1, backgroundColor: '#fff', padding: 24, display: 'flex', flexDirection: 'column' },
+  rightPanel: { 
+    flex: 1, 
+    padding: 20,
+    backgroundColor: '#fff',
+    flexDirection: 'column',
+    minHeight: 0, // CRÍTICO: Permite que flex funcione correctamente
+  },
 
-  // --- ESTILOS UI ---
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: '#334155', marginTop: 20, marginBottom: 15 },
-  formGroup: { marginBottom: 16, position: 'relative' },
-  label: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 6 },
-  input: { height: 48, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 12, fontSize: 15, color: '#1e293b' },
-  textArea: { height: 80, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 12, fontSize: 14, textAlignVertical: 'top' },
-  dropdown: { height: 48, backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dropdownText: { fontSize: 15, color: '#1e293b', flex: 1 },
-  placeholderText: { color: '#94a3b8' },
-  dropdownIcon: { color: '#64748b' },
-  dropdownMenuAbs: { position: 'absolute', top: 52, left: 0, right: 0, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, elevation: 10, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, zIndex: 9999, maxHeight: 200 },
-  dropdownItem: { padding: 12, borderBottomWidth: 1, borderColor: '#f1f5f9' },
-  dropdownItemText: { fontSize: 14, color: '#334155' },
-  twoColumns: { flexDirection: 'row', gap: 12 },
-  divider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 12 },
-  toggleButtons: { flexDirection: 'row', backgroundColor: '#e2e8f0', borderRadius: 8, padding: 2 },
-  toggleButton: { flex: 1, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 6 },
-  toggleBgWhite: { backgroundColor: '#fff', elevation: 1 },
-  toggleBgBlue: { backgroundColor: '#0C2ABF' },
-  toggleText: { fontSize: 13, fontWeight: '600', color: '#64748b' },
-  textBlue: { color: '#092090' },
-  textWhite: { color: '#fff' },
-  searchInput: { height: 48, backgroundColor: '#fff', borderWidth: 1, borderColor: '#3b82f6', borderRadius: 8, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  searchText: { fontSize: 15 },
-  searchIcon: { fontSize: 18 },
-  discountRow: { flexDirection: 'row', height: 48 },
-  discountToggle: { width: 48, backgroundColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', borderTopRightRadius: 8, borderBottomRightRadius: 8, borderWidth: 1, borderColor: '#cbd5e1', borderLeftWidth: 0 },
-  discountToggleText: { fontWeight: '700', color: '#092090' },
-  addButton: { marginTop: 10, borderRadius: 8, overflow: 'hidden', marginBottom: 20 },
-  addButtonGradient: { paddingVertical: 14, alignItems: 'center' },
-  addButtonText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  footerButtonSecundary: { flex: 1, backgroundColor: '#f1f5f9', borderRadius: 8, alignItems: 'center', justifyContent: 'center', height: 50, borderWidth: 1, borderColor: '#e2e8f0' },
-  footerButtonPrimary: { flex: 2, borderRadius: 8, overflow: 'hidden', height: 50 },
-  footerButtonGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  footerButtonText: { color: '#1a1a1a', fontWeight: '800', fontSize: 14 },
-  notaHeader: { paddingBottom: 16, borderBottomWidth: 1, borderColor: '#f1f5f9' },
-  notaTitle: { fontSize: 20, fontWeight: '700', color: '#0f172a' },
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', opacity: 0.6 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', marginTop: 8 },
-  carritoContainer: { flex: 1, marginTop: 16 },
-  tableHeader: { flexDirection: 'row', paddingBottom: 8, borderBottomWidth: 1, borderColor: '#e2e8f0' },
-  th: { fontSize: 12, fontWeight: '600', color: '#64748b' },
-  tableRow: { flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1, borderColor: '#f8fafc', alignItems: 'center' },
-  tdMain: { fontSize: 14, fontWeight: '500', color: '#0f172a' },
-  tdDiscount: { fontSize: 11, color: '#16a34a' },
-  td: { fontSize: 14, color: '#334155' },
-  tdBold: { fontSize: 14, fontWeight: '700', color: '#0f172a' },
-  deleteBtn: { width: 30, alignItems: 'flex-end' },
-  deleteIcon: { fontSize: 20, color: '#ef4444' },
-  totalsPanel: { backgroundColor: '#f8fafc', borderRadius: 12, padding: 20, marginTop: 'auto' },
-  totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  totalLabel: { color: '#64748b', fontSize: 14 },
-  totalValue: { color: '#334155', fontSize: 14, fontWeight: '600' },
-  separator: { height: 1, backgroundColor: '#cbd5e1', marginVertical: 12 },
-  totalFinalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  totalFinalLabel: { fontSize: 18, fontWeight: '800', color: '#0f172a' },
-  totalFinalValue: { fontSize: 24, fontWeight: '800', color: '#0C2ABF' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: 400, backgroundColor: '#fff', borderRadius: 12, padding: 20, maxHeight: '80%' },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16, textAlign: 'center' },
-  modalItem: { padding: 12, borderBottomWidth: 1, borderColor: '#f1f5f9' },
-  modalCloseBtn: { marginTop: 16, padding: 12, backgroundColor: '#f1f5f9', borderRadius: 8, alignItems: 'center' }
+  // UI Components
+  field: { marginBottom: 14 },
+  label: { fontSize: 12, color: '#64748b', marginBottom: 5, fontWeight: '600' },
+  select: { height: 46, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, justifyContent: 'space-between', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff' },
+  input: { height: 46, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 12, backgroundColor: '#fff', fontSize: 15, color: '#1e293b' },
+  
+  row: { flexDirection: 'row', gap: 12, marginBottom: 14 },
+  col: { flex: 1 },
+  
+  switchRow: { flexDirection: 'row', backgroundColor: '#e2e8f0', borderRadius: 8, padding: 3 },
+  switchBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 6 },
+  bgWhite: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+  bgBlue: { backgroundColor: '#0C2ABF' },
+  txtBlue: { color: '#092090', fontWeight: '700', fontSize: 13 },
+  switchTxt: { fontSize: 13, color: '#64748b', fontWeight: '500' },
+  txtWhite: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  
+  dropdown: { position: 'absolute', top: 50, left: 0, right: 0, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, zIndex: 999, elevation: 8, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
+  dropItem: { padding: 14, borderBottomWidth: 1, borderColor: '#f1f5f9' },
+  
+  divider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 16 },
+  secTitle: { fontSize: 16, fontWeight: '700', color: '#334155', marginBottom: 12 },
+  
+  suffixBtn: { width: 46, borderWidth: 1, borderColor: '#cbd5e1', borderLeftWidth: 0, borderTopRightRadius: 8, borderBottomRightRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f1f5f9' },
+  
+  addBtn: { marginTop: 10, borderRadius: 8, overflow: 'hidden', marginBottom: 20 },
+  gradBtn: { padding: 14, alignItems: 'center' },
+  txtBtn: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  txtBtnBlack: { color: '#1a1a1a', fontWeight: '800', fontSize: 14 },
+  
+  panelFooter: { 
+    padding: 16, 
+    paddingBottom: 20,
+    borderTopWidth: 1, 
+    borderColor: '#e2e8f0', 
+    flexDirection: 'row', 
+    gap: 12, 
+    backgroundColor: '#fff', 
+    flexShrink: 0, // No se encoge, siempre visible
+  },
+  btnSec: { flex: 1, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, justifyContent: 'center', alignItems: 'center', height: 48, backgroundColor: '#f8fafc' },
+  btnPri: { flex: 2, borderRadius: 8, overflow: 'hidden', height: 48 },
+  
+  rowItem: { flexDirection: 'row', padding: 12, borderBottomWidth: 1, borderColor: '#f8fafc', alignItems: 'center', justifyContent: 'space-between' },
+  totalBox: { marginTop: 'auto', padding: 20, backgroundColor: '#f8fafc', borderRadius: 12 },
+  
+  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalCard: { width: 400, backgroundColor: '#fff', borderRadius: 12, padding: 24, maxHeight: '80%', elevation: 5 },
+  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16, textAlign: 'center', color: '#1e293b' },
+  modalItem: { padding: 14, borderBottomWidth: 1, borderColor: '#f1f5f9' },
+  closeBtn: { marginTop: 20, padding: 12, backgroundColor: '#f1f5f9', alignItems: 'center', borderRadius: 8 }
 });

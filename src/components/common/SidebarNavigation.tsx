@@ -174,7 +174,7 @@ function MenuIcon({ icon, active }: { icon: string; active: boolean }) {
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    height: '100%',
+    flex: 1, // Usar flex en lugar de height: '100%'
     backgroundColor: '#ffffff',
     borderTopRightRadius: 20,
     borderBottomRightRadius: 20,
@@ -191,6 +191,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'column',
     justifyContent: 'space-between',
+    minHeight: 0, // CRÍTICO: Permite que flex funcione correctamente
   },
   topSection: {
     alignItems: 'center',

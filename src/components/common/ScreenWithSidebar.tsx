@@ -1,10 +1,5 @@
-/**
- * Screen With Sidebar - FIX LAYOUT (FLEX ROW)
- * Solución al corte de contenido: Usar columnas reales en lugar de posición absoluta.
- */
-
 import React, { ReactNode } from 'react';
-import { View, StyleSheet, ScrollView, Platform } from 'react-native';
+import { View, StyleSheet, ScrollView, Platform, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsiveLayout } from '../../constants/layout';
 import SidebarNavigation from './SidebarNavigation';
@@ -23,105 +18,107 @@ export default function ScreenWithSidebar({
   const layout = useResponsiveLayout();
   const insets = useSafeAreaInsets();
 
-  // Configuración
   const showSidebar = layout.isTablet;
   const sidebarWidth = 80;
 
-  // 1. MODO MÓVIL (Sin Sidebar) - Comportamiento estándar
+  // COMPORTAMIENTO 1: MÓVIL (Sin Sidebar)
   if (!showSidebar) {
-    return scrollable ? (
-      <ScrollView 
-        style={styles.container} 
-        contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
-      >
-        {children}
-      </ScrollView>
-    ) : (
-      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-        {children}
-      </View>
-    );
-  }
-
-  // 2. MODO TABLET (Con Sidebar) - NUEVO LAYOUT FLEX ROW
-  return (
-    <View style={styles.tabletWrapper}>
-      
-      {/* COLUMNA 1: Sidebar (Espacio reservado real) */}
-      <View style={[styles.sidebarColumn, { width: sidebarWidth, paddingBottom: insets.bottom }]}>
-        <SidebarNavigation currentScreen={currentScreen} />
-      </View>
-      
-      {/* COLUMNA 2: Contenido (Ocupa el resto del espacio automáticamente) */}
-      <View style={styles.contentColumn}>
+    return (
+      // IMPORTANTE: Este View externo con flex: 1 es lo que faltaba.
+      // Sin él, el ScrollView hijo no sabe qué altura tener.
+      <View style={styles.masterContainer}>
         {scrollable ? (
-          // CASO A: Pantalla con scroll global (Ej: Menús, Listas)
           <ScrollView 
-            style={styles.scrollContainer} 
-            contentContainerStyle={[
-              styles.scrollContent, 
-              { paddingBottom: Math.max(40, insets.bottom + 20) }
-            ]}
-            showsVerticalScrollIndicator={true}
+            style={styles.flexOne} 
+            contentContainerStyle={{ paddingBottom: insets.bottom + 20, flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
           >
             {children}
           </ScrollView>
         ) : (
-          // CASO B: Pantalla sin scroll global (Ej: Nueva Venta, POS)
-          // IMPORTANTE: No agregamos padding aquí. Dejamos que la pantalla hija (children)
-          // maneje su propio espacio y footers.
-          <View style={styles.fixedContainer}>
+          <View style={[styles.flexOne, { paddingBottom: insets.bottom }]}>
             {children}
           </View>
         )}
       </View>
+    );
+  }
 
+  // COMPORTAMIENTO 2: TABLET (Split View)
+  return (
+    <View style={styles.masterContainer}>
+      <View style={styles.splitLayout}>
+        
+        {/* Columna 1: Menú Lateral */}
+        <View style={[styles.sidebarBox, { width: sidebarWidth, paddingBottom: insets.bottom }]}>
+          <SidebarNavigation currentScreen={currentScreen} />
+        </View>
+        
+        {/* Columna 2: Contenido de la Pantalla */}
+        <View style={styles.contentBox}>
+          {scrollable ? (
+            <ScrollView 
+              style={styles.flexOne}
+              contentContainerStyle={{ paddingBottom: Math.max(40, insets.bottom + 20), flexGrow: 1 }}
+              showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            // Si la pantalla (como Nueva Venta) maneja su propio scroll,
+            // le damos un contenedor flex: 1 limpio para que ella lo gestione.
+            <View style={styles.fixedContentContainer}>
+              {children}
+            </View>
+          )}
+        </View>
+
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  // EL CONTENEDOR MAESTRO: La clave de todo.
+  masterContainer: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
+    width: '100%',
+  },
+  flexOne: {
+    flex: 1,
+    minHeight: 0, // CRÍTICO: Permite que flex funcione correctamente con ScrollView
   },
   
-  // --- ESTILOS TABLET ---
-  tabletWrapper: {
+  // Layout dividido
+  splitLayout: {
     flex: 1,
-    flexDirection: 'row', // <--- LA CLAVE: Pone los elementos uno al lado del otro
-    backgroundColor: '#ffffff',
-    overflow: 'hidden', // Corta cualquier desbordamiento extraño
+    flexDirection: 'row',
+    minHeight: 0, // CRÍTICO: Permite que flex funcione correctamente
   },
-
-  sidebarColumn: {
-    backgroundColor: '#ffffff',
-    height: '100%',
+  
+  sidebarBox: {
+    flexShrink: 0, // No se encoge
     borderRightWidth: 1,
     borderColor: '#e2e8f0',
+    backgroundColor: '#fff',
     zIndex: 10,
-  },
-
-  contentColumn: {
-    flex: 1, // Ocupa todo el ancho restante (Screen Width - 80px)
-    backgroundColor: '#ffffff',
-  },
-
-  scrollContainer: {
-    flex: 1,
-    width: '100%',
+    alignSelf: 'stretch', // Ocupa toda la altura disponible
+    minHeight: 0, // CRÍTICO: Permite que flex funcione correctamente
   },
   
-  scrollContent: {
-    padding: 0,
-    flexGrow: 1,
-  },
-  
-  fixedContainer: {
+  contentBox: {
     flex: 1,
-    width: '100%',
-    minHeight: 0, // CRÍTICO: Permite que flex funcione correctamente con ScrollView anidado
+    backgroundColor: '#fff',
+    minHeight: 0, // CRÍTICO: Permite que el scroll interno funcione
     // Sin height: '100%' ni overflow: 'hidden' para permitir scroll interno
-    // Las pantallas hijas manejan su propio scroll cuando es necesario
   },
+  
+  fixedContentContainer: {
+    flex: 1,
+    minHeight: 0, // CRÍTICO: Permite que ScrollView interno funcione
+    width: '100%',
+    // Sin overflow: 'hidden' para permitir scroll interno
+  }
 });

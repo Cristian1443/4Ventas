@@ -366,10 +366,12 @@ export default function ComunicacionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff'
+    backgroundColor: '#ffffff',
+    minHeight: 0, // CRÍTICO: Permite que ScrollView funcione
   },
   scrollView: {
-    flex: 1
+    flex: 1,
+    minHeight: 0, // CRÍTICO: Permite que ScrollView calcule su altura
   },
   scrollContent: {
     padding: 40,
