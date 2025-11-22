@@ -1,6 +1,5 @@
 /**
- * Almacén Screen - EXACTAMENTE IGUAL A LA WEB
- * Menú con dos botones: Notas Almacén y Resumen Stock
+ * Almacén Screen - Optimizado para Tablet
  */
 
 import React from 'react';
@@ -8,61 +7,80 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity
+  TouchableOpacity,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import { useResponsiveLayout } from '../../constants/layout';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 
 export default function AlmacenScreen() {
   const navigation = useNavigation<any>();
+  const layout = useResponsiveLayout();
+
+  // Configuraciones de tamaño según el dispositivo
+  const buttonSize = layout.isTablet ? 160 : 110;
+  const fontSizeIcon = layout.isTablet ? 48 : 32;
+  const fontSizeLabel = layout.isTablet ? 16 : 12;
+  const gapSize = layout.isTablet ? 30 : 15;
 
   return (
     <ScreenWithSidebar currentScreen="Almacen" scrollable={false}>
       <View style={styles.container}>
-        <View style={styles.content}>
-          {/* Botones de acción */}
-          <View style={styles.buttonsContainer}>
-            {/* Notas Almacen */}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('NotasAlmacen')}
-              activeOpacity={0.8}
-            >
-              <LinearGradient
-                colors={['#092090', '#0C2ABF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.buttonGradient}
-              >
-                <Text style={styles.buttonIcon}>📄</Text>
-                <View style={styles.buttonTextContainer}>
-                  <Text style={styles.buttonText}>Notas</Text>
-                  <Text style={styles.buttonText}>Almacen</Text>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
+        
+        <Text style={styles.headerTitle}>Gestión de Almacén</Text>
 
-            {/* Resumen Stock */}
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('ResumenStock')}
-              activeOpacity={0.8}
+        <View style={[styles.grid, { gap: gapSize }]}>
+          {/* Notas Almacen */}
+          <TouchableOpacity
+            style={[styles.buttonWrapper, { width: buttonSize, height: buttonSize * 0.85 }]}
+            onPress={() => navigation.navigate('NotasAlmacen')}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#092090', '#0C2ABF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.button}
             >
-              <LinearGradient
-                colors={['#092090', '#0C2ABF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.buttonGradient}
-              >
-                <Text style={styles.buttonIcon}>📊</Text>
-                <View style={styles.buttonTextContainer}>
-                  <Text style={styles.buttonText}>Resumen</Text>
-                  <Text style={styles.buttonText}>Stock</Text>
-                </View>
-              </LinearGradient>
-            </TouchableOpacity>
-          </View>
+              <Text style={[styles.icon, { fontSize: fontSizeIcon }]}>📄</Text>
+              <Text style={[styles.label, { fontSize: fontSizeLabel }]}>Notas{'\n'}Almacén</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Resumen Stock */}
+          <TouchableOpacity
+            style={[styles.buttonWrapper, { width: buttonSize, height: buttonSize * 0.85 }]}
+            onPress={() => navigation.navigate('ResumenStock')}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#092090', '#0C2ABF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.button}
+            >
+              <Text style={[styles.icon, { fontSize: fontSizeIcon }]}>📊</Text>
+              <Text style={[styles.label, { fontSize: fontSizeLabel }]}>Resumen{'\n'}Stock</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+           {/* Gestión Artículos (Opcional, para llenar el menú si quieres) */}
+           <TouchableOpacity
+            style={[styles.buttonWrapper, { width: buttonSize, height: buttonSize * 0.85 }]}
+            onPress={() => navigation.navigate('Articulos')}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#092090', '#0C2ABF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.button}
+            >
+              <Text style={[styles.icon, { fontSize: fontSizeIcon }]}>📦</Text>
+              <Text style={[styles.label, { fontSize: fontSizeLabel }]}>Artículos</Text>
+            </LinearGradient>
+          </TouchableOpacity>
         </View>
       </View>
     </ScreenWithSidebar>
@@ -72,45 +90,45 @@ export default function AlmacenScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff'
+    padding: 40,
+    backgroundColor: '#ffffff',
   },
-  content: {
-    flex: 1,
-    padding: 60,
-    paddingHorizontal: 140,
-    position: 'relative'
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    marginBottom: 30,
+    marginLeft: 10,
   },
-  buttonsContainer: {
+  grid: {
     flexDirection: 'row',
-    gap: 12,
-    width: 225,
-    height: 105
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
   },
-  actionButton: {
-    width: 105.319,
-    height: 105.267,
-    borderRadius: 12.532,
-    overflow: 'hidden'
+  buttonWrapper: {
+    borderRadius: 16,
+    shadowColor: '#092090',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5,
+    backgroundColor: 'white',
   },
-  buttonGradient: {
+  button: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8
+    padding: 10,
+    borderRadius: 16,
   },
-  buttonIcon: {
-    fontSize: 20,
-    color: '#ffffff'
-  },
-  buttonTextContainer: {
-    alignItems: 'center'
-  },
-  buttonText: {
-    fontFamily: 'Inter',
-    fontSize: 14.362,
-    lineHeight: 16.755,
-    textAlign: 'center',
+  icon: {
+    marginBottom: 8,
     color: '#ffffff',
-    margin: 0
-  }
+  },
+  label: {
+    fontFamily: 'Inter',
+    fontWeight: '600',
+    color: '#ffffff',
+    textAlign: 'center',
+  },
 });

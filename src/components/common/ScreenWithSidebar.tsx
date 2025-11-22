@@ -1,10 +1,10 @@
 /**
- * Screen with Sidebar Wrapper
- * Muestra sidebar a la izquierda en tablets, sin sidebar en móviles
+ * Screen With Sidebar - CORREGIDO SAFE AREA
  */
 
 import React, { ReactNode } from 'react';
 import { View, StyleSheet, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // IMPORTANTE
 import { useResponsiveLayout } from '../../constants/layout';
 import SidebarNavigation from './SidebarNavigation';
 
@@ -20,44 +20,50 @@ export default function ScreenWithSidebar({
   scrollable = true 
 }: ScreenWithSidebarProps) {
   const layout = useResponsiveLayout();
+  const insets = useSafeAreaInsets(); // OBTENER INSETS
 
-  // Mostrar sidebar SIEMPRE en tablets (tanto landscape como portrait)
+  // Mostrar sidebar SIEMPRE en tablets
   const showSidebar = layout.isTablet;
 
+  // Estilo dinámico para el padding inferior
+  const containerStyles = {
+    flex: 1,
+    backgroundColor: '#ffffff',
+    paddingBottom: insets.bottom, // Agrega espacio extra abajo
+  };
+
   if (!showSidebar) {
-    // Móvil: solo contenido, sin sidebar
     return scrollable ? (
-      <ScrollView style={styles.container}>
+      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: insets.bottom }}>
         {children}
       </ScrollView>
     ) : (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         {children}
       </View>
     );
   }
 
-  // Tablet: sidebar + contenido SIEMPRE VISIBLE
-  const sidebarWidth = 80; // Ancho fijo del sidebar (igual que el web)
+  const sidebarWidth = 80;
   
   return (
     <View style={styles.containerWithSidebar}>
-      {/* Sidebar FIJO con posición absoluta */}
-      <View style={[styles.sidebarFixed, { width: sidebarWidth }]}>
+      {/* Sidebar FIJO */}
+      <View style={[styles.sidebarFixed, { width: sidebarWidth, paddingBottom: insets.bottom }]}>
         <SidebarNavigation currentScreen={currentScreen} />
       </View>
       
-      {/* Contenido con margen para el sidebar */}
+      {/* Contenido */}
       {scrollable ? (
         <ScrollView 
           style={[styles.contentWithMargin, { marginLeft: sidebarWidth }]} 
-          contentContainerStyle={styles.contentContainer}
+          contentContainerStyle={[styles.contentContainer, { paddingBottom: Math.max(40, insets.bottom + 20) }]}
           showsVerticalScrollIndicator={true}
         >
           {children}
         </ScrollView>
       ) : (
-        <View style={[styles.contentWithMargin, { marginLeft: sidebarWidth }]}>
+        <View style={[styles.contentWithMargin, { marginLeft: sidebarWidth, paddingBottom: insets.bottom }]}>
           {children}
         </View>
       )}
@@ -73,6 +79,7 @@ const styles = StyleSheet.create({
   containerWithSidebar: {
     flex: 1,
     backgroundColor: '#ffffff',
+    position: 'relative', // Asegura contexto
   },
   sidebarFixed: {
     position: 'absolute',
@@ -80,11 +87,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     zIndex: 9999,
-    height: '100%', // Asegurar altura completa
-  },
-  content: {
-    flex: 1,
-    backgroundColor: '#ffffff',
+    height: '100%',
   },
   contentWithMargin: {
     flex: 1,
@@ -93,9 +96,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 20,
     paddingTop: 20,
-    paddingBottom: 40,
+    // paddingBottom se maneja dinámicamente arriba
   },
 });
-
-
-
