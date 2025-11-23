@@ -42,7 +42,7 @@ export default function ScreenWithSidebar({
     );
   }
 
-  // COMPORTAMIENTO 2: TABLET (Split View)
+  // COMPORTAMIENTO 2: TABLET/WEB (Split View)
   return (
     <View style={styles.masterContainer}>
       <View style={styles.splitLayout}>
@@ -64,7 +64,7 @@ export default function ScreenWithSidebar({
               {children}
             </ScrollView>
           ) : (
-            // Contenedor fijo para pantallas con su propio scroll (como NuevaVenta)
+            // IMPORTANTE: Contenedor fijo para pantallas como NuevaVenta que tienen su propio scroll
             <View style={styles.fixedContentContainer}>
               {children}
             </View>
@@ -81,19 +81,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
     width: '100%',
-    // CRÍTICO PARA WEB: Forzar altura de la ventana
-    // En móvil usa '100%', en web usa '100vh'
-    height: (Platform.OS === 'web' ? '100vh' : '100%') as any,
+    // CRÍTICO PARA WEB: Forzar altura de la ventana (Viewport Height)
+    // Sin esto, el navegador no sabe cuándo activar el scroll.
+    // @ts-ignore - Ignorar error de tipo en TS para web
+    height: Platform.OS === 'web' ? '100vh' : '100%', 
     overflow: 'hidden', 
   },
   flexOne: {
     flex: 1,
-    minHeight: 0, // Permite al flex encogerse si es necesario
+    minHeight: 0, 
   },
   splitLayout: {
     flex: 1,
     flexDirection: 'row',
-    height: '100%', // Asegura que ocupe todo el alto del padre
+    height: '100%', 
     overflow: 'hidden',
   },
   sidebarBox: {
@@ -102,18 +103,18 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     backgroundColor: '#fff',
     zIndex: 10,
-    height: '100%', // Altura completa
+    height: '100%',
   },
   contentBox: {
     flex: 1,
     backgroundColor: '#fff',
-    height: '100%', // Altura completa
-    overflow: 'hidden',
+    height: '100%',
+    overflow: 'hidden', // Evita que el contenido empuje el ancho/alto
   },
   fixedContentContainer: {
     flex: 1,
-    height: '100%', // Altura completa
+    height: '100%',
     width: '100%',
-    overflow: 'hidden', // Importante para que el hijo maneje el scroll
+    overflow: 'hidden', // CRÍTICO: Recorta el contenido que sobra para que el ScrollView hijo funcione
   }
 });

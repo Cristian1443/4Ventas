@@ -3,6 +3,7 @@
     "name": "4Ventas",
     "slug": "4ventas",
     "version": "1.0.0",
+    "sdkVersion": "54.0.0",
     "orientation": "default",
     "userInterfaceStyle": "light",
     "splash": {
@@ -25,7 +26,10 @@
       "adaptiveIcon": {
         "backgroundColor": "#0C2ABF"
       },
-      "package": "com.fourventas.app"
+      "package": "com.fourventas.app",
+      "compileSdkVersion": 54,
+      "targetSdkVersion": 54,
+      "minSdkVersion": 21
     },
     "extra": {
       "eas": {
