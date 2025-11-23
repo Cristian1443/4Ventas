@@ -1,5 +1,5 @@
 import React, { ReactNode } from 'react';
-import { View, StyleSheet, ScrollView, Platform, Dimensions } from 'react-native';
+import { View, StyleSheet, ScrollView, Platform } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsiveLayout } from '../../constants/layout';
 import SidebarNavigation from './SidebarNavigation';
@@ -47,8 +47,8 @@ export default function ScreenWithSidebar({
     <View style={styles.masterContainer}>
       <View style={styles.splitLayout}>
         
-        {/* Columna 1: Menú Lateral */}
-        <View style={[styles.sidebarBox, { width: sidebarWidth, paddingBottom: insets.bottom }]}>
+        {/* Columna 1: Menú Lateral - Borde a Borde */}
+        <View style={[styles.sidebarBox, { width: sidebarWidth }]}>
           <SidebarNavigation currentScreen={currentScreen} />
         </View>
         
@@ -64,7 +64,6 @@ export default function ScreenWithSidebar({
               {children}
             </ScrollView>
           ) : (
-            // IMPORTANTE: Contenedor fijo para pantallas como NuevaVenta que tienen su propio scroll
             <View style={styles.fixedContentContainer}>
               {children}
             </View>
@@ -81,9 +80,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
     width: '100%',
-    // CRÍTICO PARA WEB: Forzar altura de la ventana (Viewport Height)
-    // Sin esto, el navegador no sabe cuándo activar el scroll.
-    // @ts-ignore - Ignorar error de tipo en TS para web
+    // @ts-ignore
     height: Platform.OS === 'web' ? '100vh' : '100%', 
     overflow: 'hidden', 
   },
@@ -104,17 +101,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     zIndex: 10,
     height: '100%',
+    // Eliminamos paddingBottom para que sea borde a borde real
   },
   contentBox: {
     flex: 1,
     backgroundColor: '#fff',
     height: '100%',
-    overflow: 'hidden', // Evita que el contenido empuje el ancho/alto
+    overflow: 'hidden',
   },
   fixedContentContainer: {
     flex: 1,
     height: '100%',
     width: '100%',
-    overflow: 'hidden', // CRÍTICO: Recorta el contenido que sobra para que el ScrollView hijo funcione
+    overflow: 'hidden',
   }
 });

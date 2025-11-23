@@ -26,10 +26,7 @@
       "adaptiveIcon": {
         "backgroundColor": "#0C2ABF"
       },
-      "package": "com.fourventas.app",
-      "compileSdkVersion": 54,
-      "targetSdkVersion": 54,
-      "minSdkVersion": 21
+      "package": "com.fourventas.app"
     },
     "extra": {
       "eas": {

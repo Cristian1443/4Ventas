@@ -1,6 +1,6 @@
 /**
- * Contexto Global de la Aplicación
- * Maneja todo el estado de la aplicación de forma centralizada
+ * Contexto Global de la Aplicación - ACTUALIZADO
+ * - Incluye lógica de descuento de stock al crear venta
  */
 
 import React, { createContext, useState, useContext, useEffect, useCallback, ReactNode } from 'react';
@@ -364,16 +364,42 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   // ============================================================================
-  // FUNCIONES PARA VENTAS
+  // FUNCIONES PARA VENTAS (ACTUALIZADA CON DESCUENTO DE STOCK)
   // ============================================================================
 
   const addNotaVenta = async (nota: NotaVenta) => {
+    // 1. Guardar la venta
     const nuevasNotas = [nota, ...notasVenta];
     setNotasVenta(nuevasNotas);
     await storageService.setItem('notasVenta', nuevasNotas);
     
     // Agregar a cola de sincronización
     syncService.addToQueue('venta', nota);
+
+    // 2. Descontar stock de los artículos
+    if (nota.items && nota.items.length > 0) {
+      // Usamos el estado actual 'articulos'
+      const nuevosArticulos = articulos.map(articulo => {
+        // Buscar si este artículo del inventario está en los items vendidos
+        // Nota: Ajusta 'articuloId' según la estructura real de tu objeto item en venta
+        const itemVendido = nota.items?.find((i: any) => i.articuloId === articulo.id || i.id === articulo.id);
+        
+        if (itemVendido) {
+          const cantidadVendida = parseFloat(itemVendido.cantidad) || 0;
+          // Retornar artículo con cantidad reducida
+          return {
+            ...articulo,
+            cantidad: Math.max(0, articulo.cantidad - cantidadVendida) // Evitar negativos
+          };
+        }
+        return articulo;
+      });
+
+      // Actualizar estado y persistencia
+      setArticulos(nuevosArticulos);
+      await storageService.setItem('articulos', nuevosArticulos);
+      console.log('✅ Stock actualizado para', nota.items.length, 'productos');
+    }
   };
 
   const updateNotaVenta = async (id: string, estado: 'pendiente' | 'cerrada' | 'anulada') => {
