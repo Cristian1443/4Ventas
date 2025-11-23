@@ -32,13 +32,15 @@ export default function NuevaVentaScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   
-  // 1. AQUÍ FALTABA IMPORTAR 'addCobro' DEL CONTEXTO
-  const { addNotaVenta, addCobro, clientes, articulos } = useApp(); 
+  // 1. [CRÍTICO] Importamos addCobro. En tu archivo subido esto faltaba.
+  const { addNotaVenta, addCobro, clientes, articulos } = useApp();
 
   // --- ESTADOS ---
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(route.params?.clienteSeleccionado || null);
-  // IMPORTANTE: Si esto está en 'pendiente', se creará la deuda.
-  const [estadoPago, setEstadoPago] = useState<'pagado' | 'pendiente'>('pagado'); 
+  
+  // 2. [CRÍTICO] Estado por defecto 'pendiente' para que genere deuda visible
+  const [estadoPago, setEstadoPago] = useState<'pagado' | 'pendiente'>('pendiente'); 
+  
   const [tipoNota, setTipoNota] = useState('Serie P (Oficiales)');
   const [formaPago, setFormaPago] = useState('Efectivo');
   
@@ -68,6 +70,7 @@ export default function NuevaVentaScreen() {
 
   const handleSelectArticulo = (art: any) => {
     setArticuloSeleccionado(art);
+    // Limpiamos el precio de símbolos para que sea editable
     setPrecio(art.precio?.toString().replace(/[€\s]/g, '').replace(',', '.') || '');
     setModalArticulo(false);
   };
@@ -113,55 +116,62 @@ export default function NuevaVentaScreen() {
 
   // --- FUNCIÓN DE GUARDADO CONECTADA ---
   const guardarVenta = async () => {
-    if (carrito.length === 0 || !clienteSeleccionado) return Alert.alert('Error', 'Faltan datos.');
+    if (carrito.length === 0 || !clienteSeleccionado) return Alert.alert('Error', 'Faltan datos (Cliente o Artículos).');
     
     Alert.alert('Confirmar', `Total: ${totales.total.toFixed(2)} €`, [{
       text: 'Guardar', onPress: async () => {
         try {
           const fechaActual = new Date().toLocaleString('es-ES');
-          // Usamos un timestamp para asegurar IDs únicos
           const timestamp = Date.now().toString(); 
           const notaId = `N${timestamp.slice(-6)}`; 
 
-          // 1. Crear Objeto Venta (Historial)
+          // 1. GUARDAR LA NOTA (Historial de productos)
+          const estadoNota = estadoPago === 'pagado' ? 'cerrada' : 'pendiente';
           const venta = {
             id: notaId,
             cliente: clienteSeleccionado.nombre,
             clienteId: clienteSeleccionado.id,
             fecha: fechaActual,
             precio: `${totales.total.toFixed(2)} €`,
-            estado: estadoPago === 'pagado' ? 'cerrada' : 'pendiente',
+            estado: estadoNota,
             tipoNota, 
             formaPago, 
             items: carrito, 
             totalesNumericos: totales
           };
           
-          // Guardar en historial de ventas
+          console.log('💾 Guardando nota de venta:', { 
+            id: venta.id, 
+            cliente: venta.cliente, 
+            clienteId: venta.clienteId, 
+            estado: venta.estado,
+            precio: venta.precio 
+          });
+          
           await addNotaVenta(venta as any);
 
-          // 2. CONEXIÓN GLOBAL: CREAR EL COBRO (DEUDA)
-          // <--- OJO AQUÍ: ESTE BLOQUE FALTABA EN TU ARCHIVO
+          // 3. [CRÍTICO] CREAR EL COBRO (DEUDA)
+          // Este bloque faltaba en tu archivo y es lo que conecta con CobrosList
           const nuevoCobro = {
             id: `C${timestamp.slice(-6)}`, 
             cliente: clienteSeleccionado.nombre,
             clienteId: clienteSeleccionado.id,
-            monto: `${totales.total.toFixed(2)} €`, // Importante: mismo formato que espera CobrosList
+            monto: `${totales.total.toFixed(2)} €`,
             fecha: fechaActual,
             estado: estadoPago, // Si es 'pendiente', la pantalla CobrosList lo mostrará
             notaVentaId: notaId, 
             formaPago: formaPago
           };
 
-          // <--- OJO AQUÍ: LLAMAR A LA FUNCIÓN GLOBAL
+          // Llamamos a la función global
           await addCobro(nuevoCobro as any); 
 
-          // 3. Navegar
+          // 4. Navegar
           navigation.navigate('VerNota', { ventaData: venta });
           
         } catch (e) { 
           console.error(e);
-          Alert.alert('Error', 'No se guardó'); 
+          Alert.alert('Error', 'No se pudo guardar la venta correctamente'); 
         }
       }
     }, { text: 'Cancelar' }]);
@@ -169,15 +179,15 @@ export default function NuevaVentaScreen() {
 
   return (
     <ScreenWithSidebar currentScreen="NuevaVenta" scrollable={false}>
-      {/* Header */}
+      {/* Header Superior */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Nueva Venta</Text>
       </View>
 
-      {/* Contenedor Principal con Scroll Arreglado */}
+      {/* CONTENEDOR PRINCIPAL DIVIDIDO */}
       <View style={styles.mainContent}>
         
-        {/* Panel Izquierdo */}
+        {/* PANEL IZQUIERDO */}
         <View style={styles.leftPanel}>
           <View style={styles.scrollWrapper}>
             <ScrollView 
@@ -213,6 +223,10 @@ export default function NuevaVentaScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
+                {/* Mensaje visual de confirmación */}
+                <Text style={{fontSize: 11, color: '#64748b', marginTop: 4, fontStyle: 'italic'}}>
+                  {estadoPago === 'pendiente' ? '⚠️ Se generará una deuda en Cobros Pendientes' : '✅ Se marcará como cobrada (Historial)'}
+                </Text>
               </View>
 
               {/* Tipo y Forma Pago */}
@@ -302,7 +316,7 @@ export default function NuevaVentaScreen() {
             </ScrollView>
           </View>
 
-          {/* Footer */}
+          {/* Footer Izquierdo Fijo */}
           <View style={styles.panelFooter}>
             <TouchableOpacity style={styles.btnSec} onPress={() => setModalHistorial(true)}><Text style={{color:'#64748b', fontWeight:'600'}}>Historial</Text></TouchableOpacity>
             <TouchableOpacity style={styles.btnPri} onPress={guardarVenta}>
@@ -311,7 +325,7 @@ export default function NuevaVentaScreen() {
           </View>
         </View>
 
-        {/* Panel Derecho */}
+        {/* PANEL DERECHO - RESUMEN */}
         <View style={styles.rightPanel}>
           <Text style={styles.secTitle}>Resumen ({carrito.length})</Text>
           <View style={{flex: 1, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, marginBottom: 10}}>

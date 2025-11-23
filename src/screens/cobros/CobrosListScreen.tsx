@@ -50,25 +50,54 @@ export default function CobrosListScreen() {
 
   // 2. Agrupar Deudas Pendientes por Cliente
   const clientesPendientes = useMemo(() => {
-    // Filtramos las notas que están pendientes
-    const notasPendientes = notasVenta.filter(n => n.estado === 'pendiente');
+    // Filtramos las notas que están pendientes (verificamos múltiples formas)
+    const notasPendientes = notasVenta.filter(n => {
+      const estado = n.estado?.toLowerCase() || '';
+      return estado === 'pendiente';
+    });
+
+    console.log('📊 Notas pendientes encontradas:', notasPendientes.length);
+    console.log('📋 Detalles notas:', notasPendientes.map(n => ({ id: n.id, cliente: n.cliente, clienteId: n.clienteId, estado: n.estado })));
 
     // Mapeamos los clientes para ver cuáles tienen deuda
     const listaAgrupada = clientes
       .map(cliente => {
-        // Buscar notas pendientes de este cliente
-        const susNotas = notasPendientes.filter(nota => 
-          (nota.clienteId === cliente.id) ||
-          (nota.cliente && nota.cliente.toLowerCase().trim() === cliente.nombre.toLowerCase().trim()) ||
-          (cliente.empresa && nota.cliente && nota.cliente.includes(cliente.empresa))
-        );
+        // Buscar notas pendientes de este cliente (múltiples formas de matching)
+        const susNotas = notasPendientes.filter(nota => {
+          // Match por clienteId (más confiable)
+          if (nota.clienteId && cliente.id && nota.clienteId === cliente.id) return true;
+          
+          // Match por nombre exacto (case insensitive)
+          if (nota.cliente && cliente.nombre) {
+            const notaCliente = nota.cliente.toLowerCase().trim();
+            const clienteNombre = cliente.nombre.toLowerCase().trim();
+            if (notaCliente === clienteNombre) return true;
+          }
+          
+          // Match por empresa
+          if (cliente.empresa && nota.cliente) {
+            const notaCliente = nota.cliente.toLowerCase();
+            const clienteEmpresa = cliente.empresa.toLowerCase();
+            if (notaCliente.includes(clienteEmpresa) || clienteEmpresa.includes(notaCliente)) return true;
+          }
+          
+          // Match por nombreComercial si existe
+          if (cliente.nombreComercial && nota.cliente) {
+            const notaCliente = nota.cliente.toLowerCase();
+            const nombreComercial = cliente.nombreComercial.toLowerCase();
+            if (notaCliente.includes(nombreComercial) || nombreComercial.includes(notaCliente)) return true;
+          }
+          
+          return false;
+        });
 
         // Si no tiene notas pendientes, lo descartamos (return null)
         if (susNotas.length === 0) return null;
 
         // Calcular total de deuda del cliente
         const deudaTotal = susNotas.reduce((sum, nota) => {
-           const precio = parseFloat(nota.precio.replace(/[^\d,.-]/g, '').replace(',', '.') || '0');
+           const precioStr = nota.precio || '0';
+           const precio = parseFloat(precioStr.replace(/[^\d,.-]/g, '').replace(',', '.') || '0');
            return sum + precio;
         }, 0);
 
@@ -80,8 +109,9 @@ export default function CobrosListScreen() {
       })
       .filter(c => c !== null) as any[]; // Filtramos los nulos
 
+    console.log('👥 Clientes con deuda encontrados:', listaAgrupada.length);
     return listaAgrupada;
-  }, [cobros, clientes, notasVenta]); // CRÍTICO: Agregado notasVenta a dependencias
+  }, [clientes, notasVenta]); // Removido 'cobros' de dependencias ya que no se usa aquí
 
   // 3. Filtrar y Ordenar
   const clientesFiltrados = clientesPendientes

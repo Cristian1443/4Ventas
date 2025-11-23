@@ -217,7 +217,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       ]);
       
       if (savedGastos) setGastos(savedGastos);
-      if (savedNotasVenta) setNotasVenta(savedNotasVenta);
+      if (savedNotasVenta) {
+        setNotasVenta(savedNotasVenta);
+        console.log('📋 Notas de venta cargadas:', savedNotasVenta.length);
+        const pendientes = savedNotasVenta.filter((n: any) => n.estado === 'pendiente');
+        console.log('📋 Notas pendientes:', pendientes.length);
+        console.log('📋 Detalles notas pendientes:', pendientes.map((n: any) => ({ id: n.id, cliente: n.cliente, clienteId: n.clienteId, estado: n.estado })));
+      }
       if (savedCobros) setCobros(savedCobros);
       if (savedDocumentos) setDocumentos(savedDocumentos);
       if (savedArticulos) setArticulos(savedArticulos);
@@ -368,10 +374,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   // ============================================================================
 
   const addNotaVenta = async (nota: NotaVenta) => {
+    console.log('💾 addNotaVenta - Guardando nota:', {
+      id: nota.id,
+      cliente: nota.cliente,
+      clienteId: nota.clienteId,
+      estado: nota.estado,
+      precio: nota.precio
+    });
+    
     // 1. Guardar la venta
     const nuevasNotas = [nota, ...notasVenta];
     setNotasVenta(nuevasNotas);
     await storageService.setItem('notasVenta', nuevasNotas);
+    
+    console.log('✅ Nota guardada. Total notas:', nuevasNotas.length);
+    console.log('📋 Notas pendientes:', nuevasNotas.filter(n => n.estado === 'pendiente').length);
     
     // Agregar a cola de sincronización
     syncService.addToQueue('venta', nota);
