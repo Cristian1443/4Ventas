@@ -23,16 +23,21 @@ export default function ResumenStockScreen() {
   const [filtroCategoria, setFiltroCategoria] = useState('Todos');
 
   // Usar datos de articulos del contexto, mapear a formato de stock
-  const stockData = articulos.map(art => ({
-    id: art.id,
-    codigoCorto: art.codigoCorto || 'N/D',
-    nombre: art.nombre,
-    categoria: art.categoria,
-    stock: art.cantidad,
-    stockMinimo: art.stockMinimo || 0,
-    ultimaEntrada: '18/09/2024', // Datos de ejemplo, se pueden obtener del contexto
-    ultimaSalida: '15/09/2024'
-  }));
+  const stockData = articulos.map(art => {
+    const fallbackCode = art.nombre
+      ? `${art.nombre.substring(0, 3).toUpperCase()}-${art.id.slice(-3)}`
+      : art.id || 'N/D';
+    return {
+      id: art.id,
+      codigoCorto: art.codigoCorto || fallbackCode,
+      nombre: art.nombre,
+      categoria: art.categoria,
+      stock: art.cantidad,
+      stockMinimo: art.stockMinimo || 0,
+      ultimaEntrada: '18/09/2024', // Datos de ejemplo, se pueden obtener del contexto
+      ultimaSalida: '15/09/2024'
+    };
+  });
 
   const categorias = ['Todos', ...Array.from(new Set(stockData.map(a => a.categoria)))];
 
@@ -175,8 +180,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
     backgroundColor: '#ffffff',
-    position: 'sticky',
-    top: 0,
+    position: 'relative',
     zIndex: 10
   },
   headerTitle: {
