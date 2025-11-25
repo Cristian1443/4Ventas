@@ -138,6 +138,7 @@ export default function AppNavigator() {
 
       {/* Ventas */}
       <Stack.Screen name="Ventas" component={VentasListScreen} />
+      <Stack.Screen name="VentasList" component={VentasListScreen} />
       <Stack.Screen name="NuevaVenta" component={NuevaVentaScreen} />
       <Stack.Screen name="VerNota" component={VerNotaScreen} />
       <Stack.Screen name="ResumenDia" component={ResumenDiaScreen} />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,16 +7,20 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  Switch,
+  KeyboardAvoidingView,
+  Platform,
   Modal,
-  Platform
+  FlatList
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 import SeleccionarArticuloModal from '../../components/SeleccionarArticuloModal';
+import SeleccionarClienteModal from '../../components/SeleccionarClienteModal';
 
-// --- TIPOS ---
+// --- TIPOS Y CONSTANTES ---
 interface ArticuloVenta {
   id: string;
   articuloId: string;
@@ -28,70 +32,198 @@ interface ArticuloVenta {
   nota?: string;
 }
 
+const TIPOS_NOTA = [
+  { label: 'Albarán', value: 'Serie P' },
+  { label: 'Adicional', value: 'Serie X' },
+  { label: 'Pedido', value: 'Pedido' },
+  { label: 'Presupuesto', value: 'Presupuesto' }
+];
+
+const METODOS_PAGO_BASE = ['Efectivo', 'Tarjeta', 'Bizum', 'Transferencia'];
+
 export default function NuevaVentaScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  
-  // 1. [CRÍTICO] Importamos addCobro. En tu archivo subido esto faltaba.
   const { addNotaVenta, addCobro, clientes, articulos } = useApp();
 
-  // --- ESTADOS ---
-  const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(route.params?.clienteSeleccionado || null);
-  
-  // 2. [CRÍTICO] Estado por defecto 'pendiente' para que genere deuda visible
+  // Datos iniciales si venimos de editar/borrador
+  const ventaDataInicial = route.params?.ventaData;
+
+  // --- ESTADOS DOCUMENTO ---
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null);
   const [estadoPago, setEstadoPago] = useState<'pagado' | 'pendiente'>('pendiente'); 
-  
-  const [tipoNota, setTipoNota] = useState('Serie P (Oficiales)');
-  const [formaPago, setFormaPago] = useState('Efectivo');
-  
-  // Estados de Artículo
+  const [tipoNota, setTipoNota] = useState(TIPOS_NOTA[0]);
+  const [formaPago, setFormaPago] = useState(''); 
+
+  // --- ESTADOS DE LÍNEA (ARTÍCULO) ---
   const [articuloSeleccionado, setArticuloSeleccionado] = useState<any>(null);
-  const [cant, setCant] = useState('1');
+  const [codigoInput, setCodigoInput] = useState('');
+  const [cant, setCant] = useState('');
   const [precio, setPrecio] = useState('');
+  const [enableDiscount, setEnableDiscount] = useState(false);
   const [desc, setDesc] = useState('');
-  const [tipoDesc, setTipoDesc] = useState<'porcentaje' | 'pesos'>('porcentaje');
   const [notaItem, setNotaItem] = useState('');
 
   const [carrito, setCarrito] = useState<ArticuloVenta[]>([]);
+  
+  // --- MODALES ---
   const [modalCliente, setModalCliente] = useState(false);
   const [modalArticulo, setModalArticulo] = useState(false);
   const [modalHistorial, setModalHistorial] = useState(false);
-  const [dropdownTipo, setDropdownTipo] = useState(false);
-  const [dropdownPago, setDropdownPago] = useState(false);
+  const [modalSelectorVisible, setModalSelectorVisible] = useState(false);
+  const [selectorType, setSelectorType] = useState<'tipoDoc' | 'formaPago' | null>(null);
 
-  // --- LÓGICA ---
+  // Flag para controlar guardado y evitar alerta al salir
+  const [isSaved, setIsSaved] = useState(false);
+
+  // --- CARGA INICIAL (EDICIÓN) ---
+  useEffect(() => {
+    if (ventaDataInicial) {
+      const cli = clientes.find(c => c.id === ventaDataInicial.clienteId) || { 
+        id: ventaDataInicial.clienteId, 
+        nombre: ventaDataInicial.cliente, 
+        empresa: '', 
+        direccion: '' 
+      };
+      setClienteSeleccionado(cli);
+      
+      if (ventaDataInicial.items) setCarrito(ventaDataInicial.items);
+      if (ventaDataInicial.formaPago) setFormaPago(ventaDataInicial.formaPago);
+      
+      const tipoFound = TIPOS_NOTA.find(t => t.value === ventaDataInicial.tipoNota);
+      if (tipoFound) setTipoNota(tipoFound);
+      
+      // Si venía como 'pendiente' o 'pagado', lo respetamos
+      if (ventaDataInicial.estado === 'pagado' || ventaDataInicial.estado === 'pendiente') {
+        setEstadoPago(ventaDataInicial.estado);
+      }
+    }
+  }, [ventaDataInicial]);
+
+  // --- PROTECCIÓN DE NAVEGACIÓN ---
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
+      // Si no hay cambios, ya se guardó o es un reemplazo de pantalla, permitir salir
+      if (carrito.length === 0 || isSaved || e.data.action.type === 'REPLACE') {
+        return;
+      }
+
+      e.preventDefault();
+
+      Alert.alert(
+        'Nota sin guardar',
+        '¿Qué deseas hacer con esta venta?',
+        [
+          { text: 'Descartar', style: 'destructive', onPress: () => navigation.dispatch(e.data.action) },
+          { 
+            text: 'Dejar Abierta (Borrador)', 
+            onPress: () => {
+              guardarTemporalmente();
+              navigation.dispatch(e.data.action); 
+            } 
+          },
+          { text: 'Seguir editando', style: 'cancel', onPress: () => {} }
+        ]
+      );
+    });
+
+    return unsubscribe;
+  }, [navigation, carrito, isSaved, clienteSeleccionado, formaPago]);
+
+  // --- EFECTOS ---
+  const metodosDisponibles = useMemo(() => {
+    if (estadoPago === 'pendiente') {
+      return METODOS_PAGO_BASE.filter(m => m !== 'Efectivo');
+    }
+    return METODOS_PAGO_BASE;
+  }, [estadoPago]);
+
+  useEffect(() => {
+    if (!metodosDisponibles.includes(formaPago)) {
+      setFormaPago(metodosDisponibles[0]);
+    }
+  }, [estadoPago, metodosDisponibles]);
+
+  // --- SELECTORES ---
+  const openSelector = (type: 'tipoDoc' | 'formaPago') => {
+    setSelectorType(type);
+    setModalSelectorVisible(true);
+  };
+
+  const handleSelection = (item: any) => {
+    if (selectorType === 'tipoDoc') {
+      setTipoNota(item);
+    } else if (selectorType === 'formaPago') {
+      setFormaPago(item);
+    }
+    setModalSelectorVisible(false);
+  };
+
+  // --- GESTIÓN DE ARTÍCULOS ---
   const resetArticuloForm = () => {
     setArticuloSeleccionado(null);
-    setCant('1');
+    setCodigoInput('');
+    setCant('');
     setPrecio('');
     setDesc('');
     setNotaItem('');
+    // No reseteamos enableDiscount para comodidad
   };
 
   const handleSelectArticulo = (art: any) => {
     setArticuloSeleccionado(art);
-    // Limpiamos el precio de símbolos para que sea editable
+    setCodigoInput(art.codigoCorto || art.nombre);
     setPrecio(art.precio?.toString().replace(/[€\s]/g, '').replace(',', '.') || '');
     setModalArticulo(false);
   };
 
+  const handleSelectCliente = (cliente: any) => {
+    setClienteSeleccionado(cliente);
+    setModalCliente(false);
+  };
+
+  const handleCodigoChange = (text: string) => {
+    setCodigoInput(text);
+    if (!text) {
+        setArticuloSeleccionado(null);
+        return;
+    }
+    const match = articulos.find(a => 
+        (a.codigoCorto && a.codigoCorto.toLowerCase() === text.toLowerCase()) ||
+        a.id.toLowerCase() === text.toLowerCase()
+    );
+
+    if (match) {
+        setArticuloSeleccionado(match);
+        setPrecio(match.precio?.toString().replace(/[€\s]/g, '').replace(',', '.') || '');
+    }
+  };
+
   const agregarAlCarrito = () => {
-    if (!articuloSeleccionado) return Alert.alert('Atención', 'Selecciona un artículo.');
+    let artFinal = articuloSeleccionado;
+    if (!artFinal && codigoInput) {
+        artFinal = articulos.find(a => a.nombre.toLowerCase() === codigoInput.toLowerCase());
+    }
+
+    if (!artFinal) return Alert.alert('Atención', 'Artículo no válido o no encontrado.');
+    
     const c = parseFloat(cant.replace(',', '.')) || 0;
     const p = parseFloat(precio.replace(',', '.')) || 0;
-    const d = parseFloat(desc.replace(',', '.')) || 0;
-    if (c <= 0) return Alert.alert('Error', 'Cantidad inválida');
+    const d = enableDiscount ? (parseFloat(desc.replace(',', '.')) || 0) : 0;
+    
+    if (c <= 0) return Alert.alert('Error', 'Ingresa una cantidad válida.');
 
     setCarrito([...carrito, {
       id: Date.now().toString(),
-      articuloId: articuloSeleccionado.id,
-      nombre: articuloSeleccionado.nombre,
+      articuloId: artFinal.id,
+      nombre: artFinal.nombre,
       cantidad: c,
       precioUnitario: p,
       descuento: d,
-      tipoDescuento: tipoDesc,
+      tipoDescuento: 'porcentaje',
       nota: notaItem
     }]);
+    
     resetArticuloForm();
   };
 
@@ -100,33 +232,66 @@ export default function NuevaVentaScreen() {
   };
 
   const calcularTotales = () => {
-    let subtotal = 0;
-    let totalDesc = 0;
+    let subtotalLineas = 0;
+    let descuentoLineas = 0;
+
     carrito.forEach(item => {
-      const st = item.precioUnitario * item.cantidad;
-      subtotal += st;
+      const bruto = item.precioUnitario * item.cantidad;
+      subtotalLineas += bruto;
       if (item.descuento > 0) {
-        totalDesc += item.tipoDescuento === 'porcentaje' ? (st * item.descuento) / 100 : item.descuento * item.cantidad;
+        const descMonto = (bruto * item.descuento) / 100; 
+        descuentoLineas += descMonto;
       }
     });
-    const base = subtotal - totalDesc;
-    return { subtotal, descuentos: totalDesc, base, iva: base * 0.21, total: base * 1.21 };
+
+    const baseImponible = subtotalLineas - descuentoLineas;
+    const iva = baseImponible * 0.21;
+    const total = baseImponible + iva;
+
+    return { subtotal: subtotalLineas, descuentos: descuentoLineas, base: baseImponible, iva, total };
   };
+  
   const totales = calcularTotales();
 
-  // --- FUNCIÓN DE GUARDADO CONECTADA ---
-  const guardarVenta = async () => {
-    if (carrito.length === 0 || !clienteSeleccionado) return Alert.alert('Error', 'Faltan datos (Cliente o Artículos).');
-    
-    Alert.alert('Confirmar', `Total: ${totales.total.toFixed(2)} €`, [{
-      text: 'Guardar', onPress: async () => {
-        try {
-          const fechaActual = new Date().toLocaleString('es-ES');
-          const timestamp = Date.now().toString(); 
-          const notaId = `N${timestamp.slice(-6)}`; 
+  // --- GUARDAR COMO BORRADOR ---
+  const guardarTemporalmente = async () => {
+    setIsSaved(true); // Evita bucle de alerta
+    const fechaActual = new Date().toLocaleString('es-ES');
+    const notaId = ventaDataInicial?.id || `TEMP-${Date.now().toString().slice(-6)}`;
 
-          // 1. GUARDAR LA NOTA (Historial de productos)
+    const ventaTemp = {
+      id: notaId,
+      cliente: clienteSeleccionado?.nombre || 'Cliente Sin Definir',
+      clienteId: clienteSeleccionado?.id,
+      fecha: fechaActual,
+      precio: `${totales.total.toFixed(2)} €`,
+      estado: 'abierta', // ESTADO CLAVE
+      tipoNota: tipoNota.value,
+      formaPago: formaPago || 'Efectivo', 
+      items: carrito, 
+      totalesNumericos: totales
+    };
+
+    await addNotaVenta(ventaTemp as any);
+  };
+
+  // --- FINALIZAR VENTA ---
+  const finalizarVenta = async () => {
+    if (carrito.length === 0 || !clienteSeleccionado) return Alert.alert('Error', 'Faltan datos (Cliente o Artículos).');
+    if (!formaPago) return Alert.alert('Error', 'Selecciona una forma de pago.');
+
+    Alert.alert('Confirmar Venta', `Total: ${totales.total.toFixed(2)} €`, [{
+      text: 'Finalizar', onPress: async () => {
+        try {
+          setIsSaved(true); // Bloquear listener de salida
+          const fechaActual = new Date().toLocaleString('es-ES');
+          
+          // Si era temporal, usamos su ID, si no generamos uno nuevo oficial
+          const esTemporal = ventaDataInicial?.id?.startsWith('TEMP');
+          const notaId = (ventaDataInicial && !esTemporal) ? ventaDataInicial.id : `N${Date.now().toString().slice(-6)}`; 
+
           const estadoNota = estadoPago === 'pagado' ? 'cerrada' : 'pendiente';
+          
           const venta = {
             id: notaId,
             cliente: clienteSeleccionado.nombre,
@@ -134,44 +299,32 @@ export default function NuevaVentaScreen() {
             fecha: fechaActual,
             precio: `${totales.total.toFixed(2)} €`,
             estado: estadoNota,
-            tipoNota, 
+            tipoNota: tipoNota.value,
             formaPago, 
             items: carrito, 
             totalesNumericos: totales
           };
           
-          console.log('💾 Guardando nota de venta:', { 
-            id: venta.id, 
-            cliente: venta.cliente, 
-            clienteId: venta.clienteId, 
-            estado: venta.estado,
-            precio: venta.precio 
-          });
-          
           await addNotaVenta(venta as any);
 
-          // 3. [CRÍTICO] CREAR EL COBRO (DEUDA)
-          // Este bloque faltaba en tu archivo y es lo que conecta con CobrosList
           const nuevoCobro = {
-            id: `C${timestamp.slice(-6)}`, 
+            id: `C${Date.now().toString().slice(-6)}`, 
             cliente: clienteSeleccionado.nombre,
             clienteId: clienteSeleccionado.id,
             monto: `${totales.total.toFixed(2)} €`,
             fecha: fechaActual,
-            estado: estadoPago, // Si es 'pendiente', la pantalla CobrosList lo mostrará
+            estado: estadoPago, 
             notaVentaId: notaId, 
             formaPago: formaPago
           };
 
-          // Llamamos a la función global
           await addCobro(nuevoCobro as any); 
-
-          // 4. Navegar
-          navigation.navigate('VerNota', { ventaData: venta });
           
+          navigation.navigate('VerNota', { ventaData: venta });
         } catch (e) { 
           console.error(e);
-          Alert.alert('Error', 'No se pudo guardar la venta correctamente'); 
+          setIsSaved(false);
+          Alert.alert('Error', 'No se pudo guardar la venta.'); 
         }
       }
     }, { text: 'Cancelar' }]);
@@ -179,203 +332,286 @@ export default function NuevaVentaScreen() {
 
   return (
     <ScreenWithSidebar currentScreen="NuevaVenta" scrollable={false}>
-      {/* Header Superior */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Nueva Venta</Text>
-      </View>
-
-      {/* CONTENEDOR PRINCIPAL DIVIDIDO */}
-      <View style={styles.mainContent}>
-        
-        {/* PANEL IZQUIERDO */}
-        <View style={styles.leftPanel}>
-          <View style={styles.scrollWrapper}>
-            <ScrollView 
-              style={styles.scrollView}
-              contentContainerStyle={styles.scrollInner}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={true}
-            >
-              {/* SELECTOR CLIENTE */}
-              <View style={[styles.field, { zIndex: 20 }]}>
-                <Text style={styles.label}>Cliente *</Text>
-                <TouchableOpacity style={styles.select} onPress={() => setModalCliente(true)}>
-                  <Text style={{ color: clienteSeleccionado ? '#1e293b' : '#94a3b8' }}>
-                    {clienteSeleccionado?.nombre || 'Seleccionar Cliente...'}
-                  </Text>
-                  <Text>▼</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* SELECTOR ESTADO (PAGADO / PENDIENTE) */}
-              <View style={styles.field}>
-                <Text style={styles.label}>Estado inicial</Text>
-                <View style={styles.switchRow}>
-                  {['pagado', 'pendiente'].map((est) => (
-                    <TouchableOpacity
-                      key={est}
-                      style={[styles.switchBtn, estadoPago === est && (est === 'pagado' ? styles.bgWhite : styles.bgBlue)]}
-                      onPress={() => setEstadoPago(est as any)}
-                    >
-                      <Text style={[styles.switchTxt, estadoPago === est && (est === 'pagado' ? styles.txtBlue : styles.txtWhite)]}>
-                        {est.charAt(0).toUpperCase() + est.slice(1)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-                {/* Mensaje visual de confirmación */}
-                <Text style={{fontSize: 11, color: '#64748b', marginTop: 4, fontStyle: 'italic'}}>
-                  {estadoPago === 'pendiente' ? '⚠️ Se generará una deuda en Cobros Pendientes' : '✅ Se marcará como cobrada (Historial)'}
-                </Text>
-              </View>
-
-              {/* Tipo y Forma Pago */}
-              <View style={[styles.row, { zIndex: 15 }]}>
-                <View style={[styles.col, { zIndex: 16 }]}>
-                  <Text style={styles.label}>Tipo Doc.</Text>
-                  <TouchableOpacity style={styles.select} onPress={() => { setDropdownTipo(!dropdownTipo); setDropdownPago(false); }}>
-                    <Text numberOfLines={1}>{tipoNota}</Text>
-                    <Text>▼</Text>
-                  </TouchableOpacity>
-                  {dropdownTipo && (
-                    <View style={styles.dropdown}>
-                      {['Serie P (Oficiales)', 'Serie X', 'Pedido'].map(t => (
-                        <TouchableOpacity key={t} style={styles.dropItem} onPress={() => { setTipoNota(t); setDropdownTipo(false); }}>
-                          <Text>{t}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                </View>
-                <View style={[styles.col, { zIndex: 15 }]}>
-                  <Text style={styles.label}>Forma Pago</Text>
-                  <TouchableOpacity style={styles.select} onPress={() => { setDropdownPago(!dropdownPago); setDropdownTipo(false); }}>
-                    <Text numberOfLines={1}>{formaPago}</Text>
-                    <Text>▼</Text>
-                  </TouchableOpacity>
-                  {dropdownPago && (
-                    <View style={styles.dropdown}>
-                      {['Efectivo', 'Tarjeta', 'Bizum'].map(p => (
-                        <TouchableOpacity key={p} style={styles.dropItem} onPress={() => { setFormaPago(p); setDropdownPago(false); }}>
-                          <Text>{p}</Text>
-                        </TouchableOpacity>
-                      ))}
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              <View style={styles.divider} />
-              <Text style={styles.secTitle}>Añadir Línea</Text>
-
-              {/* Artículo */}
-              <View style={[styles.field, { zIndex: 10 }]}>
-                <Text style={styles.label}>Artículo *</Text>
-                <TouchableOpacity style={styles.select} onPress={() => setModalArticulo(true)}>
-                  <Text style={{ color: articuloSeleccionado ? '#1e293b' : '#94a3b8' }}>
-                    {articuloSeleccionado?.nombre || 'Buscar en catálogo...'}
-                  </Text>
-                  <Text>🔍</Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Cantidad y Precio */}
-              <View style={styles.row}>
-                <View style={styles.col}>
-                  <Text style={styles.label}>Cant.</Text>
-                  <TextInput style={styles.input} value={cant} onChangeText={setCant} keyboardType="numeric" selectTextOnFocus />
-                </View>
-                <View style={styles.col}>
-                  <Text style={styles.label}>Precio Unit.</Text>
-                  <TextInput style={styles.input} value={precio} onChangeText={setPrecio} keyboardType="numeric" placeholder="0.00" />
-                </View>
-              </View>
-
-              {/* Descuento */}
-              <View style={styles.field}>
-                <Text style={styles.label}>Descuento</Text>
-                <View style={{ flexDirection: 'row' }}>
-                  <TextInput style={[styles.input, { flex: 1, borderRightWidth: 0, borderTopRightRadius: 0, borderBottomRightRadius: 0 }]} value={desc} onChangeText={setDesc} keyboardType="numeric" placeholder="0" />
-                  <TouchableOpacity style={styles.suffixBtn} onPress={() => setTipoDesc(t => t === 'porcentaje' ? 'pesos' : 'porcentaje')}>
-                    <Text style={{ fontWeight: 'bold', color: '#092090' }}>{tipoDesc === 'porcentaje' ? '%' : '€'}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Nota */}
-              <View style={styles.field}>
-                <Text style={styles.label}>Nota (opcional)</Text>
-                <TextInput style={[styles.input, { height: 60, textAlignVertical: 'top', paddingTop: 8 }]} multiline value={notaItem} onChangeText={setNotaItem} placeholder="Detalle opcional..." />
-              </View>
-
-              <TouchableOpacity style={styles.addBtn} onPress={agregarAlCarrito}>
-                <LinearGradient colors={['#092090', '#0C2ABF']} style={styles.gradBtn}><Text style={styles.txtBtn}>+ AÑADIR AL CARRITO</Text></LinearGradient>
-              </TouchableOpacity>
-              
-              <View style={{ height: 40 }} />
-            </ScrollView>
-          </View>
-
-          {/* Footer Izquierdo Fijo */}
-          <View style={styles.panelFooter}>
-            <TouchableOpacity style={styles.btnSec} onPress={() => setModalHistorial(true)}><Text style={{color:'#64748b', fontWeight:'600'}}>Historial</Text></TouchableOpacity>
-            <TouchableOpacity style={styles.btnPri} onPress={guardarVenta}>
-               <LinearGradient colors={['#8bd600', '#c4ff57']} style={styles.gradBtn}><Text style={styles.txtBtnBlack}>✅ CREAR NOTA</Text></LinearGradient>
-            </TouchableOpacity>
-          </View>
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      >
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Nueva Venta</Text>
         </View>
 
-        {/* PANEL DERECHO - RESUMEN */}
-        <View style={styles.rightPanel}>
-          <Text style={styles.secTitle}>Resumen ({carrito.length})</Text>
-          <View style={{flex: 1, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, marginBottom: 10}}>
-            {carrito.length === 0 ? (
-               <View style={{flex:1, alignItems:'center', justifyContent:'center', opacity:0.5}}>
-                 <Text style={{fontSize:40}}>🛒</Text>
-                 <Text style={{marginTop: 10, color: '#64748b'}}>Carrito Vacío</Text>
-               </View>
-            ) : (
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{padding: 0}}>
-                {carrito.map(i => (
-                  <View key={i.id} style={styles.rowItem}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={{fontWeight:'600', color: '#1e293b'}}>{i.nombre}</Text>
-                        <Text style={{fontSize:12, color: '#64748b'}}>x{i.cantidad}  {i.descuento > 0 ? `(-${i.descuento})` : ''}</Text>
-                    </View>
-                    <Text style={{ fontWeight:'bold', color: '#1e293b' }}>{(i.precioUnitario * i.cantidad).toFixed(2)} €</Text>
-                    <TouchableOpacity onPress={() => eliminarDelCarrito(i.id)} style={{marginLeft:12, padding: 4}}><Text style={{color:'#ef4444', fontSize: 18}}>×</Text></TouchableOpacity>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-          </View>
+        <View style={styles.mainContent}>
           
-          <View style={styles.totalBox}>
-            <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 5}}>
-               <Text style={{color:'#64748b'}}>Base</Text><Text>{totales.base.toFixed(2)} €</Text>
+          {/* PANEL IZQUIERDO - FORMULARIO */}
+          <View style={styles.leftPanel}>
+            <View style={styles.scrollWrapper}>
+              <ScrollView 
+                style={styles.scrollView}
+                contentContainerStyle={styles.scrollInner}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={true}
+              >
+                {/* CABECERA DOCUMENTO */}
+                <View style={styles.sectionCard}>
+                    {/* CLIENTE */}
+                    <View style={[styles.field, { zIndex: 20 }]}>
+                        <Text style={styles.label}>Cliente *</Text>
+                        <TouchableOpacity style={styles.select} onPress={() => setModalCliente(true)}>
+                        <Text style={{ color: clienteSeleccionado ? '#1e293b' : '#94a3b8', fontSize: 15 }}>
+                            {clienteSeleccionado ? `${clienteSeleccionado.nombre}` : 'Seleccionar Cliente...'}
+                        </Text>
+                        <Text style={{fontSize: 16}}>🔍</Text>
+                        </TouchableOpacity>
+                        {clienteSeleccionado && (
+                            <Text style={{fontSize: 11, color: '#64748b', marginTop: 4, marginLeft: 2}}>
+                                {clienteSeleccionado.empresa} • {clienteSeleccionado.direccion}
+                            </Text>
+                        )}
+                    </View>
+
+                    {/* FILA: ESTADO | FORMA PAGO | TIPO DOC */}
+                    <View style={[styles.row, { marginBottom: 5 }]}>
+                        {/* Estado Pago */}
+                        <View style={{flex: 1.2}}>
+                            <Text style={styles.label}>Estado Pago</Text>
+                            <View style={styles.switchRowCompact}>
+                                <TouchableOpacity onPress={() => setEstadoPago('pagado')} style={[styles.switchBtnCompact, estadoPago === 'pagado' && styles.bgSuccess]}>
+                                    <Text style={[styles.switchTxtCompact, estadoPago === 'pagado' && styles.txtWhite]}>Contado</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setEstadoPago('pendiente')} style={[styles.switchBtnCompact, estadoPago === 'pendiente' && styles.bgWarning]}>
+                                    <Text style={[styles.switchTxtCompact, estadoPago === 'pendiente' && styles.txtWhite]}>Crédito</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+
+                        {/* Forma Pago (SELECTOR MODAL) */}
+                        <View style={styles.col}>
+                            <Text style={styles.label}>Forma Pago</Text>
+                            <TouchableOpacity style={styles.selectCompact} onPress={() => openSelector('formaPago')}>
+                                <Text numberOfLines={1} style={{fontSize: 13, color: '#1e293b'}}>{formaPago || '-'}</Text>
+                                <Text style={{fontSize: 10}}>▼</Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Tipo Doc (SELECTOR MODAL) */}
+                        <View style={styles.col}>
+                            <Text style={styles.label}>Tipo Doc.</Text>
+                            <TouchableOpacity style={styles.selectCompact} onPress={() => openSelector('tipoDoc')}>
+                                <Text numberOfLines={1} style={{fontSize: 13, color: '#1e293b'}}>{tipoNota.label}</Text>
+                                <Text style={{fontSize: 10}}>▼</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+
+                <View style={styles.divider} />
+                <Text style={styles.secTitle}>Añadir Línea (Rápida)</Text>
+
+                {/* --- AÑADIR LÍNEA (GRID) --- */}
+                <View style={styles.addLineContainer}>
+                    {/* FILA 1 */}
+                    <View style={[styles.gridRow, { alignItems: 'flex-end' }]}>
+                        
+                        {/* ARTÍCULO - LUPA ARREGLADA */}
+                        <View style={{flex: 3, marginRight: 8}}>
+                            <Text style={styles.label}>Artículo / Código</Text>
+                            <View style={styles.inputWithIcon}>
+                                <TextInput 
+                                    style={styles.inputNoBorder}
+                                    value={codigoInput}
+                                    onChangeText={handleCodigoChange}
+                                    placeholder="Escanear o buscar..."
+                                    placeholderTextColor="#94a3b8"
+                                />
+                                <TouchableOpacity onPress={() => setModalArticulo(true)} style={styles.iconContainer}>
+                                    <Text style={{fontSize: 16}}>🔍</Text>
+                                </TouchableOpacity>
+                            </View>
+                            {articuloSeleccionado && (
+                                <Text style={{fontSize: 11, color: '#10b981', marginTop: 2, fontWeight: '600'}} numberOfLines={1}>
+                                    {articuloSeleccionado.nombre}
+                                </Text>
+                            )}
+                        </View>
+
+                        {/* CANTIDAD */}
+                        <View style={{flex: 1, marginRight: 8}}>
+                            <Text style={styles.label}>Cantidad</Text>
+                            <TextInput 
+                                style={styles.inputGrid} 
+                                value={cant} 
+                                onChangeText={setCant} 
+                                keyboardType="numeric" 
+                                placeholder="" 
+                            />
+                        </View>
+
+                        {/* PRECIO */}
+                        <View style={{flex: 1, marginRight: 8}}>
+                            <Text style={styles.label}>Precio</Text>
+                            <TextInput 
+                                style={styles.inputGrid} 
+                                value={precio} 
+                                onChangeText={setPrecio} 
+                                keyboardType="numeric" 
+                                placeholder="0.00" 
+                            />
+                        </View>
+
+                        {/* DTO % (CON SWITCH) */}
+                        <View style={{flex: 1}}>
+                            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5}}>
+                                <Text style={[styles.label, {marginBottom: 0}]}>DTO %</Text>
+                                <Switch 
+                                    value={enableDiscount} 
+                                    onValueChange={setEnableDiscount}
+                                    trackColor={{ false: "#e2e8f0", true: "#0C2ABF" }}
+                                    thumbColor={"#fff"}
+                                    style={{ transform: [{ scaleX: 0.6 }, { scaleY: 0.6 }] }} 
+                                />
+                            </View>
+                            <TextInput 
+                                style={[styles.inputGrid, !enableDiscount && styles.inputDisabled]} 
+                                value={desc} 
+                                onChangeText={setDesc} 
+                                keyboardType="numeric" 
+                                placeholder="0" 
+                                editable={enableDiscount}
+                            />
+                        </View>
+                    </View>
+
+                    {/* FILA 2: NOTA Y BOTÓN */}
+                    <View style={[styles.gridRow, {marginTop: 12, alignItems: 'flex-end'}]}>
+                        <View style={{flex: 3, marginRight: 12}}>
+                            <Text style={styles.label}>Nota (Opcional)</Text>
+                            <TextInput 
+                                style={[styles.inputGrid, {height: 40, textAlign: 'left', paddingHorizontal: 10}]} 
+                                value={notaItem} 
+                                onChangeText={setNotaItem} 
+                                placeholder="Detalle..." 
+                            />
+                        </View>
+                        <View style={{flex: 1}}>
+                            <TouchableOpacity style={styles.addBtnCompact} onPress={agregarAlCarrito}>
+                                <LinearGradient colors={['#092090', '#0C2ABF']} style={styles.gradBtnCompact}>
+                                    <Text style={styles.txtBtnCompact}>+ AÑADIR</Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+                
+                <View style={{ height: 40 }} />
+              </ScrollView>
             </View>
-            <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 10}}>
-               <Text style={{color:'#64748b'}}>IVA (21%)</Text><Text>{totales.iva.toFixed(2)} €</Text>
+
+            {/* Footer */}
+            <View style={styles.panelFooter}>
+              <TouchableOpacity style={styles.btnSec} onPress={() => setModalHistorial(true)}><Text style={{color:'#64748b', fontWeight:'600'}}>Historial</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.btnPri} onPress={finalizarVenta}>
+                 <LinearGradient colors={['#91e600', '#65a30d']} style={styles.gradBtn}><Text style={styles.txtBtnBlack}>✅ FINALIZAR VENTA</Text></LinearGradient>
+              </TouchableOpacity>
             </View>
-            <View style={{height:1, backgroundColor:'#cbd5e1', marginBottom: 10}}/>
-            <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
-               <Text style={{fontSize: 16, fontWeight:'800', color: '#0f172a'}}>TOTAL</Text>
-               <Text style={{fontSize: 20, fontWeight:'800', color: '#0C2ABF'}}>{totales.total.toFixed(2)} €</Text>
+          </View>
+
+          {/* PANEL DERECHO - RESUMEN */}
+          <View style={styles.rightPanel}>
+            <Text style={styles.secTitle}>Resumen ({carrito.length})</Text>
+            <View style={{flex: 1, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, marginBottom: 10}}>
+              {carrito.length === 0 ? (
+                 <View style={{flex:1, alignItems:'center', justifyContent:'center', opacity:0.5}}>
+                   <Text style={{fontSize:40}}>🛒</Text>
+                   <Text style={{marginTop: 10, color: '#64748b'}}>Carrito Vacío</Text>
+                 </View>
+              ) : (
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{padding: 0}}>
+                  {carrito.map(i => (
+                    <View key={i.id} style={styles.rowItem}>
+                      <View style={{ flex: 1 }}>
+                          <Text style={{fontWeight:'600', color: '#1e293b'}}>{i.nombre}</Text>
+                          <Text style={{fontSize:12, color: '#64748b'}}>x{i.cantidad}  {i.descuento > 0 ? `(-${i.descuento}%)` : ''}</Text>
+                          {i.nota ? <Text style={{fontSize:11, color:'#94a3b8', fontStyle:'italic'}}>{i.nota}</Text> : null}
+                      </View>
+                      <Text style={{ fontWeight:'bold', color: '#1e293b' }}>{(i.precioUnitario * i.cantidad).toFixed(2)} €</Text>
+                      <TouchableOpacity onPress={() => eliminarDelCarrito(i.id)} style={{marginLeft:12, padding: 4}}><Text style={{color:'#ef4444', fontSize: 18}}>×</Text></TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+            
+            <View style={styles.totalBox}>
+              <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 5}}>
+                 <Text style={{color:'#64748b'}}>Subtotal</Text><Text>{totales.subtotal.toFixed(2)} €</Text>
+              </View>
+              {totales.descuentos > 0 && (
+                  <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 5}}>
+                      <Text style={{color:'#10b981'}}>Descuentos</Text>
+                      <Text style={{color:'#10b981'}}>-{totales.descuentos.toFixed(2)} €</Text>
+                  </View>
+              )}
+              <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 5}}>
+                 <Text style={{color:'#64748b'}}>Base Imponible</Text><Text>{totales.base.toFixed(2)} €</Text>
+              </View>
+              <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 10}}>
+                 <Text style={{color:'#64748b'}}>IVA (21%)</Text><Text>{totales.iva.toFixed(2)} €</Text>
+              </View>
+              <View style={{height:1, backgroundColor:'#cbd5e1', marginBottom: 10}}/>
+              <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
+                 <Text style={{fontSize: 16, fontWeight:'800', color: '#0f172a'}}>TOTAL</Text>
+                 <Text style={{fontSize: 24, fontWeight:'800', color: '#0C2ABF'}}>{totales.total.toFixed(2)} €</Text>
+              </View>
             </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
 
-      {/* MODALES */}
-      <Modal visible={modalCliente} transparent animationType="fade"><View style={styles.modalBg}><View style={styles.modalCard}>
-        <Text style={styles.modalTitle}>Clientes</Text>
-        <ScrollView style={{maxHeight: 300}}>{clientes.map(c => <TouchableOpacity key={c.id} style={styles.modalItem} onPress={() => {setClienteSeleccionado(c); setModalCliente(false)}}><Text style={{fontSize:16}}>{c.nombre}</Text></TouchableOpacity>)}</ScrollView>
-        <TouchableOpacity style={styles.closeBtn} onPress={() => setModalCliente(false)}><Text>Cerrar</Text></TouchableOpacity>
-      </View></View></Modal>
+      {/* MODAL SELECTOR GENÉRICO (Para Dropdowns) */}
+      <Modal visible={modalSelectorVisible} transparent animationType="fade" onRequestClose={() => setModalSelectorVisible(false)}>
+        <TouchableOpacity style={styles.modalBg} onPress={() => setModalSelectorVisible(false)} activeOpacity={1}>
+            <View style={styles.selectorModalCard}>
+                <Text style={styles.selectorTitle}>
+                    {selectorType === 'tipoDoc' ? 'Seleccionar Tipo de Documento' : 'Seleccionar Forma de Pago'}
+                </Text>
+                <FlatList
+                    data={selectorType === 'tipoDoc' ? TIPOS_NOTA : metodosDisponibles}
+                    keyExtractor={(item) => typeof item === 'string' ? item : item.value}
+                    renderItem={({ item }) => (
+                        <TouchableOpacity 
+                            style={styles.selectorItem} 
+                            onPress={() => handleSelection(item)}
+                        >
+                            <Text style={styles.selectorItemText}>
+                                {typeof item === 'string' ? item : item.label}
+                            </Text>
+                        </TouchableOpacity>
+                    )}
+                />
+                <TouchableOpacity style={styles.closeBtn} onPress={() => setModalSelectorVisible(false)}><Text>Cancelar</Text></TouchableOpacity>
+            </View>
+        </TouchableOpacity>
+      </Modal>
 
-      <SeleccionarArticuloModal visible={modalArticulo} onClose={() => setModalArticulo(false)} articulos={articulos} onSelect={handleSelectArticulo} />
+      {/* OTROS MODALES */}
+      <SeleccionarClienteModal
+        visible={modalCliente}
+        onClose={() => setModalCliente(false)}
+        onSelect={handleSelectCliente}
+        clientes={clientes}
+      />
+
+      <SeleccionarArticuloModal 
+        visible={modalArticulo} 
+        onClose={() => setModalArticulo(false)} 
+        articulos={articulos} 
+        onSelect={handleSelectArticulo} 
+      />
       
-      <Modal visible={modalHistorial} transparent animationType="fade"><View style={styles.modalBg}><View style={styles.modalCard}><Text style={{textAlign:'center', margin: 20}}>Sin historial reciente.</Text><TouchableOpacity style={styles.closeBtn} onPress={() => setModalHistorial(false)}><Text>Cerrar</Text></TouchableOpacity></View></View></Modal>
+      <Modal visible={modalHistorial} transparent animationType="fade">
+        <View style={styles.modalBg}><View style={styles.modalCard}><Text style={{textAlign:'center', margin: 20}}>Sin historial reciente.</Text><TouchableOpacity style={styles.closeBtn} onPress={() => setModalHistorial(false)}><Text>Cerrar</Text></TouchableOpacity></View></View>
+      </Modal>
 
     </ScreenWithSidebar>
   );
@@ -386,55 +622,108 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#1e293b' },
   
   mainContent: { flex: 1, flexDirection: 'row', height: '100%', overflow: 'hidden' },
-  
-  leftPanel: { width: 420, borderRightWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#f8fafc', flexDirection: 'column', flexShrink: 0, height: '100%', display: 'flex' },
+  leftPanel: { width: 480, borderRightWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#f8fafc', flexDirection: 'column', flexShrink: 0, height: '100%', display: 'flex' },
   scrollWrapper: { flex: 1, minHeight: 0 },
   scrollView: { flex: 1 },
   scrollInner: { padding: 20, paddingBottom: 40 },
-  
   rightPanel: { flex: 1, padding: 20, backgroundColor: '#fff', flexDirection: 'column', height: '100%', minWidth: 0 },
 
+  sectionCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1
+  },
+  addLineContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#092090',
+    marginBottom: 10,
+    shadowColor: '#092090',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2
+  },
+
   field: { marginBottom: 14 },
-  label: { fontSize: 12, color: '#64748b', marginBottom: 5, fontWeight: '600' },
-  select: { height: 46, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, justifyContent: 'space-between', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff' },
-  input: { height: 46, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, paddingHorizontal: 12, backgroundColor: '#fff', fontSize: 15, color: '#1e293b' },
+  label: { fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: '600', textTransform: 'uppercase' },
   
+  select: { height: 44, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, justifyContent: 'space-between', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc' },
+  selectCompact: { height: 38, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, justifyContent: 'space-between', paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc' },
+  
+  gridRow: { flexDirection: 'row' },
+  inputWithIcon: {
+    height: 42,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    backgroundColor: '#f8fafc',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 10,
+    paddingRight: 0,
+    overflow: 'hidden'
+  },
+  inputNoBorder: { flex: 1, fontSize: 14, color: '#1e293b', height: '100%' },
+  iconContainer: { width: 40, height: '100%', alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1, borderLeftColor: '#e2e8f0', backgroundColor: '#fff' },
+  
+  inputGrid: {
+    height: 42,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    backgroundColor: '#f8fafc',
+    fontSize: 14,
+    textAlign: 'center',
+    color: '#1e293b'
+  },
+  inputDisabled: {
+    backgroundColor: '#e2e8f0',
+    color: '#94a3b8',
+    borderColor: '#e2e8f0'
+  },
+
   row: { flexDirection: 'row', gap: 12, marginBottom: 14 },
   col: { flex: 1 },
+  switchRowCompact: { flexDirection: 'row', backgroundColor: '#e2e8f0', borderRadius: 6, padding: 2, height: 38 },
+  switchBtnCompact: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 5 },
+  switchTxtCompact: { fontSize: 12, color: '#64748b', fontWeight: '600' },
   
-  switchRow: { flexDirection: 'row', backgroundColor: '#e2e8f0', borderRadius: 8, padding: 3 },
-  switchBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 6 },
-  bgWhite: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
-  bgBlue: { backgroundColor: '#0C2ABF' },
-  txtBlue: { color: '#092090', fontWeight: '700', fontSize: 13 },
-  switchTxt: { fontSize: 13, color: '#64748b', fontWeight: '500' },
-  txtWhite: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  
-  dropdown: { position: 'absolute', top: 50, left: 0, right: 0, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, zIndex: 999, elevation: 8, shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10 },
-  dropItem: { padding: 14, borderBottomWidth: 1, borderColor: '#f1f5f9' },
-  
+  bgSuccess: { backgroundColor: '#10b981' },
+  bgWarning: { backgroundColor: '#f59e0b' },
+  txtWhite: { color: '#fff', fontWeight: '700' },
+
   divider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 16 },
   secTitle: { fontSize: 16, fontWeight: '700', color: '#334155', marginBottom: 12 },
-  
-  suffixBtn: { width: 46, borderWidth: 1, borderColor: '#cbd5e1', borderLeftWidth: 0, borderTopRightRadius: 8, borderBottomRightRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f1f5f9' },
-  
-  addBtn: { marginTop: 10, borderRadius: 8, overflow: 'hidden', marginBottom: 10 },
-  gradBtn: { padding: 14, alignItems: 'center' },
-  txtBtn: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  txtBtnBlack: { color: '#1a1a1a', fontWeight: '800', fontSize: 14 },
-  
+
+  addBtnCompact: { borderRadius: 8, overflow: 'hidden', height: 40 },
+  gradBtnCompact: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  txtBtnCompact: { color: '#fff', fontWeight: '700', fontSize: 13 },
+
   panelFooter: { padding: 16, paddingBottom: 20, borderTopWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', gap: 12, backgroundColor: '#fff', flexShrink: 0, zIndex: 10 },
   btnSec: { flex: 1, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, justifyContent: 'center', alignItems: 'center', height: 48, backgroundColor: '#f8fafc' },
   btnPri: { flex: 2, borderRadius: 8, overflow: 'hidden', height: 48 },
-  
+  gradBtn: { padding: 14, alignItems: 'center', height: '100%', justifyContent: 'center' },
+  txtBtnBlack: { color: '#1a1a1a', fontWeight: '800', fontSize: 14 },
+
   rowItem: { flexDirection: 'row', padding: 12, borderBottomWidth: 1, borderColor: '#f8fafc', alignItems: 'center', justifyContent: 'space-between' },
   totalBox: { marginTop: 'auto', padding: 20, backgroundColor: '#f8fafc', borderRadius: 12 },
-  
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', 
-    // @ts-ignore
-    position: Platform.OS === 'web' ? 'fixed' : 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 },
+
+  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalCard: { width: 400, backgroundColor: '#fff', borderRadius: 12, padding: 24, maxHeight: '80%', elevation: 5 },
-  modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 16, textAlign: 'center', color: '#1e293b' },
-  modalItem: { padding: 14, borderBottomWidth: 1, borderColor: '#f1f5f9' },
-  closeBtn: { marginTop: 20, padding: 12, backgroundColor: '#f1f5f9', alignItems: 'center', borderRadius: 8 }
+  closeBtn: { marginTop: 20, padding: 12, backgroundColor: '#f1f5f9', alignItems: 'center', borderRadius: 8 },
+
+  selectorModalCard: { width: 320, backgroundColor: '#fff', borderRadius: 12, padding: 0, elevation: 10, maxHeight: '60%' },
+  selectorTitle: { fontSize: 15, fontWeight: '700', color: '#1e293b', padding: 16, textAlign: 'center', borderBottomWidth: 1, borderColor: '#f1f5f9', backgroundColor: '#f8fafc', borderTopLeftRadius: 12, borderTopRightRadius: 12 },
+  selectorItem: { padding: 16, borderBottomWidth: 1, borderColor: '#f1f5f9' },
+  selectorItemText: { fontSize: 16, color: '#334155', textAlign: 'center' }
 });

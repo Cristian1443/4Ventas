@@ -42,17 +42,31 @@ export interface Gasto {
   imagen?: string;
 }
 
+// NUEVA INTERFAZ PARA TOTALES NUMÉRICOS
+export interface TotalesVenta {
+  subtotal: number;
+  descuentos: number;
+  base: number;
+  iva: number;
+  total: number;
+}
+
 export interface NotaVenta {
   id: string;
   cliente: string;
   precio: string;
   fecha: string;
   items?: any[];
-  estado?: 'pendiente' | 'cerrada' | 'anulada';
+  // AÑADIDO 'abierta'
+  estado?: 'pendiente' | 'cerrada' | 'anulada' | 'abierta';
   clienteId?: string;
   generoCobro?: boolean;
   cobroId?: string;
   formaPago?: string;
+  tipoNota?: string;
+  totalesNumericos?: TotalesVenta;
+  aplicarDescGlobal?: boolean;
+  descGlobal?: string;
 }
 
 export interface Cobro {
@@ -66,6 +80,7 @@ export interface Cobro {
   formaPago?: string;
 }
 
+// ... (El resto del archivo se mantiene idéntico: Documento, Articulo, Cliente, etc.)
 export interface Documento {
   id: string;
   nombre: string;
@@ -111,14 +126,11 @@ export interface NotaAlmacen {
   observaciones?: string;
 }
 
-// ============================================================================
-// TIPOS DE CONFIGURACIÓN
-// ============================================================================
-
+// ... (AppConfig, UserSession, SyncStatus, RootStackParamList igual que antes)
 export interface AppConfig {
   erpEnabled: boolean;
   autoSyncEnabled: boolean;
-  syncInterval: number; // en milisegundos
+  syncInterval: number;
   modoOffline: boolean;
 }
 
@@ -129,10 +141,6 @@ export interface UserSession {
   sessionId?: string;
 }
 
-// ============================================================================
-// TIPOS DE SINCRONIZACIÓN
-// ============================================================================
-
 export interface SyncStatus {
   clientes: 'idle' | 'syncing' | 'success' | 'error';
   articulos: 'idle' | 'syncing' | 'success' | 'error';
@@ -141,10 +149,6 @@ export interface SyncStatus {
   operacionesPendientes?: number;
 }
 
-// ============================================================================
-// TIPOS DE NAVEGACIÓN
-// ============================================================================
-
 export type RootStackParamList = {
   Login: undefined;
   LoginEmail: undefined;
@@ -152,8 +156,8 @@ export type RootStackParamList = {
   Dashboard: undefined;
   VentasMenu: undefined;
   Ventas: undefined;
-  NuevaVenta: { clienteSeleccionado?: Cliente };
-  VerNota: { ventaData: any };
+  NuevaVenta: { clienteSeleccionado?: Cliente; ventaData?: any }; // Actualizado para permitir editar
+  VerNota: { ventaData: any; notaId?: string }; // Actualizado
   ResumenDia: undefined;
   CobrosList: undefined;
   Cobros: { clienteSeleccionado?: Cliente };

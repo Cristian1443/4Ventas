@@ -132,7 +132,7 @@ export default function DashboardScreen() {
         <View style={styles.heroButtons}>
           <TouchableOpacity
             style={styles.heroButton}
-            onPress={() => navigation.navigate('NuevaVenta')}
+            onPress={() => navigation.navigate('Ventas')}
             activeOpacity={0.8}
           >
             <Text style={styles.heroButtonText}>Nueva Venta</Text>
@@ -423,6 +423,28 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#ffffff',
     fontWeight: '600'
+  },
+  headerActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  actionButton: {
+    backgroundColor: '#092090',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 20,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4
+  },
+  actionButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#ffffff'
   },
   heroSection: {
     borderRadius: 16,

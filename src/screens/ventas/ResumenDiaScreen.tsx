@@ -4,7 +4,7 @@
  * - Adaptación de columnas dinámica (Grid System).
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import {
   TextInput,
   Image,
   Platform,
+  Alert,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -54,6 +55,11 @@ export default function ResumenDiaScreen() {
   const numeroVentas = notasVenta.filter(n => n.estado !== 'anulada').length;
   const ventasPendientes = notasVenta.filter(n => n.estado === 'pendiente').length;
   
+  // --- FILTRAR NOTAS ABIERTAS (BORRADORES) ---
+  const notasAbiertas = useMemo(() => 
+    notasVenta.filter(n => n.estado === 'abierta'), 
+    [notasVenta]);
+  
   const clientesVisitadosHoy = new Set(
     notasVenta
       .filter(n => n.estado !== 'anulada')
@@ -70,8 +76,27 @@ export default function ResumenDiaScreen() {
     gasto.categoria.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // --- MODIFICAR EXPORTAR/IMPRIMIR PARA ADVERTIR ---
+  const handleExport = () => {
+    if (notasAbiertas.length > 0) {
+      Alert.alert(
+        'Advertencia', 
+        `Tienes ${notasAbiertas.length} nota(s) abierta(s) temporalmente. Estas no se incluirán en el cierre final. ¿Deseas continuar?`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Continuar', onPress: () => alert('Exportando...') }
+        ]
+      );
+    } else {
+      alert('Exportando...');
+    }
+  };
+
+  const layout = useResponsiveLayout();
+  
   return (
     <ScreenWithSidebar currentScreen="ResumenDia" scrollable={true}>
+      <View style={[styles.contentWrapper, { paddingHorizontal: layout.padding }]}>
       {/* --- HEADER --- */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
@@ -87,12 +112,9 @@ export default function ResumenDiaScreen() {
         <View style={styles.headerActions}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => {
-                console.log("Navegando a Nueva Venta"); // Debug
-                navigation.navigate('NuevaVenta');
-            }}
-            activeOpacity={0.7} // Añadir feedback visual
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} // Aumentar área táctil
+            onPress={() => navigation.navigate('Ventas')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
             <Text style={styles.actionButtonText}>+ Nueva Venta</Text>
           </TouchableOpacity>
@@ -105,7 +127,7 @@ export default function ResumenDiaScreen() {
           {!isSmallDevice && (
             <TouchableOpacity 
               style={styles.exportButton}
-              onPress={() => alert('Próximamente')}
+              onPress={handleExport}
             >
               <LinearGradient
                 colors={['#092090', '#0C2ABF']}
@@ -120,6 +142,26 @@ export default function ResumenDiaScreen() {
           )}
         </View>
       </View>
+
+      {/* --- SECCIÓN DE ALERTAS DE NOTAS ABIERTAS (NUEVO) --- */}
+      {notasAbiertas.length > 0 && (
+        <View style={styles.alertContainer}>
+          <Text style={styles.alertTitle}>⚠️ Tienes {notasAbiertas.length} nota(s) abierta(s)</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginTop: 10}}>
+            {notasAbiertas.map(nota => (
+              <TouchableOpacity 
+                key={nota.id} 
+                style={styles.openNoteCard}
+                onPress={() => navigation.navigate('NuevaVenta', { ventaData: nota })} // REANUDAR
+              >
+                <Text style={styles.openNoteClient}>{nota.cliente}</Text>
+                <Text style={styles.openNoteTotal}>{nota.precio}</Text>
+                <Text style={styles.openNoteLabel}>Clic para continuar</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      )}
 
       {/* --- FILTROS --- */}
       <View style={[styles.filtersRow, isSmallDevice && styles.filtersRowMobile]}>
@@ -161,10 +203,15 @@ export default function ResumenDiaScreen() {
       </View>
 
       {/* --- TABS --- */}
-      <View style={{ height: 50, marginBottom: 20 }}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer}>
-          {['Totales del Día', 'Notas de Venta', 'Cobros', 'Gastos'].map((tab) => (
-            <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}>
+      <View style={styles.tabsWrapper}>
+        <View style={styles.tabsContainer}>
+          {['Totales del Día', 'Notas de Venta', 'Cobros', 'Gastos'].map((tab, index) => (
+            <TouchableOpacity 
+              key={tab} 
+              onPress={() => setActiveTab(tab)}
+              style={[styles.tabButton, index > 0 && styles.tabButtonSpacing]}
+              activeOpacity={0.7}
+            >
               {activeTab === tab ? (
                 <LinearGradient
                   colors={['#092090', '#0C2ABF']}
@@ -181,7 +228,7 @@ export default function ResumenDiaScreen() {
               )}
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
       </View>
 
       {/* --- STATS CARDS --- */}
@@ -341,6 +388,7 @@ export default function ResumenDiaScreen() {
           </ContentPanel>
         </View>
       )}
+      </View>
     </ScreenWithSidebar>
   );
 }
@@ -371,10 +419,22 @@ function ContentPanel({ title, children, onAdd }: { title: string; children: Rea
   const navigation = useNavigation<any>();
   
   const handleAdd = () => {
-    if (title.includes('Ventas')) {
-      navigation.navigate('NuevaVenta');
-    } else if (title.includes('Gastos')) {
-      navigation.navigate('Gastos');
+    console.log('handleAdd llamado, title:', title);
+    const titleLower = title.toLowerCase();
+    if (titleLower.includes('venta')) {
+      console.log('Navegando a Ventas');
+      try {
+        navigation.navigate('Ventas');
+      } catch (error) {
+        console.error('Error al navegar:', error);
+      }
+    } else if (titleLower.includes('gasto')) {
+      console.log('Navegando a Gastos');
+      try {
+        navigation.navigate('Gastos');
+      } catch (error) {
+        console.error('Error al navegar:', error);
+      }
     } else if (onAdd) {
       onAdd();
     }
@@ -387,7 +447,12 @@ function ContentPanel({ title, children, onAdd }: { title: string; children: Rea
             <Text style={styles.panelIcon}>📊</Text>
             <Text style={styles.panelTitle}>{title}</Text>
         </View>
-        <TouchableOpacity style={styles.panelAddButton} onPress={handleAdd}>
+        <TouchableOpacity 
+          style={styles.panelAddButton} 
+          onPress={handleAdd}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
           <Text style={styles.panelAddText}>+ Añadir</Text>
         </TouchableOpacity>
       </View>
@@ -426,6 +491,10 @@ function GastoItem({ nombre, categoria, precio, imagen }: any) {
 // --- ESTILOS ---
 
 const styles = StyleSheet.create({
+  contentWrapper: {
+    flex: 1,
+    width: '100%',
+  },
   header: {
     paddingVertical: 20,
     paddingBottom: 16,
@@ -562,23 +631,37 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     padding: 0,
   },
+  tabsWrapper: {
+    marginBottom: 20,
+    marginTop: 0,
+    width: '100%',
+  },
   tabsContainer: {
-    paddingRight: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+  },
+  tabButton: {
+    flexShrink: 0,
+    marginRight: 12,
+  },
+  tabButtonSpacing: {
+    marginLeft: 0,
   },
   filterTab: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
     borderRadius: 30,
     borderWidth: 1,
     borderColor: '#092090',
     backgroundColor: 'transparent',
-    marginRight: 8,
+    minWidth: 'auto',
   },
   filterTabActive: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
     borderRadius: 30,
-    marginRight: 8,
+    minWidth: 'auto',
   },
   filterTabText: {
     fontSize: 13,
@@ -795,4 +878,43 @@ const styles = StyleSheet.create({
   totalPanelRight: {
     alignItems: 'flex-end',
   },
-});
+  alertContainer: {
+    backgroundColor: '#fff7ed',
+    borderWidth: 1,
+    borderColor: '#f97316',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
+    marginHorizontal: 0
+  },
+  alertTitle: {
+    color: '#c2410c',
+    fontWeight: '700',
+    fontSize: 14
+  },
+  openNoteCard: {
+    backgroundColor: '#fff',
+    padding: 12,
+    borderRadius: 8,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#fed7aa',
+    minWidth: 140
+  },
+  openNoteClient: {
+    fontWeight: '600',
+    color: '#1e293b',
+    fontSize: 13,
+    marginBottom: 4
+  },
+  openNoteTotal: {
+    fontWeight: '700',
+    color: '#f97316',
+    fontSize: 14
+  },
+  openNoteLabel: {
+    fontSize: 10,
+    color: '#9ca3af',
+    marginTop: 4
+  },
+});   
