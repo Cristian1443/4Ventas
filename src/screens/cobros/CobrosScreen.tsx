@@ -1,10 +1,10 @@
 /**
- * Cobros Screen
- * Selección de notas pendientes y confirmación de pago.
- * Incluye opción para generar recibo impreso.
+ * Cobros Screen - SOLUCIÓN FINAL
+ * - Corrige el envío de datos a la pantalla de confirmación (subtotal).
+ * - Captura los datos antes de procesar para evitar errores de sincronización.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,15 +22,14 @@ import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 export default function CobrosScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { notasVenta, updateNotaVenta, addCobro, cobros } = useApp();
+  
+  const { notasVenta, updateNotaVenta, cobros, updateCobro, addCobro } = useApp();
 
   const clienteSeleccionado = route.params?.clienteSeleccionado;
 
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
   const [showPaymentDropdown, setShowPaymentDropdown] = useState(false);
-  const [selectedNotes, setSelectedNotes] = useState<string[]>([]);
-  
-  // Nuevo estado para la opción de imprimir
+  const [selectedDebtIds, setSelectedDebtIds] = useState<string[]>([]); 
   const [imprimirRecibo, setImprimirRecibo] = useState(true);
 
   const paymentMethods = [
@@ -41,96 +40,96 @@ export default function CobrosScreen() {
     'Transferencia Bancaria'
   ];
 
-  // Filtrar notas pendientes del cliente
-  const pendingNotes = clienteSeleccionado
-    ? notasVenta
-        .filter(nota => {
-          if (nota.estado !== 'pendiente') return false;
-          
-          // Coincidencia por ID o Nombre
-          if (nota.clienteId && clienteSeleccionado.id && nota.clienteId === clienteSeleccionado.id) {
-            return true;
-          }
-          
-          const nombreCliente = clienteSeleccionado.nombre?.toLowerCase().trim() || '';
-          const empresaCliente = clienteSeleccionado.empresa?.toLowerCase().trim() || '';
-          const nombreNota = nota.cliente?.toLowerCase().trim() || '';
-          
-          return nombreNota.includes(nombreCliente) || 
-                 nombreCliente.includes(nombreNota) ||
-                 nombreNota.includes(empresaCliente) ||
-                 empresaCliente.includes(nombreNota);
-        })
-        .map(nota => ({
-          id: nota.id,
-          client: nota.cliente,
-          date: nota.fecha,
-          amount: parseFloat(nota.precio.replace(/[^\d,]/g, '').replace(',', '.')) || 0,
-          originalNota: nota // Guardamos la referencia completa
-        }))
-    : [];
+  // 1. Listar Deudas Pendientes
+  const pendingDebts = useMemo(() => {
+    if (!clienteSeleccionado) return [];
 
-  const toggleNote = (index: string) => {
-    if (selectedNotes.includes(index)) {
-      setSelectedNotes(selectedNotes.filter(n => n !== index));
+    const deudasCliente = cobros.filter(c => {
+      if (c.estado !== 'pendiente') return false;
+
+      const idMatch = String(c.clienteId) === String(clienteSeleccionado.id);
+      const nameMatch = c.cliente && clienteSeleccionado.nombre && 
+                        c.cliente.toLowerCase().includes(clienteSeleccionado.nombre.toLowerCase());
+      
+      return idMatch || nameMatch;
+    });
+
+    return deudasCliente.map(cobro => {
+      const notaOriginal = notasVenta.find(n => n.id === cobro.notaVentaId);
+      
+      return {
+        id: cobro.id, // ID Real del Cobro
+        notaId: cobro.notaVentaId || 'S/N',
+        client: cobro.cliente,
+        date: cobro.fecha,
+        amount: parseFloat(cobro.monto.toString().replace(/[^\d,]/g, '').replace(',', '.') || '0'),
+        originalNota: notaOriginal,
+      };
+    });
+  }, [cobros, notasVenta, clienteSeleccionado]);
+
+  const toggleDebt = (id: string) => {
+    if (selectedDebtIds.includes(id)) {
+      setSelectedDebtIds(selectedDebtIds.filter(dId => dId !== id));
     } else {
-      setSelectedNotes([...selectedNotes, index]);
+      setSelectedDebtIds([...selectedDebtIds, id]);
     }
   };
 
-  // Calcular subtotal
-  const subtotal = selectedNotes.reduce((sum, noteIndex) => {
-    const note = pendingNotes[parseInt(noteIndex)];
-    return sum + (note?.amount || 0);
+  const subtotal = selectedDebtIds.reduce((sum, id) => {
+    const item = pendingDebts.find(d => d.id === id);
+    return sum + (item?.amount || 0);
   }, 0);
 
+  // 2. PROCESO DE COBRO BLINDADO
   const handleConfirmarCobro = async () => {
-    if (!clienteSeleccionado || selectedNotes.length === 0 || !selectedPaymentMethod) {
-      Alert.alert('Faltan datos', 'Por favor selecciona un método de pago y al menos una nota para cobrar.');
+    if (!clienteSeleccionado || selectedDebtIds.length === 0 || !selectedPaymentMethod) {
+      Alert.alert('Faltan datos', 'Selecciona método de pago y al menos una deuda.');
       return;
     }
 
     try {
-      // 1. Registrar el Cobro en el sistema
-      const nuevoCobro = {
-        id: `C${String(Math.floor(Math.random() * 10000)).padStart(4, '0')}`, // ID único
-        cliente: clienteSeleccionado.empresa || clienteSeleccionado.nombre,
-        clienteId: clienteSeleccionado.id,
-        monto: `${subtotal.toFixed(2).replace('.', ',')} €`,
-        fecha: new Date().toLocaleString('es-ES'),
-        estado: 'pagado' as const,
-        formaPago: selectedPaymentMethod,
-        notasPagadasIds: selectedNotes.map(idx => pendingNotes[parseInt(idx)].id) // Referencia a notas
-      };
+      // A. CAPTURAR DATOS ANTES DE ACTUALIZAR
+      // Es vital hacer esto antes del bucle await para no perder referencias
+      const itemsAPagar = pendingDebts.filter(d => selectedDebtIds.includes(d.id));
       
-      await addCobro(nuevoCobro);
+      // Preparamos las notas para el recibo
+      const notasParaRecibo = itemsAPagar.map(item => ({
+        id: item.notaId !== 'S/N' ? item.notaId : item.id,
+        client: item.client,
+        date: item.date,
+        amount: item.amount
+      }));
 
-      // 2. Actualizar estado de las notas a 'cerrada'
-      for (const index of selectedNotes) {
-        const nota = pendingNotes[parseInt(index)];
-        if (nota) {
-          await updateNotaVenta(nota.id, 'cerrada');
+      // B. ACTUALIZAR BASE DE DATOS
+      for (const item of itemsAPagar) {
+        // 1. Marcar deuda como pagada
+        await updateCobro(item.id, 'pagado');
+
+        // 2. Cerrar nota de venta asociada si existe
+        if (item.originalNota) {
+          await updateNotaVenta(item.originalNota.id, 'cerrada');
         }
       }
 
-      // 3. Preparar datos para la pantalla de Recibo/Impresión
-      const notasCobradas = selectedNotes.map(index => pendingNotes[parseInt(index)]).filter(Boolean);
-      
+      // C. DATOS EXACTOS PARA LA PANTALLA DE CONFIRMACIÓN
       const datosRecibo = {
-        cobroId: nuevoCobro.id,
+        cobroId: `PAGO-${Date.now().toString().slice(-6)}`,
         cliente: clienteSeleccionado,
-        notas: notasCobradas,
+        notas: notasParaRecibo, 
         metodoPago: selectedPaymentMethod,
-        totalCobrado: subtotal,
+        subtotal: subtotal, // CORREGIDO: Se llama 'subtotal' en la otra pantalla
         fecha: new Date(),
-        autoPrint: imprimirRecibo // Pasamos la preferencia de impresión
+        autoPrint: imprimirRecibo
       };
 
-      // 4. Navegar a la pantalla de Impresión/Confirmación
-      navigation.replace('CobrosConfirmacion', { cobranzaActual: datosRecibo });
+      // D. NAVEGACIÓN
+      // Usamos navigate para asegurar que se apile correctamente
+      navigation.navigate('CobrosConfirmacion', { cobranzaActual: datosRecibo });
 
     } catch (error: any) {
-      Alert.alert('Error', `Ocurrió un error al procesar el cobro: ${error?.message}`);
+      console.error("Error al cobrar:", error);
+      Alert.alert('Error', 'No se pudo procesar el cobro. Intenta de nuevo.');
     }
   };
 
@@ -139,17 +138,15 @@ export default function CobrosScreen() {
       <View style={styles.container}>
         <View style={styles.mainContent}>
           
-          {/* COLUMNA IZQUIERDA - Formulario de Pago */}
+          {/* COLUMNA IZQUIERDA */}
           <View style={styles.leftColumn}>
             <View style={styles.headerLeft}>
-                 {/* Botón Volver sutil */}
                 <TouchableOpacity onPress={() => navigation.goBack()} style={{marginBottom: 10}}>
                     <Text style={{color: '#697b92'}}>← Volver a lista</Text>
                 </TouchableOpacity>
                 <Text style={styles.sectionLabel}>Cliente</Text>
             </View>
 
-            {/* Selector de Cliente (Visualización) */}
             <View style={styles.clientCard}>
               <Text style={styles.clientName}>
                 {clienteSeleccionado ? (clienteSeleccionado.empresa || clienteSeleccionado.nombre) : 'Seleccione un cliente'}
@@ -159,28 +156,15 @@ export default function CobrosScreen() {
               )}
             </View>
             
-            {clienteSeleccionado && (
-                <TouchableOpacity 
-                    style={styles.changeClientLink}
-                    onPress={() => navigation.navigate('CobrosList')}
-                >
-                    <Text style={styles.changeClientText}>↻ Cambiar Cliente</Text>
-                </TouchableOpacity>
-            )}
-
             <Text style={[styles.sectionLabel, {marginTop: 30}]}>Forma de Pago</Text>
 
-            {/* Selector Método de Pago */}
             <View style={styles.paymentSelectorContainer}>
               <TouchableOpacity
                 style={styles.paymentSelector}
                 onPress={() => setShowPaymentDropdown(!showPaymentDropdown)}
               >
-                <Text style={[
-                  styles.paymentText,
-                  !selectedPaymentMethod && styles.paymentTextPlaceholder
-                ]}>
-                  {selectedPaymentMethod || 'Seleccione método de pago'}
+                <Text style={[styles.paymentText, !selectedPaymentMethod && styles.paymentTextPlaceholder]}>
+                  {selectedPaymentMethod || 'Seleccione método...'}
                 </Text>
                 <Text style={styles.dropdownIcon}>▼</Text>
               </TouchableOpacity>
@@ -203,9 +187,8 @@ export default function CobrosScreen() {
               )}
             </View>
 
-            {/* Opción Imprimir Recibo */}
             <View style={styles.printOptionContainer}>
-                <Text style={styles.printOptionLabel}>🖨️ Generar Recibo para Cliente</Text>
+                <Text style={styles.printOptionLabel}>🖨️ Generar Recibo</Text>
                 <Switch
                     trackColor={{ false: "#e2e8f0", true: "#0C2ABF" }}
                     thumbColor={imprimirRecibo ? "#ffffff" : "#f4f3f4"}
@@ -214,80 +197,75 @@ export default function CobrosScreen() {
                 />
             </View>
 
-            {/* Botón Confirmar */}
             <TouchableOpacity
               style={[
                 styles.confirmButton,
-                (!clienteSeleccionado || selectedNotes.length === 0 || !selectedPaymentMethod) &&
+                (!clienteSeleccionado || selectedDebtIds.length === 0 || !selectedPaymentMethod) &&
                 styles.confirmButtonDisabled
               ]}
               onPress={handleConfirmarCobro}
-              disabled={!clienteSeleccionado || selectedNotes.length === 0 || !selectedPaymentMethod}
+              disabled={!clienteSeleccionado || selectedDebtIds.length === 0 || !selectedPaymentMethod}
             >
               <LinearGradient
-                colors={
-                  (!clienteSeleccionado || selectedNotes.length === 0 || !selectedPaymentMethod)
-                    ? ['#d4d4d4', '#e2e2e2']
-                    : ['#092090', '#0C2ABF']
-                }
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
+                colors={(!clienteSeleccionado || selectedDebtIds.length === 0 || !selectedPaymentMethod)
+                    ? ['#d4d4d4', '#e2e2e2'] : ['#092090', '#0C2ABF']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                 style={styles.confirmButtonGradient}
               >
                 <Text style={styles.confirmButtonIcon}>✅</Text>
-                <Text style={styles.confirmButtonText}>Confirmar Cobro</Text>
+                <Text style={styles.confirmButtonText}>Confirmar ({subtotal.toFixed(2)} €)</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
 
-          {/* COLUMNA DERECHA - Notas Pendientes */}
+          {/* COLUMNA DERECHA */}
           <View style={styles.rightColumn}>
             <View style={styles.notesHeader}>
               <Text style={styles.notesHeaderIcon}>📄</Text>
-              <Text style={styles.notesHeaderTitle}>Marcar Notas Pendientes</Text>
+              <Text style={styles.notesHeaderTitle}>Recibos Pendientes ({pendingDebts.length})</Text>
             </View>
 
             <ScrollView style={styles.notesList} contentContainerStyle={styles.notesListContent}>
               {!clienteSeleccionado ? (
                 <View style={styles.emptyState}>
-                  <Text style={styles.emptyStateText}>Selecciona un cliente para ver sus notas</Text>
+                  <Text style={styles.emptyStateText}>Selecciona un cliente</Text>
                 </View>
-              ) : pendingNotes.length === 0 ? (
+              ) : pendingDebts.length === 0 ? (
                 <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateIcon}>🎉</Text>
                   <Text style={styles.emptyStateTitle}>Todo al día</Text>
-                  <Text style={styles.emptyStateText}>Este cliente no tiene deudas pendientes.</Text>
+                  <Text style={styles.emptyStateText}>No hay recibos pendientes.</Text>
                 </View>
               ) : (
-                pendingNotes.map((note, index) => {
-                   const isSelected = selectedNotes.includes(index.toString());
+                pendingDebts.map((item) => {
+                   const isSelected = selectedDebtIds.includes(item.id);
                    return (
                     <TouchableOpacity 
-                        key={index} 
+                        key={item.id} 
                         style={[styles.noteCard, isSelected && styles.noteCardSelected]}
-                        onPress={() => toggleNote(index.toString())}
+                        onPress={() => toggleDebt(item.id)}
                         activeOpacity={0.9}
                     >
                         <View style={styles.noteHeader}>
-                        <View style={styles.noteIdBadge}>
-                            <Text style={styles.noteIdText}>{note.id}</Text>
-                        </View>
-                        <Text style={styles.noteClient}>{note.client}</Text>
-                        </View>
-
-                        <View style={styles.noteDateRow}>
-                        <Text style={styles.noteDateLabel}>Fecha:</Text>
-                        <Text style={styles.noteDateValue}>{note.date}</Text>
+                            <View style={{flexDirection: 'row', gap: 8, alignItems: 'center'}}>
+                                <View style={styles.noteIdBadge}>
+                                    <Text style={styles.noteIdText}>
+                                      {item.notaId !== 'S/N' ? item.notaId : item.id}
+                                    </Text>
+                                </View>
+                                <Text style={{fontSize: 14, fontWeight: '600', color: '#1e293b'}}>
+                                    {item.originalNota ? 'Nota de Venta' : 'Deuda'}
+                                </Text>
+                            </View>
+                            <Text style={styles.noteDateValue}>{item.date}</Text>
                         </View>
 
                         <Text style={styles.noteAmount}>
-                        {note.amount.toFixed(2).replace('.', ',')} €
+                            {item.amount.toFixed(2).replace('.', ',')} €
                         </Text>
 
-                        <View style={[
-                            styles.checkbox,
-                            isSelected && styles.checkboxSelected
-                        ]}>
-                        {isSelected && <Text style={styles.checkmark}>✓</Text>}
+                        <View style={[styles.checkbox, isSelected && styles.checkboxSelected]}>
+                            {isSelected && <Text style={styles.checkmark}>✓</Text>}
                         </View>
                     </TouchableOpacity>
                   );
@@ -310,302 +288,61 @@ export default function CobrosScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff'
-  },
-  mainContent: {
-    flex: 1,
-    flexDirection: 'row',
-    padding: 40,
-    gap: 40
-  },
-  // Left Column
-  leftColumn: {
-    width: 400,
-    paddingTop: 20,
-    flexShrink: 0
-  },
-  headerLeft: {
-      marginBottom: 10
-  },
-  sectionLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 12
-  },
-  clientCard: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 20,
-    marginBottom: 8
-  },
-  clientName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginBottom: 4
-  },
-  clientDetail: {
-    fontSize: 13,
-    color: '#697b92'
-  },
-  changeClientLink: {
-      alignSelf: 'flex-start',
-      paddingVertical: 8
-  },
-  changeClientText: {
-      fontSize: 13,
-      color: '#0C2ABF',
-      fontWeight: '600'
-  },
-  paymentSelectorContainer: {
-    position: 'relative',
-    marginBottom: 30,
-    zIndex: 10 // Ensure dropdown appears on top
-  },
-  paymentSelector: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between'
-  },
-  paymentText: {
-    fontSize: 14,
-    color: '#1a1a1a'
-  },
-  paymentTextPlaceholder: {
-    color: '#94a3b8'
-  },
-  dropdownIcon: {
-    fontSize: 12,
-    color: '#697b92'
-  },
-  paymentDropdown: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: '#ffffff',
-    borderRadius: 8,
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5
-  },
-  paymentOption: {
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9'
-  },
-  paymentOptionText: {
-    fontSize: 14,
-    color: '#1a1a1a'
-  },
-  printOptionContainer: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      backgroundColor: '#f8fafc',
-      padding: 16,
-      borderRadius: 8,
-      marginBottom: 30,
-      borderWidth: 1,
-      borderColor: '#e2e8f0'
-  },
-  printOptionLabel: {
-      fontSize: 14,
-      color: '#1a1a1a',
-      fontWeight: '500'
-  },
-  confirmButton: {
-    width: '100%',
-    borderRadius: 30,
-    overflow: 'hidden',
-    marginTop: 'auto' // Push to bottom if space allows
-  },
-  confirmButtonDisabled: {
-    opacity: 0.5
-  },
-  confirmButtonGradient: {
-    paddingVertical: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10
-  },
-  confirmButtonIcon: {
-    fontSize: 16
-  },
-  confirmButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#ffffff'
-  },
+  container: { flex: 1, backgroundColor: '#ffffff' },
+  mainContent: { flex: 1, flexDirection: 'row', padding: 30, gap: 30, height: '100%', overflow: 'hidden' },
   
-  // Right Column
-  rightColumn: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 16,
-    overflow: 'hidden',
-    display: 'flex',
-    flexDirection: 'column'
-  },
-  notesHeader: {
-    padding: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#ffffff'
-  },
-  notesHeaderIcon: {
-    fontSize: 20
-  },
-  notesHeaderTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a1a'
-  },
-  notesList: {
-    flex: 1,
-    backgroundColor: '#f8fafc'
-  },
-  notesListContent: {
-    padding: 24
-  },
-  emptyState: {
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptyStateTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 8
-  },
-  emptyStateText: {
-    fontSize: 14,
-    color: '#697b92'
-  },
-  noteCard: {
-    backgroundColor: '#ffffff',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 16,
-    marginBottom: 12,
-    position: 'relative'
-  },
-  noteCardSelected: {
-      borderColor: '#0C2ABF',
-      backgroundColor: '#f0f7ff'
-  },
-  noteHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 8
-  },
-  noteIdBadge: {
-    backgroundColor: '#91e600',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4
-  },
-  noteIdText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#1a1a1a'
-  },
-  noteClient: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#697b92'
-  },
-  noteDateRow: {
-    flexDirection: 'row',
-    gap: 6
-  },
-  noteDateLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#092090'
-  },
-  noteDateValue: {
-    fontSize: 12,
-    color: '#092090'
-  },
-  noteAmount: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a1a'
-  },
-  checkbox: {
-    position: 'absolute',
-    bottom: 16,
-    right: 16,
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#ffffff'
-  },
-  checkboxSelected: {
-    borderColor: '#0C2ABF',
-    backgroundColor: '#0C2ABF'
-  },
-  checkmark: {
-    color: '#ffffff',
-    fontSize: 14,
-    fontWeight: 'bold'
-  },
-  notesFooter: {
-    padding: 24,
-    backgroundColor: '#ffffff',
-    borderTopWidth: 1,
-    borderTopColor: '#e2e8f0'
-  },
-  subtotalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#f0f7ff',
-    padding: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#dbeafe'
-  },
-  subtotalLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1e293b'
-  },
-  subtotalValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#092090'
-  }
+  leftColumn: { width: 350, flexDirection: 'column', flexShrink: 0 },
+  headerLeft: { marginBottom: 20 },
+  sectionLabel: { fontSize: 14, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 },
+  clientCard: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 16 },
+  clientName: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginBottom: 4 },
+  clientDetail: { fontSize: 13, color: '#697b92' },
+  
+  paymentSelectorContainer: { position: 'relative', marginBottom: 20, zIndex: 20 },
+  paymentSelector: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  paymentText: { fontSize: 14, color: '#1a1a1a' },
+  paymentTextPlaceholder: { color: '#94a3b8' },
+  dropdownIcon: { fontSize: 12, color: '#697b92' },
+  paymentDropdown: { position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#fff', borderRadius: 8, marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 },
+  paymentOption: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
+  paymentOptionText: { fontSize: 14, color: '#1a1a1a' },
+  
+  printOptionContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', padding: 14, borderRadius: 8, marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0' },
+  printOptionLabel: { fontSize: 14, color: '#1a1a1a', fontWeight: '500' },
+  
+  confirmButton: { width: '100%', borderRadius: 30, overflow: 'hidden', marginTop: 'auto' },
+  confirmButtonDisabled: { opacity: 0.5 },
+  confirmButtonGradient: { paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  confirmButtonIcon: { fontSize: 16 },
+  confirmButtonText: { fontSize: 16, fontWeight: '700', color: '#ffffff' },
+  
+  rightColumn: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+  notesHeader: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#e2e8f0', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff' },
+  notesHeaderIcon: { fontSize: 20 },
+  notesHeaderTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
+  
+  notesList: { flex: 1, backgroundColor: '#f8fafc' },
+  notesListContent: { padding: 20 },
+  
+  noteCard: { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', padding: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  noteCardSelected: { borderColor: '#0C2ABF', backgroundColor: '#f0f7ff' },
+  noteHeader: { flexDirection: 'column', gap: 4 },
+  noteIdBadge: { backgroundColor: '#e2e8f0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' },
+  noteIdText: { fontSize: 11, fontWeight: '700', color: '#475569' },
+  noteDateValue: { fontSize: 12, color: '#64748b' },
+  noteAmount: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginRight: 40 },
+  
+  checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#cbd5e1', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  checkboxSelected: { borderColor: '#0C2ABF', backgroundColor: '#0C2ABF' },
+  checkmark: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  
+  emptyState: { padding: 40, alignItems: 'center', justifyContent: 'center', flex: 1 },
+  emptyStateIcon: { fontSize: 40, marginBottom: 10 },
+  emptyStateTitle: { fontSize: 18, fontWeight: '600', color: '#1a1a1a', marginBottom: 8 },
+  emptyStateText: { fontSize: 14, color: '#697b92' },
+  
+  notesFooter: { padding: 20, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e2e8f0' },
+  subtotalContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f0f7ff', padding: 16, borderRadius: 8, borderWidth: 1, borderColor: '#dbeafe' },
+  subtotalLabel: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
+  subtotalValue: { fontSize: 20, fontWeight: '700', color: '#092090' }
 });

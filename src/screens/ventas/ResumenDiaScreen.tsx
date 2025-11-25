@@ -1,5 +1,7 @@
 /**
- * Resumen del Día Screen - COPIA COMPLETA DEL WEB
+ * Resumen del Día Screen - OPTIMIZADO TABLET/MÓVIL
+ * - Corregido desbordamiento en móviles (minWidth excesivo).
+ * - Adaptación de columnas dinámica (Grid System).
  */
 
 import React, { useState } from 'react';
@@ -11,40 +13,38 @@ import {
   TouchableOpacity,
   TextInput,
   Image,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
-import { useResponsiveLayout } from '../../constants/layout';
+import { useResponsiveLayout, layout } from '../../constants/layout';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 
 const imgRectangle26 = require('../../../assets/blue-image-panel.png');
 
 export default function ResumenDiaScreen() {
   const navigation = useNavigation<any>();
-  const layout = useResponsiveLayout();
-  const { notasVenta, gastos, cobros } = useApp();
+  const { isTablet, isSmallDevice } = useResponsiveLayout(); // Hook de layout
+  const { notasVenta, gastos } = useApp();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('Totales del Día');
   const [selectedPeriod, setSelectedPeriod] = useState('Hoy');
 
-  // Importar useNavigation para ContentPanel
-  const navForPanel = useNavigation();
-
-  // Calcular totales
+  // --- CÁLCULOS ---
   const calcularTotalVentas = () => {
     return notasVenta
       .filter(n => n.estado !== 'anulada')
       .reduce((sum, nota) => {
-        const precio = parseFloat(nota.precio.replace(',', '.').replace('€', '').trim() || '0');
+        const precio = parseFloat(nota.precio.replace(/[^\d,.-]/g, '').replace(',', '.') || '0');
         return sum + precio;
       }, 0);
   };
 
   const calcularTotalGastos = () => {
     return gastos.reduce((sum, gasto) => {
-      const precio = parseFloat(gasto.precio.replace(',', '.').replace('€', '').trim() || '0');
+      const precio = parseFloat(gasto.precio.replace(/[^\d,.-]/g, '').replace(',', '.') || '0');
       return sum + precio;
     }, 0);
   };
@@ -72,7 +72,7 @@ export default function ResumenDiaScreen() {
 
   return (
     <ScreenWithSidebar currentScreen="ResumenDia" scrollable={true}>
-      {/* Header con botón volver y acciones */}
+      {/* --- HEADER --- */}
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <TouchableOpacity
@@ -87,7 +87,12 @@ export default function ResumenDiaScreen() {
         <View style={styles.headerActions}>
           <TouchableOpacity 
             style={styles.actionButton}
-            onPress={() => navigation.navigate('NuevaVenta')}
+            onPress={() => {
+                console.log("Navegando a Nueva Venta"); // Debug
+                navigation.navigate('NuevaVenta');
+            }}
+            activeOpacity={0.7} // Añadir feedback visual
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} // Aumentar área táctil
           >
             <Text style={styles.actionButtonText}>+ Nueva Venta</Text>
           </TouchableOpacity>
@@ -95,32 +100,35 @@ export default function ResumenDiaScreen() {
             style={styles.actionButton}
             onPress={() => navigation.navigate('Gastos')}
           >
-            <Text style={styles.actionButtonText}>+ Nuevo Gasto</Text>
+            <Text style={styles.actionButtonText}>+ Gasto</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.exportButton}
-            onPress={() => alert('Exportar funcionalidad próximamente')}
-          >
-            <LinearGradient
-              colors={['#092090', '#0C2ABF']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.exportGradient}
+          {!isSmallDevice && (
+            <TouchableOpacity 
+              style={styles.exportButton}
+              onPress={() => alert('Próximamente')}
             >
-              <Text style={styles.exportIcon}>🖨️</Text>
-              <Text style={styles.exportText}>Exportar</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={['#092090', '#0C2ABF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.exportGradient}
+              >
+                <Text style={styles.exportIcon}>🖨️</Text>
+                <Text style={styles.exportText}>Exportar</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
-      {/* Filtros de fecha y búsqueda */}
-      <View style={styles.filtersRow}>
+      {/* --- FILTROS --- */}
+      <View style={[styles.filtersRow, isSmallDevice && styles.filtersRowMobile]}>
         <View style={styles.periodButtons}>
           {['Hoy', 'Ayer', 'Semana', 'Mes'].map((periodo) => (
             <TouchableOpacity
               key={periodo}
               onPress={() => setSelectedPeriod(periodo)}
+              style={{flex: isSmallDevice ? 1 : 0}}
             >
               {selectedPeriod === periodo ? (
                 <LinearGradient
@@ -140,11 +148,11 @@ export default function ResumenDiaScreen() {
           ))}
         </View>
         
-        <View style={styles.searchBox}>
+        <View style={[styles.searchBox, isSmallDevice && { width: '100%', marginTop: 10 }]}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={styles.searchInput}
-            placeholder="Buscar cliente o nota..."
+            placeholder="Buscar..."
             placeholderTextColor="#94a3b8"
             value={searchTerm}
             onChangeText={setSearchTerm}
@@ -152,34 +160,36 @@ export default function ResumenDiaScreen() {
         </View>
       </View>
 
-      {/* Tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainer}>
-        {['Totales del Día', 'Notas de Venta', 'Cobros', 'Gastos', 'Incidencias'].map((tab) => (
-          <TouchableOpacity
-            key={tab}
-            onPress={() => setActiveTab(tab)}
-          >
-            {activeTab === tab ? (
-              <LinearGradient
-                colors={['#092090', '#0C2ABF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.filterTabActive}
-              >
-                <Text style={styles.filterTabTextActive}>{tab}</Text>
-              </LinearGradient>
-            ) : (
-              <View style={styles.filterTab}>
-                <Text style={styles.filterTabText}>{tab}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+      {/* --- TABS --- */}
+      <View style={{ height: 50, marginBottom: 20 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContainer}>
+          {['Totales del Día', 'Notas de Venta', 'Cobros', 'Gastos'].map((tab) => (
+            <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)}>
+              {activeTab === tab ? (
+                <LinearGradient
+                  colors={['#092090', '#0C2ABF']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.filterTabActive}
+                >
+                  <Text style={styles.filterTabTextActive}>{tab}</Text>
+                </LinearGradient>
+              ) : (
+                <View style={styles.filterTab}>
+                  <Text style={styles.filterTabText}>{tab}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
 
-      {/* Stats cards - CLICKEABLES */}
+      {/* --- STATS CARDS --- */}
       <View style={styles.statsGrid}>
-        <TouchableOpacity onPress={() => setActiveTab('Notas de Venta')}>
+        <TouchableOpacity 
+          style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]} 
+          onPress={() => setActiveTab('Notas de Venta')}
+        >
           <StatsCard 
             title="Ventas Hoy"
             value={`${totalVentas.toFixed(2).replace('.', ',')} €`}
@@ -188,7 +198,11 @@ export default function ResumenDiaScreen() {
             bgGradient={true}
           />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setActiveTab('Gastos')}>
+        
+        <TouchableOpacity 
+          style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]} 
+          onPress={() => setActiveTab('Gastos')}
+        >
           <StatsCard 
             title="Gastos Hoy"
             value={`${totalGastos.toFixed(2).replace('.', ',')} €`}
@@ -197,7 +211,11 @@ export default function ResumenDiaScreen() {
             titleBg="#0C2ABF"
           />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => setActiveTab('Notas de Venta')}>
+        
+        <TouchableOpacity 
+          style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]} 
+          onPress={() => setActiveTab('Notas de Venta')}
+        >
           <StatsCard 
             title="Nº de Ventas"
             value={numeroVentas.toString()}
@@ -205,22 +223,73 @@ export default function ResumenDiaScreen() {
             changeColor="#91e600"
           />
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => navigation.navigate('Clientes')}>
+        
+        <TouchableOpacity 
+          style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]} 
+          onPress={() => navigation.navigate('Clientes')}
+        >
           <StatsCard 
-            title="Clientes Visitados"
+            title="Clientes"
             value={clientesVisitadosHoy.toString()}
-            change="Objetivo: 15 clientes"
+            change="Objetivo: 15"
             changeColor="#697b92"
           />
         </TouchableOpacity>
       </View>
 
-      {/* Content basado en tab activo */}
+      {/* --- CONTENT PANELS --- */}
       {activeTab === 'Totales del Día' && (
         <View style={styles.contentGrid}>
-          {/* Notas de Venta */}
-          <ContentPanel title="Notas de Venta">
-            {filteredNotasVenta.slice(0, 5).map((nota) => (
+          {/* Panel Izquierdo */}
+          <View style={[styles.panelWrapper, isTablet ? { flex: 1 } : { width: '100%' }]}>
+            <ContentPanel title="Notas de Venta">
+              {filteredNotasVenta.length === 0 ? (
+                 <Text style={styles.emptyText}>No hay ventas hoy</Text>
+              ) : (
+                filteredNotasVenta.slice(0, 5).map((nota) => (
+                  <TouchableOpacity 
+                    key={nota.id} 
+                    onPress={() => navigation.navigate('VerNota', { notaId: nota.id })}
+                  >
+                    <NotaVentaItem {...nota} />
+                  </TouchableOpacity>
+                ))
+              )}
+              {filteredNotasVenta.length > 5 && (
+                <TouchableOpacity 
+                  style={styles.seeAllButton}
+                  onPress={() => setActiveTab('Notas de Venta')}
+                >
+                  <Text style={styles.seeAllText}>Ver todas ({filteredNotasVenta.length})</Text>
+                </TouchableOpacity>
+              )}
+            </ContentPanel>
+          </View>
+
+          {/* Panel Derecho */}
+          <View style={[styles.panelWrapper, isTablet ? { flex: 1 } : { width: '100%' }]}>
+            <ContentPanel title="Gastos">
+              {filteredGastos.length === 0 ? (
+                 <Text style={styles.emptyText}>No hay gastos hoy</Text>
+              ) : (
+                filteredGastos.slice(0, 5).map((gasto) => (
+                  <TouchableOpacity 
+                    key={gasto.id}
+                    onPress={() => navigation.navigate('Gastos')}
+                  >
+                    <GastoItem {...gasto} imagen={imgRectangle26} />
+                  </TouchableOpacity>
+                ))
+              )}
+            </ContentPanel>
+          </View>
+        </View>
+      )}
+
+      {activeTab === 'Notas de Venta' && (
+        <View style={styles.fullWidthPanel}>
+          <ContentPanel title="Todas las Notas de Venta">
+            {filteredNotasVenta.map((nota) => (
               <TouchableOpacity 
                 key={nota.id} 
                 onPress={() => navigation.navigate('VerNota', { notaId: nota.id })}
@@ -228,19 +297,27 @@ export default function ResumenDiaScreen() {
                 <NotaVentaItem {...nota} />
               </TouchableOpacity>
             ))}
-            {filteredNotasVenta.length > 5 && (
-              <TouchableOpacity 
-                style={styles.seeAllButton}
-                onPress={() => setActiveTab('Notas de Venta')}
-              >
-                <Text style={styles.seeAllText}>Ver todas ({filteredNotasVenta.length})</Text>
-              </TouchableOpacity>
-            )}
+            
+            <View style={styles.totalPanel}>
+              <View>
+                <Text style={styles.totalPanelLabel}>Total Ventas</Text>
+                <Text style={styles.totalPanelValue}>
+                  {totalVentas.toFixed(2).replace('.', ',')} €
+                </Text>
+              </View>
+              <View style={styles.totalPanelRight}>
+                <Text style={styles.totalPanelLabel}>Notas procesadas</Text>
+                <Text style={styles.totalPanelValue}>{filteredNotasVenta.length}</Text>
+              </View>
+            </View>
           </ContentPanel>
+        </View>
+      )}
 
-          {/* Gastos */}
-          <ContentPanel title="Gastos">
-            {filteredGastos.slice(0, 5).map((gasto) => (
+      {activeTab === 'Gastos' && (
+        <View style={styles.fullWidthPanel}>
+          <ContentPanel title="Todos los Gastos">
+            {filteredGastos.map((gasto) => (
               <TouchableOpacity 
                 key={gasto.id}
                 onPress={() => navigation.navigate('Gastos')}
@@ -248,66 +325,27 @@ export default function ResumenDiaScreen() {
                 <GastoItem {...gasto} imagen={imgRectangle26} />
               </TouchableOpacity>
             ))}
+            
+            <View style={styles.totalPanel}>
+              <View>
+                <Text style={styles.totalPanelLabel}>Total Gastos</Text>
+                <Text style={[styles.totalPanelValue, { color: '#f59e0b' }]}>
+                  {totalGastos.toFixed(2).replace('.', ',')} €
+                </Text>
+              </View>
+              <View style={styles.totalPanelRight}>
+                <Text style={styles.totalPanelLabel}>Gastos registrados</Text>
+                <Text style={styles.totalPanelValue}>{filteredGastos.length}</Text>
+              </View>
+            </View>
           </ContentPanel>
         </View>
-      )}
-
-      {activeTab === 'Notas de Venta' && (
-        <ContentPanel title="Todas las Notas de Venta">
-          {filteredNotasVenta.map((nota) => (
-            <TouchableOpacity 
-              key={nota.id} 
-              onPress={() => navigation.navigate('VerNota', { notaId: nota.id })}
-            >
-              <NotaVentaItem {...nota} />
-            </TouchableOpacity>
-          ))}
-          
-          <View style={styles.totalPanel}>
-            <View>
-              <Text style={styles.totalPanelLabel}>Total Ventas</Text>
-              <Text style={styles.totalPanelValue}>
-                {totalVentas.toFixed(2).replace('.', ',')} €
-              </Text>
-            </View>
-            <View style={styles.totalPanelRight}>
-              <Text style={styles.totalPanelLabel}>Notas procesadas</Text>
-              <Text style={styles.totalPanelValue}>{filteredNotasVenta.length}</Text>
-            </View>
-          </View>
-        </ContentPanel>
-      )}
-
-      {activeTab === 'Gastos' && (
-        <ContentPanel title="Todos los Gastos">
-          {filteredGastos.map((gasto) => (
-            <TouchableOpacity 
-              key={gasto.id}
-              onPress={() => navigation.navigate('Gastos')}
-            >
-              <GastoItem {...gasto} imagen={imgRectangle26} />
-            </TouchableOpacity>
-          ))}
-          
-          <View style={styles.totalPanel}>
-            <View>
-              <Text style={styles.totalPanelLabel}>Total Gastos</Text>
-              <Text style={[styles.totalPanelValue, { color: '#f59e0b' }]}>
-                {totalGastos.toFixed(2).replace('.', ',')} €
-              </Text>
-            </View>
-            <View style={styles.totalPanelRight}>
-              <Text style={styles.totalPanelLabel}>Gastos registrados</Text>
-              <Text style={styles.totalPanelValue}>{filteredGastos.length}</Text>
-            </View>
-          </View>
-        </ContentPanel>
       )}
     </ScreenWithSidebar>
   );
 }
 
-// COMPONENTES AUXILIARES (igual al web)
+// --- COMPONENTES AUXILIARES ---
 
 function StatsCard({ title, value, change, changeColor, bgGradient, titleBg }: any) {
   return (
@@ -321,10 +359,10 @@ function StatsCard({ title, value, change, changeColor, bgGradient, titleBg }: a
         />
       )}
       <View style={[styles.statBadge, { backgroundColor: titleBg || (bgGradient ? 'rgba(255,255,255,0.2)' : '#0C2ABF') }]}>
-        <Text style={styles.statBadgeText}>{title}</Text>
+        <Text style={styles.statBadgeText} numberOfLines={1}>{title}</Text>
       </View>
-      <Text style={[styles.statValue, bgGradient && { color: '#ffffff' }]}>{value}</Text>
-      <Text style={[styles.statChange, { color: changeColor }]}>{change}</Text>
+      <Text style={[styles.statValue, bgGradient && { color: '#ffffff' }]} numberOfLines={1}>{value}</Text>
+      <Text style={[styles.statChange, { color: changeColor }]} numberOfLines={1}>{change}</Text>
     </View>
   );
 }
@@ -345,8 +383,10 @@ function ContentPanel({ title, children, onAdd }: { title: string; children: Rea
   return (
     <View style={styles.panel}>
       <View style={styles.panelHeader}>
-        <Text style={styles.panelIcon}>📊</Text>
-        <Text style={styles.panelTitle}>{title}</Text>
+        <View style={{flexDirection:'row', alignItems:'center', flex:1}}>
+            <Text style={styles.panelIcon}>📊</Text>
+            <Text style={styles.panelTitle}>{title}</Text>
+        </View>
         <TouchableOpacity style={styles.panelAddButton} onPress={handleAdd}>
           <Text style={styles.panelAddText}>+ Añadir</Text>
         </TouchableOpacity>
@@ -361,9 +401,9 @@ function ContentPanel({ title, children, onAdd }: { title: string; children: Rea
 function NotaVentaItem({ id, cliente, precio }: any) {
   return (
     <View style={styles.notaItem}>
-      <View>
+      <View style={{flex:1}}>
         <Text style={styles.notaId}>{id}</Text>
-        <Text style={styles.notaCliente}>{cliente}</Text>
+        <Text style={styles.notaCliente} numberOfLines={1}>{cliente}</Text>
       </View>
       <Text style={styles.notaPrecio}>{precio}</Text>
     </View>
@@ -375,7 +415,7 @@ function GastoItem({ nombre, categoria, precio, imagen }: any) {
     <View style={styles.gastoItem}>
       <Image source={imagen} style={styles.gastoImage} />
       <View style={styles.gastoInfo}>
-        <Text style={styles.gastoNombre}>{nombre}</Text>
+        <Text style={styles.gastoNombre} numberOfLines={1}>{nombre}</Text>
         <Text style={styles.gastoCategoria}>{categoria}</Text>
       </View>
       <Text style={styles.gastoPrecio}>{precio}</Text>
@@ -383,9 +423,11 @@ function GastoItem({ nombre, categoria, precio, imagen }: any) {
   );
 }
 
+// --- ESTILOS ---
+
 const styles = StyleSheet.create({
   header: {
-    paddingVertical: 24,
+    paddingVertical: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0',
@@ -411,26 +453,25 @@ const styles = StyleSheet.create({
     color: '#697b92',
   },
   title: {
-    fontFamily: 'Inter',
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: '#1a1a1a',
   },
   headerActions: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
+    flexWrap: 'wrap'
   },
   actionButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderWidth: 2,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderWidth: 1.5,
     borderColor: '#092090',
     borderRadius: 30,
     backgroundColor: 'transparent',
   },
   actionButtonText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#092090',
   },
@@ -441,26 +482,33 @@ const styles = StyleSheet.create({
   exportGradient: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   exportIcon: {
-    fontSize: 16,
+    fontSize: 14,
   },
   exportText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#ffffff',
   },
+  // CORRECCIÓN PARA FILTROS SUPERPUESTOS
   filtersRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap', // Permite que el buscador baje si no hay espacio
     gap: 16,
     marginVertical: 24,
+    alignItems: 'center',
+  },
+  filtersRowMobile: {
+    flexDirection: 'column',
+    gap: 10
   },
   periodButtons: {
     flexDirection: 'row',
+    flexWrap: 'wrap', // Permite que los botones de fecha se acomoden en varias líneas
     gap: 8,
   },
   periodButton: {
@@ -470,21 +518,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     backgroundColor: '#ffffff',
+    minWidth: 60, // Ancho mínimo para evitar colapsos
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   periodButtonActive: {
-    borderWidth: 0,
+    paddingVertical: 8, // Igualar padding para evitar saltos
+    paddingHorizontal: 16,
+    borderRadius: 30,
+    minWidth: 60,
+    alignItems: 'center'
   },
   periodText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#697b92',
   },
   periodTextActive: {
+    fontSize: 13,
+    fontWeight: '600',
     color: '#ffffff',
   },
+  // CORRECCIÓN PARA EL BUSCADOR (para que no aplaste los filtros)
   searchBox: {
-    flex: 1,
+    flex: 1, // Toma el espacio restante
+    minWidth: 200, // Pero no menos de 200px
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#ffffff',
@@ -502,9 +560,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: '#1a1a1a',
+    padding: 0,
   },
   tabsContainer: {
-    marginBottom: 32,
+    paddingRight: 20,
   },
   filterTab: {
     paddingVertical: 8,
@@ -516,32 +575,41 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   filterTabActive: {
-    borderWidth: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 30,
+    marginRight: 8,
   },
   filterTabText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#092090',
   },
   filterTabTextActive: {
+    fontSize: 13,
+    fontWeight: '600',
     color: '#ffffff',
   },
+  // GRID SYSTEM
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 20,
-    marginBottom: 32,
+    gap: 12, // Gap funciona en RN >= 0.71
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  statWrapper: {
+    marginBottom: 12,
   },
   statCard: {
     flex: 1,
-    minWidth: 220,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 24,
-    position: 'relative',
+    borderRadius: 12,
+    padding: 16,
+    minHeight: 130,
+    justifyContent: 'space-between'
   },
   statCardGradient: {
     borderWidth: 0,
@@ -549,105 +617,110 @@ const styles = StyleSheet.create({
   },
   statBadge: {
     alignSelf: 'flex-start',
-    paddingVertical: 5,
-    paddingHorizontal: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
     borderRadius: 20,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   statBadgeText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 11,
+    fontWeight: '700',
     color: '#ffffff',
   },
   statValue: {
-    fontFamily: 'Inter',
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: '700',
     color: '#1a1a1a',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   statChange: {
-    fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: '500',
   },
+  
+  // CONTENT LAYOUT
   contentGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 30,
+    gap: 20,
+  },
+  panelWrapper: {
+    marginBottom: 20,
+  },
+  fullWidthPanel: {
+    width: '100%',
+    marginBottom: 20
   },
   panel: {
     flex: 1,
-    minWidth: 450,
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 28,
+    borderRadius: 12,
+    padding: 20,
+    // Responsive width handled by wrapper
   },
   panelHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 28,
+    marginBottom: 20,
   },
   panelIcon: {
     fontSize: 18,
+    marginRight: 8
   },
   panelTitle: {
-    flex: 1,
-    fontFamily: 'Inter',
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: '700',
     color: '#1a1a1a',
-    marginLeft: 10,
+    flex: 1,
   },
   panelAddButton: {
     paddingVertical: 6,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     backgroundColor: '#0C2ABF',
     borderRadius: 20,
   },
   panelAddText: {
-    fontFamily: 'Inter',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#ffffff',
   },
   panelContent: {
     gap: 12,
   },
+  // ITEMS
   notaItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#ffffff',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 10,
-    padding: 16,
+    padding: 14,
     marginBottom: 8,
   },
   notaId: {
-    fontFamily: 'Inter',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#1a1a1a',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   notaCliente: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    color: '#697b92',
+    fontSize: 13,
+    color: '#64748b',
   },
   notaPrecio: {
-    fontFamily: 'Inter',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#0C2ABF',
   },
   gastoItem: {
     flexDirection: 'row',
     gap: 12,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 10,
@@ -656,68 +729,70 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   gastoImage: {
-    width: 60,
-    height: 60,
+    width: 48,
+    height: 48,
     borderRadius: 8,
-    backgroundColor: '#f1f5f9',
+    backgroundColor: '#e2e8f0',
   },
   gastoInfo: {
     flex: 1,
   },
   gastoNombre: {
-    fontFamily: 'Inter',
     fontSize: 14,
     fontWeight: '600',
     color: '#1a1a1a',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   gastoCategoria: {
-    fontFamily: 'Inter',
     fontSize: 12,
-    color: '#697b92',
+    color: '#64748b',
   },
   gastoPrecio: {
-    fontFamily: 'Inter',
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: '#f59e0b',
   },
   seeAllButton: {
     width: '100%',
     padding: 12,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 8,
   },
   seeAllText: {
-    fontFamily: 'Inter',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#092090',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#94a3b8',
+    marginVertical: 20,
+    fontStyle: 'italic'
   },
   totalPanel: {
     marginTop: 20,
     padding: 16,
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f1f5f9',
     borderRadius: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center'
   },
   totalPanelLabel: {
-    fontFamily: 'Inter',
-    fontSize: 14,
-    color: '#697b92',
+    fontSize: 12,
+    color: '#64748b',
+    marginBottom: 4
   },
   totalPanelValue: {
-    fontFamily: 'Inter',
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '700',
     color: '#1a1a1a',
-    marginTop: 4,
   },
   totalPanelRight: {
     alignItems: 'flex-end',
   },
 });
-
