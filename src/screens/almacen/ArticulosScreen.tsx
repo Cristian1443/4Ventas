@@ -14,23 +14,27 @@ import {
   ScrollView,
   TextInput,
   Modal,
-  Alert,
   Image,
   FlatList
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
+import { useResponsiveLayout } from '../../constants/layout';
+import { Articulo } from '../../types';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
+
+const imgPlaceholder = require('../../../assets/blue-image-panel.png');
 
 export default function ArticulosScreen() {
   const navigation = useNavigation<any>();
   const { articulos } = useApp();
+  const { isTablet, isSmallDevice } = useResponsiveLayout();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Todos');
   const [sortBy, setSortBy] = useState<'nombre' | 'cantidad' | 'stock'>('nombre');
-  const [selectedArticulo, setSelectedArticulo] = useState<any>(null);
+  const [selectedArticulo, setSelectedArticulo] = useState<Articulo | null>(null);
 
   // 1. GENERAR CATEGORÍAS DINÁMICAS + STOCK BAJO
   const categorias = useMemo(() => {
@@ -104,7 +108,7 @@ export default function ArticulosScreen() {
     return sum + (precio * a.cantidad);
   }, 0);
 
-  const isStockBajo = (articulo: any) => articulo.cantidad < (articulo.stockMinimo || 0);
+  const isStockBajo = (articulo: Articulo) => articulo.cantidad <= (articulo.stockMinimo || 0);
 
   return (
     <ScreenWithSidebar currentScreen="Articulos" scrollable={false}>
@@ -120,8 +124,18 @@ export default function ArticulosScreen() {
             </TouchableOpacity>
             <Text style={styles.title}>Artículos</Text>
           </View>
-          {/* Botones originales restaurados */}
-          
+          <View style={styles.headerActions}>
+            <View style={[styles.searchBoxHeader, isSmallDevice && { minWidth: 200 }]}>
+              <Text style={styles.searchIcon}>🔍</Text>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Buscar por Nombre, ID o Código Corto..."
+                placeholderTextColor="#94a3b8"
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+              />
+            </View>
+          </View>
         </View>
 
         <ScrollView 
@@ -225,7 +239,8 @@ export default function ArticulosScreen() {
                   key={articulo.id}
                   style={[
                     styles.articuloCard,
-                    isStockBajo(articulo) && styles.articuloCardBajo
+                    isStockBajo(articulo) && styles.articuloCardBajo,
+                    isTablet ? styles.cardTablet : styles.cardMobile
                   ]}
                   onPress={() => setSelectedArticulo(articulo)}
                   activeOpacity={0.8}
@@ -234,17 +249,11 @@ export default function ArticulosScreen() {
                     
                     {/* 1. IMAGEN (Izquierda) */}
                     <View style={styles.imageContainer}>
-                      {articulo.imagen ? (
-                        <Image
-                          source={{ uri: articulo.imagen }}
-                          style={styles.articuloImagen}
-                          resizeMode="cover"
-                        />
-                      ) : (
-                        <View style={styles.imagePlaceholder}>
-                          <Text style={{ fontSize: 30 }}>🌻</Text>
-                        </View>
-                      )}
+                      <Image
+                        source={articulo.imagen ? { uri: articulo.imagen } : imgPlaceholder}
+                        style={styles.articuloImagen}
+                        resizeMode="cover"
+                      />
                     </View>
 
                     {/* 2. INFO (Derecha) */}
@@ -253,7 +262,7 @@ export default function ArticulosScreen() {
                         <View style={styles.badgesRow}>
                             {/* Badge Código Corto */}
                             <View style={styles.shortCodeBadge}>
-                                <Text style={styles.shortCodeText}>{articulo.codigoCorto}</Text>
+                                <Text style={styles.shortCodeText}>{articulo.codigoCorto || 'N/D'}</Text>
                             </View>
                             {/* ID pequeño */}
                             <Text style={styles.idText}>{articulo.id}</Text>
@@ -404,6 +413,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12
+  },
   backButton: {
     width: 36,
     height: 36,
@@ -423,6 +437,18 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#1a1a1a'
+  },
+  searchBoxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 30,
+    height: 46,
+    paddingHorizontal: 16,
+    gap: 10,
+    minWidth: 260
   },
   headerButtons: {
     flexDirection: 'row',
@@ -557,7 +583,16 @@ const styles = StyleSheet.create({
   
   // --- TARJETA ARTÍCULO NUEVA (Horizontal) ---
   grid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
       gap: 12
+  },
+  cardTablet: {
+    width: '32%',
+    minWidth: 260
+  },
+  cardMobile: {
+    width: '100%'
   },
   articuloCard: {
     backgroundColor: '#ffffff',

@@ -45,7 +45,7 @@ export default function SidebarNavigation({ currentScreen }: SidebarNavigationPr
         <MenuItem 
           icon="ventas"
           label="Ventas"
-          active={['VentasMenu', 'Ventas', 'NuevaVenta', 'ResumenDia', 'CobrosList', 'Cobros', 'CobrosConfirmacion', 'Gastos'].includes(currentScreen)}
+          active={['VentasMenu', 'Ventas', 'NuevaVenta', 'ResumenDia', 'CobrosList', 'Cobros', 'CobrosConfirmacion', 'Gastos','Clientes','Documentos'].includes(currentScreen)}
           onPress={() => navigation.navigate('Main', { screen: 'VentasMenu' })}
         />
         <MenuItem 
@@ -57,7 +57,7 @@ export default function SidebarNavigation({ currentScreen }: SidebarNavigationPr
         <MenuItem 
           icon="comunicacion"
           label="Comunica"
-          active={['Comunicacion', 'Clientes'].includes(currentScreen)}
+          active={['Comunicacion'].includes(currentScreen)}
           onPress={() => navigation.navigate('Main', { screen: 'Comunicacion' })}
         />
         <MenuItem 

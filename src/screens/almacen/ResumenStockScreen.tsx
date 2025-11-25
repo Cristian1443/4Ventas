@@ -25,6 +25,7 @@ export default function ResumenStockScreen() {
   // Usar datos de articulos del contexto, mapear a formato de stock
   const stockData = articulos.map(art => ({
     id: art.id,
+    codigoCorto: art.codigoCorto || 'N/D',
     nombre: art.nombre,
     categoria: art.categoria,
     stock: art.cantidad,
@@ -111,7 +112,8 @@ export default function ResumenStockScreen() {
           <View style={styles.tableContainer}>
             {/* Header */}
             <View style={styles.tableHeader}>
-              <Text style={[styles.tableHeaderText, { width: 100 }]}>ID</Text>
+              <Text style={[styles.tableHeaderText, { width: 60 }]}>ID</Text>
+              <Text style={[styles.tableHeaderText, { width: 100 }]}>Código</Text>
               <Text style={[styles.tableHeaderText, { flex: 1 }]}>Nombre</Text>
               <Text style={[styles.tableHeaderText, { width: 150 }]}>Categoría</Text>
               <Text style={[styles.tableHeaderText, { width: 100, textAlign: 'center' }]}>Stock</Text>
@@ -132,7 +134,8 @@ export default function ResumenStockScreen() {
                     index < filteredData.length - 1 && styles.tableRowBorder
                   ]}
                 >
-                  <Text style={[styles.tableCell, { width: 100 }]}>{articulo.id}</Text>
+                  <Text style={[styles.tableCell, { width: 60 }]}>{articulo.id}</Text>
+                  <Text style={[styles.tableCell, styles.tableCellBold, { width: 100 }]}>{articulo.codigoCorto}</Text>
                   <Text style={[styles.tableCell, { flex: 1 }]}>{articulo.nombre}</Text>
                   <Text style={[styles.tableCell, styles.tableCellGray, { width: 150 }]}>{articulo.categoria}</Text>
                   <Text style={[
