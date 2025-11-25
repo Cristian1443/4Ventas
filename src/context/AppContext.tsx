@@ -1,8 +1,6 @@
 /**
  * Contexto Global de la Aplicación
- * - Centraliza el estado de la aplicación.
- * - Maneja la persistencia local (storageService) y la cola de sincronización (syncService).
- * - NOTA: Se eliminaron las ventas, cobros y gastos hardcodeados para un entorno limpio.
+ * - Incluye datos iniciales para pruebas (MOCK) mientras se conecta el ERP.
  */
 
 import React, { createContext, useState, useContext, useEffect, useCallback, ReactNode } from 'react';
@@ -18,8 +16,6 @@ import {
   UserSession,
   SyncStatus
 } from '../types';
-// Los servicios de sincronización y almacenamiento deben estar definidos
-// en el proyecto para que esto funcione correctamente.
 import { syncService } from '../services/sync.service';
 import { storageService } from '../services/storage.service';
 
@@ -99,10 +95,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [modoOffline, setModoOffline] = useState(false);
   
   const [config, setConfig] = useState<AppConfig>({
-    erpEnabled: false, autoSyncEnabled: true, syncInterval: 3600000, modoOffline: false
+    erpEnabled: false, // MODO PRUEBA: false para usar datos locales/mock
+    autoSyncEnabled: true, 
+    syncInterval: 3600000, 
+    modoOffline: false
   });
 
-  // --- DATOS INICIALES MÍNIMOS PARA DEMOSTRACIÓN DE FLUJO ---
+  // --- DATOS INICIALES PARA PRUEBAS (MOCK) ---
   const initialClientes: Cliente[] = [
     { id: 'c1', codigo: '430001', nombre: 'Floristería El Jardín', empresa: 'Floristería El Jardín S.L.', direccion: 'Calle Mayor 123, Madrid', telefono: '600123456', email: 'contacto@eljardin.com', nif: 'B12345678', codigoPostal: '28001', provincia: 'Madrid' },
     { id: 'c2', codigo: '430005', nombre: 'Eventos y Bodas SL', empresa: 'Eventos y Bodas SL', direccion: 'Av. América 45, Madrid', telefono: '600999888', email: 'info@eventosbodas.com', nif: 'B98765432', codigoPostal: '28002', provincia: 'Madrid' }
@@ -112,9 +111,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     { id: '10001', nombre: 'Monitor Curvo 27"', cantidad: 50, categoria: 'Electrónica', precio: '250,00 €', stockMinimo: 10, codigoCorto: 'MON27' },
     { id: '10002', nombre: 'Teclado Mecánico RGB', cantidad: 12, categoria: 'Accesorios', precio: '75,50 €', stockMinimo: 5, codigoCorto: 'TECME' },
     { id: '10003', nombre: 'Mouse Inalámbrico Ergonómico', cantidad: 8, categoria: 'Accesorios', precio: '30,00 €', stockMinimo: 15, codigoCorto: 'MOUWI' },
+    { id: '10004', nombre: 'Silla Gamer Pro', cantidad: 5, categoria: 'Mobiliario', precio: '199,99 €', stockMinimo: 5, codigoCorto: 'SIGAM' },
+    { id: '10005', nombre: 'Auriculares Noise Cancel', cantidad: 20, categoria: 'Audio', precio: '120,00 €', stockMinimo: 8, codigoCorto: 'AUNC' }
   ];
   // -----------------------------------------------------------
-
 
   // INICIALIZACIÓN
   useEffect(() => { initializeApp(); }, []);
@@ -122,9 +122,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const initializeApp = async () => {
     const savedConfig = await storageService.getItem<AppConfig>('appConfig');
     if (savedConfig) setConfig(savedConfig);
+    
+    // 1. Cargar datos locales
     await loadLocalData();
-    // await syncService.initialize(); // Descomentar al conectar ERP
-    // await sincronizar(); 
+    
+    // 2. Intentar sincronizar si está habilitado el ERP
+    if (config.erpEnabled) {
+        syncService.initialize().then(() => {
+           refreshLocalDataFromSync();
+        }).catch(err => console.log("Inicio offline o error de sync:", err));
+    }
   };
 
   const loadLocalData = async () => {
@@ -140,25 +147,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       ]);
       
       setGastos(sGastos || []);
-      if (!sGastos) storageService.setItem('gastos', []);
-
       setNotasVenta(sNotas || []);
-      if (!sNotas) storageService.setItem('notasVenta', []);
-
       setCobros(sCobros || []);
-      if (!sCobros) storageService.setItem('cobros', []);
-
       setDocumentos(sDocs || []);
-      if (!sDocs) storageService.setItem('documentos', []);
       
-      if (sArts && sArts.length) {
+      // Si no hay datos locales (primera vez), usar MOCKS para pruebas
+      if (sArts && sArts.length > 0) {
         setArticulos(sArts);
       } else {
         setArticulos(initialArticulos);
         storageService.setItem('articulos', initialArticulos);
       }
 
-      if (sCli && sCli.length) {
+      if (sCli && sCli.length > 0) {
         setClientes(sCli);
       } else {
         setClientes(initialClientes);
@@ -166,37 +167,49 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }
       
       setNotasAlmacen(sAlm || []);
-      if (!sAlm) storageService.setItem('notasAlmacen', []);
     } catch (error) {
       console.error('Error cargando datos locales:', error);
     }
   };
 
-  // SINCRONIZACIÓN (Funciones de sincronización mantenidas para futuro)
+  const refreshLocalDataFromSync = async () => {
+    const [cliSync, artSync, gasSync] = await Promise.all([
+      syncService.getClientesLocal(),
+      syncService.getArticulosLocal(),
+      syncService.getGastosLocal()
+    ]);
+
+    if (cliSync) setClientes(cliSync);
+    if (artSync) setArticulos(artSync);
+    if (gasSync) setGastos(gasSync);
+  };
+
+  // SINCRONIZACIÓN
   const sincronizar = useCallback(async () => {
     try {
       setSyncStatus(p => ({ ...p, clientes: 'syncing', articulos: 'syncing' }));
+      
+      // Si ERP está deshabilitado, simulamos éxito para pruebas
+      if (!config.erpEnabled) {
+          setTimeout(() => {
+              setSyncStatus(p => ({ ...p, clientes: 'success', articulos: 'success', ultimaSync: new Date().toISOString() }));
+          }, 1000);
+          return;
+      }
+
       const status = await syncService.syncAll();
-      const cliSync = await syncService.getClientesLocal();
-      const artSync = await syncService.getArticulosLocal();
-      
-      if (cliSync.length > 0) { setClientes(cliSync); storageService.setItem('clientes', cliSync); }
-      if (artSync.length > 0) { setArticulos(artSync); storageService.setItem('articulos', artSync); }
-      
+      await refreshLocalDataFromSync();
       setSyncStatus(status);
       setModoOffline(status.clientes === 'error' && status.articulos === 'error');
     } catch (error: any) {
       setSyncStatus(p => ({ ...p, error: error.message, clientes: 'error', articulos: 'error' }));
       setModoOffline(true);
     }
-  }, []);
+  }, [config.erpEnabled]);
 
   const forzarSincronizacion = useCallback(async () => { await sincronizar(); }, [sincronizar]);
 
-  // --------------------------------------------------------------------------
-  // FUNCIONES BLINDADAS (ACTUALIZACIÓN DE DATOS)
-  // --------------------------------------------------------------------------
-
+  // FUNCIONES DE NEGOCIO (Igual que antes)
   const addArticulo = async (articulo: Articulo) => {
     setArticulos(prev => {
         const updated = [articulo, ...prev];
@@ -213,31 +226,59 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     });
   };
 
-
   const addGasto = async (gasto: Gasto) => {
     setGastos(prev => {
       const updated = [gasto, ...prev];
       storageService.setItem('gastos', updated);
       return updated;
     });
-    syncService.addToQueue('gasto', gasto);
+    if(config.erpEnabled) syncService.addToQueue('gasto', gasto);
   };
 
   const deleteGasto = async (id: string) => {
+    const gastoId = String(id).trim(); // Normalizar el ID
+    console.log('🔧 [AppContext] deleteGasto llamado con ID:', gastoId);
+    console.log('📋 [AppContext] Gastos actuales:', gastos.length);
+    
+    // 1. Eliminar visualmente y de almacenamiento local inmediatamente
     setGastos(prev => {
-      const updated = prev.filter(g => g.id !== id);
-      storageService.setItem('gastos', updated);
+      console.log('📋 [AppContext] Gastos antes de eliminar:', prev.length);
+      console.log('🔍 [AppContext] Buscando gasto con ID:', gastoId);
+      console.log('📋 [AppContext] IDs de gastos actuales:', prev.map(g => ({ id: String(g.id).trim(), nombre: g.nombre })));
+      
+      const updated = prev.filter(g => {
+        const gId = String(g.id).trim();
+        const shouldKeep = gId !== gastoId;
+        if (!shouldKeep) {
+          console.log('✅ [AppContext] Gasto encontrado y será eliminado:', { id: gId, nombre: g.nombre });
+        }
+        return shouldKeep;
+      });
+      
+      console.log('📋 [AppContext] Gastos después de eliminar:', updated.length);
+      
+      // Guardar en storage de forma asíncrona pero no bloquear
+      storageService.setItem('gastos', updated).catch(err => {
+        console.error('❌ Error guardando gastos en storage:', err);
+      });
+      
       return updated;
     });
-    // syncService.addToQueue('gasto_delete', { id }); // Descomentar para enviar eliminación al ERP
+
+    // 2. Encolar la eliminación para que se procese en el ERP cuando haya red
+    // Esto evita que el gasto "reviva" en la próxima sincronización
+    try {
+      syncService.addToQueue('gasto_delete', { id: gastoId });
+      console.log('✅ [AppContext] Gasto encolado para eliminación en ERP');
+    } catch (error) {
+      console.error('❌ Error encolando eliminación:', error);
+    }
   };
 
   const addNotaVenta = async (nota: NotaVenta) => {
-    // 1. Descontar Stock (Usando estado previo para seguridad)
     if (nota.items && nota.items.length > 0) {
       setArticulos(prevArticulos => {
         const updatedArticulos = prevArticulos.map(art => {
-          // Busca por articuloId o id (compatibilidad)
           const itemVendido = nota.items?.find((i: any) => i.articuloId === art.id || i.id === art.id); 
           if (itemVendido) {
             return { ...art, cantidad: Math.max(0, art.cantidad - (parseFloat(itemVendido.cantidad) || 0)) };
@@ -249,9 +290,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       });
     }
     
-    // 2. Guardar Venta
     setNotasVenta(prev => {
-      // Si la nota existe (es un borrador TEMP), la reemplazamos en su posición
       const existsIndex = prev.findIndex(n => n.id === nota.id);
       let updated;
       if (existsIndex > -1) {
@@ -260,15 +299,13 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       } else {
         updated = [nota, ...prev];
       }
-
       storageService.setItem('notasVenta', updated);
       return updated;
     });
     
-    syncService.addToQueue('venta', nota);
+    if(config.erpEnabled) syncService.addToQueue('venta', nota);
   };
 
-  // Actualización segura para bucles
   const updateNotaVenta = async (id: string, estado: 'pendiente' | 'cerrada' | 'anulada' | 'abierta') => {
     setNotasVenta(prev => {
       const updated = prev.map(n => n.id === id ? { ...n, estado } : n);
@@ -283,10 +320,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       storageService.setItem('cobros', updated);
       return updated;
     });
-    syncService.addToQueue('pago', cobro);
+    if(config.erpEnabled) syncService.addToQueue('pago', cobro);
   };
 
-  // Actualización segura para bucles
   const updateCobro = async (id: string, estado: 'pendiente' | 'pagado') => {
     setCobros(prev => {
       const updated = prev.map(c => c.id === id ? { ...c, estado } : c);
@@ -317,7 +353,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       storageService.setItem('articulos', updated);
       return updated;
     });
-    await syncService.updateArticuloStock(id, cantidad);
+    if(config.erpEnabled) await syncService.updateArticuloStock(id, cantidad);
   };
 
   const addNotaAlmacen = async (nota: NotaAlmacen) => {
@@ -334,7 +370,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     await storageService.setItem('appConfig', updatedConfig);
   };
 
-  const updateAppConfig = updateConfig; // Alias para compatibilidad
+  const updateAppConfig = updateConfig;
 
   const value: AppContextType = {
     userSession, setUserSession,

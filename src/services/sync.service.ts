@@ -11,7 +11,7 @@ import * as erpService from './erp.service';
 
 export interface SyncOperation {
   id: string;
-  type: 'venta' | 'pago' | 'cliente' | 'gasto' | 'documento';
+  type: 'venta' | 'pago' | 'cliente' | 'gasto' | 'gasto_delete' | 'documento';
   data: any;
   timestamp: number;
   retries: number;
@@ -118,6 +118,13 @@ class SyncService {
         status.articulos = 'error';
       }
 
+      // Sincronizar gastos
+      try {
+        await this.syncGastos();
+      } catch (error) {
+        console.warn('⚠️ Error sincronizando gastos, usando datos locales');
+      }
+
       status.ultimaSync = new Date().toISOString();
       status.operacionesPendientes = this.getPendingCount();
 
@@ -195,6 +202,49 @@ class SyncService {
   }
 
   // ============================================================================
+  // SINCRONIZACIÓN DE GASTOS
+  // ============================================================================
+
+  async syncGastos(): Promise<any[]> {
+    try {
+      console.log('📉 Descargando gastos del ERP...');
+      const gastosERP = await erpService.getGastos();
+      const gastosServer = gastosERP.map(erpService.mapearGastoERPaLocal);
+      
+      // Obtener estado local actual
+      const gastosLocales = (await storageService.getItem<any[]>('gastos')) || [];
+
+      // 1. PRESERVAR GASTOS NUEVOS LOCALES (Los que tienen ID temporal 'G...')
+      // Estos no están en el servidor aún, así que no debemos borrarlos al sobrescribir
+      const gastosNuevosOffline = gastosLocales.filter(g => g.id && g.id.toString().startsWith('G'));
+
+      // 2. IDENTIFICAR BORRADOS PENDIENTES
+      // Miramos la cola para ver qué IDs se han mandado borrar
+      const pendingDeletes = this.queue
+        .filter(op => op.type === 'gasto_delete')
+        .map(op => op.data.id);
+
+      // 3. MEZCLAR: (Server - BorradosPendientes) + NuevosLocales
+      const gastosServerFiltrados = gastosServer.filter(g => !pendingDeletes.includes(g.id));
+      
+      const listaFinal = [...gastosServerFiltrados, ...gastosNuevosOffline];
+      
+      // Guardar la lista mezclada
+      await storageService.setItem('gastos', listaFinal);
+      
+      console.log(`✅ Gastos sincronizados: ${gastosServerFiltrados.length} del servidor + ${gastosNuevosOffline.length} locales nuevos`);
+      return listaFinal;
+    } catch (error) {
+      console.warn('⚠️ Error sync gastos, manteniendo locales');
+      return (await storageService.getItem<any[]>('gastos')) || [];
+    }
+  }
+
+  async getGastosLocal(): Promise<any[]> {
+    return (await storageService.getItem<any[]>('gastos')) || [];
+  }
+
+  // ============================================================================
   // COLA DE OPERACIONES
   // ============================================================================
 
@@ -267,6 +317,9 @@ class SyncService {
           break;
         case 'gasto':
           result = await this.syncGasto(operation.data);
+          break;
+        case 'gasto_delete':
+          result = await this.syncGastoDelete(operation.data);
           break;
         case 'documento':
           result = await this.syncDocumento(operation.data);
@@ -393,8 +446,60 @@ class SyncService {
   }
 
   private async syncGasto(gastoData: any): Promise<any> {
-    // TODO: Implementar cuando sea necesario
-    return { success: true };
+    try {
+      const precioNumerico = parseFloat(gastoData.precio.replace(/[€\s]/g, '').replace(',', '.'));
+      
+      // Convertir fecha local "DD/MM/YYYY, HH:MM" a ISO para el ERP
+      // Ojo: Asumimos que el ERP acepta string ISO.
+      const [fechaPart, horaPart] = gastoData.fecha.split(','); 
+      // Un parsing robusto dependerá del formato exacto guardado en pantalla
+      
+      const gastoERP: Partial<erpService.GastoERP> = {
+        Concepto: gastoData.nombre,
+        Tipo: gastoData.categoria,
+        Importe: isNaN(precioNumerico) ? 0 : precioNumerico,
+        Fecha: new Date().toISOString(), // Enviamos fecha actual de sincronización o parseamos la original
+        Imagen: gastoData.imagen // Base64 o URI
+      };
+
+      const response = await erpService.crearGasto(gastoERP);
+
+      if (response && (!response.InfoError || response.InfoError.Codigo === 0)) {
+        return { success: true, data: response };
+      } else {
+        return { 
+          success: false, 
+          error: { 
+            codigo: response.InfoError?.Codigo || -1,
+            descripcion: response.InfoError?.Descripcion || 'Error en ERP' 
+          } 
+        };
+      }
+    } catch (error: any) {
+      return { 
+        success: false, 
+        error: { 
+          codigo: -1,
+          descripcion: error.message || 'Error de conexión' 
+        } 
+      };
+    }
+  }
+
+  // NUEVO: Procesar borrado en servidor
+  private async syncGastoDelete(data: { id: string }): Promise<any> {
+    try {
+      // Si es un ID temporal (local), no hace falta borrar en servidor, solo éxito
+      if (data.id.startsWith('G')) return { success: true };
+
+      const idNumerico = parseInt(data.id);
+      if (isNaN(idNumerico)) return { success: true }; // ID inválido, asumimos ya borrado
+
+      const success = await erpService.eliminarGasto(idNumerico);
+      return { success };
+    } catch (error) {
+      return { success: false };
+    }
   }
 
   private async syncDocumento(documentoData: any): Promise<any> {

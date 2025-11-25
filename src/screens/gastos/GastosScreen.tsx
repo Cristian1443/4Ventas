@@ -1,8 +1,3 @@
-/**
- * Gastos Screen - EXACTAMENTE IGUAL A LA WEB
- * Layout 2 columnas: Formulario + Lista
- */
-
 import React, { useState } from 'react';
 import {
   View,
@@ -38,18 +33,31 @@ export default function GastosScreen() {
   const tiposGasto = ['Comida', 'Combustible', 'Alojamiento', 'Transporte', 'Material', 'Otros'];
   const categoriasFiltro = ['Todas', ...tiposGasto];
 
+  // Helper para fecha local consistente DD/MM/YYYY, HH:MM:SS
+  const getFechaActualFormateada = () => {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    const seconds = String(now.getSeconds()).padStart(2, '0');
+    return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
+  };
+
   const handleAddGasto = () => {
     if (!nombreGasto || !selectedType || !valorGasto) {
       Alert.alert('Error', 'Completa todos los campos');
       return;
     }
 
+    // FIX: Generar ID único robusto y Fecha estándar manual
     const nuevoGasto = {
-      id: `G${String(gastos.length + 1).padStart(3, '0')}`,
+      id: `G${Date.now()}`, // Timestamp para evitar duplicados
       nombre: nombreGasto,
       categoria: selectedType,
       precio: valorGasto.includes('€') ? valorGasto : `${valorGasto} €`,
-      fecha: new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
+      fecha: getFechaActualFormateada(), // Formato forzado DD/MM/YYYY
       imagen: imagenGasto || undefined
     };
 
@@ -65,14 +73,37 @@ export default function GastosScreen() {
     setTimeout(() => setShowSuccessMessage(false), 3000);
   };
 
-  const handleDeleteGasto = (id: string) => {
+  const handleDeleteGasto = (id: string | number) => {
+    const gastoId = String(id).trim();
+    console.log('🗑️ Intentando eliminar gasto con ID:', gastoId);
+    console.log('📋 Gastos actuales:', gastos.map(g => ({ id: g.id, nombre: g.nombre })));
+    
     Alert.alert(
       'Eliminar Gasto',
-      '¿Estás seguro?',
+      '¿Estás seguro de que deseas eliminar este gasto?',
       [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Eliminar', onPress: () => deleteGasto(id), style: 'destructive' }
-      ]
+        { 
+          text: 'Cancelar', 
+          style: 'cancel',
+          onPress: () => console.log('❌ Eliminación cancelada')
+        },
+        { 
+          text: 'Eliminar', 
+          onPress: () => {
+            console.log('✅ Confirmado, eliminando gasto:', gastoId);
+            deleteGasto(gastoId)
+              .then(() => {
+                console.log('✅ Gasto eliminado exitosamente');
+              })
+              .catch((error) => {
+                console.error('❌ Error eliminando gasto:', error);
+                Alert.alert('Error', 'No se pudo eliminar el gasto. Inténtalo de nuevo.');
+              });
+          }, 
+          style: 'destructive' 
+        }
+      ],
+      { cancelable: true }
     );
   };
 
@@ -96,7 +127,7 @@ export default function GastosScreen() {
   });
 
   const totalGastos = filteredGastos.reduce((sum, gasto) => {
-    const valor = parseFloat(gasto.precio.replace(',', '.').replace('€', '').trim());
+    const valor = parseFloat(gasto.precio.replace(/[^\d,.-]/g, '').replace(',', '.').trim());
     return sum + (isNaN(valor) ? 0 : valor);
   }, 0);
 
@@ -133,7 +164,6 @@ export default function GastosScreen() {
             <ScrollView>
               <Text style={styles.subtitle}>Registrar Nuevo Gasto</Text>
 
-              {/* Success message */}
               {showSuccessMessage && (
                 <View style={styles.successMessage}>
                   <Text style={styles.successIcon}>✓</Text>
@@ -141,7 +171,6 @@ export default function GastosScreen() {
                 </View>
               )}
 
-              {/* Nombre */}
               <TextInput
                 style={styles.input}
                 placeholder="Nombre del Gasto"
@@ -150,9 +179,7 @@ export default function GastosScreen() {
                 onChangeText={setNombreGasto}
               />
 
-              {/* Tipo y Valor */}
               <View style={styles.row}>
-                {/* Tipo dropdown */}
                 <TouchableOpacity
                   style={[styles.input, styles.dropdown, { flex: 1 }]}
                   onPress={() => setShowTypeDropdown(!showTypeDropdown)}
@@ -163,7 +190,6 @@ export default function GastosScreen() {
                   <Text style={styles.dropdownIcon}>▼</Text>
                 </TouchableOpacity>
 
-                {/* Valor */}
                 <TextInput
                   style={[styles.input, { flex: 1 }]}
                   placeholder="Valor Ej: 12,69 €"
@@ -174,7 +200,6 @@ export default function GastosScreen() {
                 />
               </View>
 
-              {/* Dropdown de tipos */}
               {showTypeDropdown && (
                 <View style={styles.dropdownMenu}>
                   {tiposGasto.map((tipo) => (
@@ -192,7 +217,6 @@ export default function GastosScreen() {
                 </View>
               )}
 
-              {/* Upload imagen */}
               <TouchableOpacity style={styles.uploadButton} onPress={handlePickImage}>
                 <Text style={styles.uploadIcon}>📷</Text>
                 <Text style={styles.uploadText}>Haz una foto o sube una imagen</Text>
@@ -202,7 +226,6 @@ export default function GastosScreen() {
                 <Image source={{ uri: imagenGasto }} style={styles.previewImage} />
               )}
 
-              {/* Add button */}
               <TouchableOpacity style={styles.addButton} onPress={handleAddGasto}>
                 <LinearGradient
                   colors={['#092090', '#0C2ABF']}
@@ -220,7 +243,6 @@ export default function GastosScreen() {
           {/* COLUMNA DERECHA - Lista */}
           <View style={styles.rightColumn}>
             <ScrollView>
-              {/* Search and filters */}
               <View style={styles.searchContainer}>
                 <Text style={styles.searchIcon}>🔍</Text>
                 <TextInput
@@ -232,7 +254,6 @@ export default function GastosScreen() {
                 />
               </View>
 
-              {/* Filtros categoría */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
                 {categoriasFiltro.map(cat => (
                   <TouchableOpacity
@@ -247,7 +268,6 @@ export default function GastosScreen() {
                 ))}
               </ScrollView>
 
-              {/* Total */}
               <View style={styles.totalCard}>
                 <View>
                   <Text style={styles.totalLabel}>
@@ -261,7 +281,6 @@ export default function GastosScreen() {
                 </View>
               </View>
 
-              {/* Lista de gastos */}
               {filteredGastos.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Text style={styles.emptyText}>No hay gastos registrados</Text>
@@ -290,7 +309,12 @@ export default function GastosScreen() {
                       <Text style={styles.gastoPrecio}>{gasto.precio}</Text>
                       <TouchableOpacity
                         style={styles.deleteButton}
-                        onPress={() => handleDeleteGasto(gasto.id)}
+                        onPress={() => {
+                          console.log('🔘 Botón Eliminar presionado para gasto:', gasto.id);
+                          handleDeleteGasto(gasto.id);
+                        }}
+                        activeOpacity={0.7}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       >
                         <Text style={styles.deleteButtonText}>Eliminar</Text>
                       </TouchableOpacity>
@@ -308,352 +332,66 @@ export default function GastosScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff'
-  },
-  scrollContent: {
-    minWidth: 1000
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 20,
-    paddingTop: 60,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0'
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16
-  },
-  backIcon: {
-    fontSize: 20,
-    color: '#697b92'
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1a1a1a'
-  },
-  resumenButton: {
-    borderRadius: 30,
-    overflow: 'hidden'
-  },
-  resumenGradient: {
-    paddingVertical: 10,
-    paddingHorizontal: 20
-  },
-  resumenText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff'
-  },
-  mainContent: {
-    flexDirection: 'row',
-    minWidth: 1000
-  },
-  // COLUMNA IZQUIERDA
-  leftColumn: {
-    width: 480,
-    padding: 40,
-    borderRightWidth: 1,
-    borderRightColor: '#e2e8f0'
-  },
-  subtitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 24
-  },
-  successMessage: {
-    backgroundColor: '#91e600',
-    borderRadius: 8,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16
-  },
-  successIcon: {
-    fontSize: 20,
-    color: '#ffffff',
-    marginRight: 8
-  },
-  successText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff'
-  },
-  input: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 5,
-    padding: 18,
-    fontSize: 14,
-    color: '#1a1a1a',
-    marginBottom: 14,
-    minHeight: 56
-  },
-  row: {
-    flexDirection: 'row',
-    marginBottom: 16
-  },
-  dropdown: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginRight: 10
-  },
-  inputText: {
-    fontSize: 14,
-    color: '#1a1a1a'
-  },
-  placeholder: {
-    color: '#697b92'
-  },
-  dropdownIcon: {
-    fontSize: 12,
-    color: '#697b92'
-  },
-  dropdownMenu: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 5,
-    marginTop: -14,
-    marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 5
-  },
-  dropdownItem: {
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e2e8f0'
-  },
-  dropdownItemText: {
-    fontSize: 14,
-    color: '#1a1a1a'
-  },
-  uploadButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24
-  },
-  uploadIcon: {
-    fontSize: 14,
-    marginRight: 10
-  },
-  uploadText: {
-    fontSize: 14,
-    color: '#697b92'
-  },
-  previewImage: {
-    width: '100%',
-    height: 150,
-    borderRadius: 8,
-    marginBottom: 16
-  },
-  addButton: {
-    borderRadius: 30,
-    overflow: 'hidden'
-  },
-  addGradient: {
-    paddingVertical: 15,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  addIcon: {
-    fontSize: 16,
-    color: '#ffffff',
-    marginRight: 8,
-    fontWeight: '600'
-  },
-  addText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff'
-  },
-  // COLUMNA DERECHA
-  rightColumn: {
-    flex: 1,
-    padding: 40
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 30,
-    height: 50,
-    alignItems: 'center',
-    paddingHorizontal: 18,
-    marginBottom: 16
-  },
-  searchIcon: {
-    fontSize: 14,
-    marginRight: 14
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: '#1a1a1a'
-  },
-  filters: {
-    marginBottom: 24
-  },
-  filterChip: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 30,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#ffffff',
-    marginRight: 8
-  },
-  filterChipActive: {
-    backgroundColor: '#0C2ABF',
-    borderColor: '#0C2ABF'
-  },
-  filterText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#697b92'
-  },
-  filterTextActive: {
-    color: '#ffffff'
-  },
-  totalCard: {
-    backgroundColor: '#f8fafc',
-    borderRadius: 10,
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20
-  },
-  totalLabel: {
-    fontSize: 14,
-    color: '#697b92',
-    marginBottom: 4
-  },
-  totalValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#f59e0b'
-  },
-  totalCount: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    textAlign: 'right'
-  },
-  emptyState: {
-    padding: 40,
-    alignItems: 'center'
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#697b92'
-  },
-  gastoCard: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    borderRadius: 10,
-    padding: 16,
-    flexDirection: 'row',
-    marginBottom: 12
-  },
-  gastoImage: {
-    width: 88,
-    height: 88,
-    borderRadius: 10,
-    marginRight: 16
-  },
-  gastoImagePlaceholder: {
-    width: 88,
-    height: 88,
-    borderRadius: 10,
-    backgroundColor: '#f1f5f9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 16
-  },
-  gastoImageIcon: {
-    fontSize: 32
-  },
-  gastoInfo: {
-    flex: 1,
-    justifyContent: 'center'
-  },
-  gastoNombre: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 6
-  },
-  gastoMeta: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  categoriaBadge: {
-    backgroundColor: '#f1f5f9',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 12
-  },
-  categoriaBadgeText: {
-    fontSize: 12,
-    color: '#697b92'
-  },
-  gastoFecha: {
-    fontSize: 12,
-    color: '#697b92'
-  },
-  gastoRight: {
-    justifyContent: 'center',
-    alignItems: 'flex-end'
-  },
-  gastoPrecio: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#f59e0b',
-    marginBottom: 8
-  },
-  deleteButton: {
-    backgroundColor: '#fee2e2',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6
-  },
-  deleteButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#dc2626'
-  }
+  container: { flex: 1, backgroundColor: '#ffffff' },
+  scrollContent: { minWidth: 1000 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, paddingTop: 60, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+  headerLeft: { flexDirection: 'row', alignItems: 'center' },
+  backButton: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  backIcon: { fontSize: 20, color: '#697b92' },
+  title: { fontSize: 28, fontWeight: '700', color: '#1a1a1a' },
+  resumenButton: { borderRadius: 30, overflow: 'hidden' },
+  resumenGradient: { paddingVertical: 10, paddingHorizontal: 20 },
+  resumenText: { fontSize: 14, fontWeight: '600', color: '#ffffff' },
+  mainContent: { flexDirection: 'row', minWidth: 1000 },
+  leftColumn: { width: 480, padding: 40, borderRightWidth: 1, borderRightColor: '#e2e8f0' },
+  subtitle: { fontSize: 20, fontWeight: '600', color: '#1a1a1a', marginBottom: 24 },
+  successMessage: { backgroundColor: '#91e600', borderRadius: 8, padding: 12, flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  successIcon: { fontSize: 20, color: '#ffffff', marginRight: 8 },
+  successText: { fontSize: 14, fontWeight: '600', color: '#ffffff' },
+  input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 5, padding: 18, fontSize: 14, color: '#1a1a1a', marginBottom: 14, minHeight: 56 },
+  row: { flexDirection: 'row', marginBottom: 16 },
+  dropdown: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginRight: 10 },
+  inputText: { fontSize: 14, color: '#1a1a1a' },
+  placeholder: { color: '#697b92' },
+  dropdownIcon: { fontSize: 12, color: '#697b92' },
+  dropdownMenu: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 5, marginTop: -14, marginBottom: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 6, elevation: 5 },
+  dropdownItem: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
+  dropdownItemText: { fontSize: 14, color: '#1a1a1a' },
+  uploadButton: { backgroundColor: 'transparent', borderWidth: 1, borderColor: '#e2e8f0', borderStyle: 'dashed', borderRadius: 8, padding: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 24 },
+  uploadIcon: { fontSize: 14, marginRight: 10 },
+  uploadText: { fontSize: 14, color: '#697b92' },
+  previewImage: { width: '100%', height: 150, borderRadius: 8, marginBottom: 16 },
+  addButton: { borderRadius: 30, overflow: 'hidden' },
+  addGradient: { paddingVertical: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+  addIcon: { fontSize: 16, color: '#ffffff', marginRight: 8, fontWeight: '600' },
+  addText: { fontSize: 14, fontWeight: '600', color: '#ffffff' },
+  rightColumn: { flex: 1, padding: 40 },
+  searchContainer: { flexDirection: 'row', backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 30, height: 50, alignItems: 'center', paddingHorizontal: 18, marginBottom: 16 },
+  searchIcon: { fontSize: 14, marginRight: 14 },
+  searchInput: { flex: 1, fontSize: 14, color: '#1a1a1a' },
+  filters: { marginBottom: 24 },
+  filterChip: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 30, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#ffffff', marginRight: 8 },
+  filterChipActive: { backgroundColor: '#0C2ABF', borderColor: '#0C2ABF' },
+  filterText: { fontSize: 13, fontWeight: '600', color: '#697b92' },
+  filterTextActive: { color: '#ffffff' },
+  totalCard: { backgroundColor: '#f8fafc', borderRadius: 10, padding: 16, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+  totalLabel: { fontSize: 14, color: '#697b92', marginBottom: 4 },
+  totalValue: { fontSize: 28, fontWeight: '700', color: '#f59e0b' },
+  totalCount: { fontSize: 28, fontWeight: '700', color: '#1a1a1a', textAlign: 'right' },
+  emptyState: { padding: 40, alignItems: 'center' },
+  emptyText: { fontSize: 16, color: '#697b92' },
+  gastoCard: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 16, flexDirection: 'row', marginBottom: 12 },
+  gastoImage: { width: 88, height: 88, borderRadius: 10, marginRight: 16 },
+  gastoImagePlaceholder: { width: 88, height: 88, borderRadius: 10, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', marginRight: 16 },
+  gastoImageIcon: { fontSize: 32 },
+  gastoInfo: { flex: 1, justifyContent: 'center' },
+  gastoNombre: { fontSize: 16, fontWeight: '600', color: '#1a1a1a', marginBottom: 6 },
+  gastoMeta: { flexDirection: 'row', alignItems: 'center' },
+  categoriaBadge: { backgroundColor: '#f1f5f9', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginRight: 12 },
+  categoriaBadgeText: { fontSize: 12, color: '#697b92' },
+  gastoFecha: { fontSize: 12, color: '#697b92' },
+  gastoRight: { justifyContent: 'center', alignItems: 'flex-end' },
+  gastoPrecio: { fontSize: 18, fontWeight: '600', color: '#f59e0b', marginBottom: 8 },
+  deleteButton: { backgroundColor: '#fee2e2', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 },
+  deleteButtonText: { fontSize: 12, fontWeight: '600', color: '#dc2626' }
 });
-
-

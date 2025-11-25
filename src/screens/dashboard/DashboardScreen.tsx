@@ -1,8 +1,4 @@
-/**
- * Dashboard Screen - React Native
- */
-
-import React, { useEffect } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -25,6 +21,7 @@ export default function DashboardScreen() {
     notasVenta,
     gastos,
     cobros,
+    clientes,
     syncStatus,
     modoOffline,
     sincronizar
@@ -32,55 +29,82 @@ export default function DashboardScreen() {
 
   const [refreshing, setRefreshing] = React.useState(false);
 
+  // Función de refresco manual (fuerza sincronización con ERP)
   const onRefresh = React.useCallback(async () => {
     setRefreshing(true);
     await sincronizar();
     setRefreshing(false);
   }, [sincronizar]);
 
-  // Calcular totales
-  const calcularTotalVentas = () => {
-    return notasVenta
-      .filter(n => n.estado !== 'anulada')
-      .reduce((sum, nota) => {
-        const precio = parseFloat(nota.precio.replace(',', '.').replace('€', '').trim() || '0');
-        return sum + precio;
-      }, 0);
+  // --- CÁLCULOS DE NEGOCIO (Datos Reales) ---
+
+  // Helper para limpiar precios (ej: "1.200,50 €" -> 1200.50)
+  const parsePrecio = (valor: string) => {
+    if (!valor) return 0;
+    const sanitized = valor.replace(/[€\s]/g, '').replace(/\./g, '').replace(',', '.');
+    const parsed = parseFloat(sanitized);
+    return isNaN(parsed) ? 0 : parsed;
   };
 
-  const calcularTotalGastos = () => {
-    return gastos.reduce((sum, gasto) => {
-      const precio = parseFloat(gasto.precio.replace(',', '.').replace('€', '').trim() || '0');
-      return sum + precio;
-    }, 0);
+  // Helper para fecha de HOY en formato DD/MM/YYYY consistente
+  const getTodayString = () => {
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    return `${day}/${month}/${year}`;
   };
 
-  const totalVentas = calcularTotalVentas();
-  const totalGastos = calcularTotalGastos();
-  const numeroVentas = notasVenta.filter(n => n.estado !== 'anulada').length;
+  const hoyString = getTodayString();
+
+  // 1. Ventas
+  const ventasActivas = notasVenta.filter(n => n.estado !== 'anulada');
+  const ventasHoy = ventasActivas.filter(n => {
+    if (!n.fecha) return false;
+    const fechaNota = n.fecha.split(',')[0].trim();
+    return fechaNota.startsWith(hoyString);
+  });
+  
+  const totalVentasDia = ventasHoy.reduce((sum, nota) => sum + parsePrecio(nota.precio), 0);
+  const numeroVentasHoy = ventasHoy.length;
+
+  // 2. Gastos
+  const gastosHoy = gastos.filter(g => {
+    if (!g.fecha) return false;
+    const fechaGasto = g.fecha.split(',')[0].trim();
+    return fechaGasto.startsWith(hoyString);
+  });
+  // Si la fecha del gasto es solo hora (HH:mm), necesitaríamos la fecha completa en el modelo. 
+  // Para este caso, sumamos todos o ajustamos según modelo.
+  const totalGastos = gastos.reduce((sum, gasto) => sum + parsePrecio(gasto.precio), 0);
+
+  // 3. Cobros Pendientes
   const cobrosPendientes = cobros.filter(c => c.estado === 'pendiente');
-  const totalCobrosPendientes = cobrosPendientes.reduce((sum, cobro) => {
-    const monto = parseFloat(cobro.monto.replace(',', '.').replace('€', '').trim() || '0');
-    return sum + monto;
-  }, 0);
+  const totalCobrosPendientes = cobrosPendientes.reduce((sum, cobro) => sum + parsePrecio(cobro.monto), 0);
 
-  // Calcular ancho de cards dinámicamente
+  // 4. Clientes (Cartera vs Atendidos)
+  // Contamos clientes únicos que han comprado hoy
+  const clientesAtendidosHoyIds = new Set(ventasHoy.map(v => v.clienteId || v.cliente));
+  const clientesAtendidosCount = clientesAtendidosHoyIds.size;
+  const totalClientesCartera = clientes.length;
+
+  // Formateador de moneda
+  const formatMoney = (amount: number) => {
+    return amount.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  };
+
+  // --- LAYOUT DINÁMICO ---
   const cardWidth = layout.isTablet && layout.isLandscape
-    ? (layout.maxContentWidth - 52) / 4  // 4 columnas en tablet horizontal
+    ? (layout.maxContentWidth - 52) / 4
     : layout.isTablet
-    ? (layout.window.width - 52) / 3     // 3 columnas en tablet vertical
-    : (layout.window.width - 52) / 2;    // 2 columnas en móvil
+    ? (layout.window.width - 52) / 3
+    : (layout.window.width - 52) / 2;
 
   const quickAccessWidth = layout.isTablet && layout.isLandscape
-    ? (layout.maxContentWidth - 72) / 6  // 6 columnas en tablet horizontal
+    ? (layout.maxContentWidth - 72) / 6
     : layout.isTablet
-    ? (layout.window.width - 62) / 4     // 4 columnas en tablet vertical
-    : (layout.window.width - 52) / 3;    // 3 columnas en móvil
-
-  const containerStyle = [
-    styles.container,
-    layout.isTablet && layout.isLandscape && styles.containerTabletLandscape
-  ];
+    ? (layout.window.width - 62) / 4
+    : (layout.window.width - 52) / 3;
 
   const contentStyle = [
     styles.content,
@@ -95,237 +119,264 @@ export default function DashboardScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        showsVerticalScrollIndicator={layout.isTablet}
+        showsVerticalScrollIndicator={false}
       >
-      {/* Status de sincronización (SIEMPRE visible) */}
-      <View style={styles.syncStatus}>
-        <View style={[styles.syncDot, modoOffline ? styles.syncDotOffline : styles.syncDotOnline]} />
-        <Text style={styles.syncText}>
-          {modoOffline ? '🔴 Modo Offline' : '🟢 Sincronizado'}
-        </Text>
-        {syncStatus.operacionesPendientes && syncStatus.operacionesPendientes > 0 && (
-          <View style={styles.pendingBadge}>
-            <Text style={styles.pendingText}>{syncStatus.operacionesPendientes}</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Hero section con imagen de fondo */}
-      <LinearGradient
-        colors={['#092090', '#0C2ABF']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
-        style={styles.heroSection}
-      >
-        <View>
-          <Text style={styles.welcomeText}>Bienvenido, Vendedor</Text>
-          <Text style={styles.dateText}>
-            {new Date().toLocaleDateString('es-ES', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric'
-            })}
+        {/* Status de Sincronización */}
+        <View style={styles.syncStatus}>
+          <View style={[styles.syncDot, modoOffline ? styles.syncDotOffline : styles.syncDotOnline]} />
+          <Text style={styles.syncText}>
+            {modoOffline ? '🔴 Modo Offline' : '🟢 Conectado ERP'}
           </Text>
+          {syncStatus.operacionesPendientes ? (
+            syncStatus.operacionesPendientes > 0 && (
+              <View style={styles.pendingBadge}>
+                <Text style={styles.pendingText}>{syncStatus.operacionesPendientes} Pendientes</Text>
+              </View>
+            )
+          ) : null}
         </View>
 
-        <View style={styles.heroButtons}>
+        {/* Hero Section */}
+        <LinearGradient
+          colors={['#092090', '#0C2ABF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={styles.heroSection}
+        >
+          <View>
+            <Text style={styles.welcomeText}>Resumen Comercial</Text>
+            <Text style={styles.dateText}>
+              {new Date().toLocaleDateString('es-ES', {
+                weekday: 'long',
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric'
+              })}
+            </Text>
+          </View>
+
+          <View style={styles.heroButtons}>
           <TouchableOpacity
             style={styles.heroButton}
-            onPress={() => navigation.navigate('Ventas')}
+            onPress={() => navigation.navigate('VentasList')}
             activeOpacity={0.8}
           >
-            <Text style={styles.heroButtonText}>Nueva Venta</Text>
-          </TouchableOpacity>
+              <Text style={styles.heroButtonText}>+ Nueva Venta</Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.heroButton}
-            onPress={() => navigation.navigate('ResumenDia')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.heroButtonText}>Ver Informe</Text>
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
+            <TouchableOpacity
+              style={styles.heroButton}
+              onPress={() => navigation.navigate('ResumenDia')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.heroButtonText}>Ver Cierre</Text>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
 
-      {/* Alertas importantes (2 cards) */}
-      <View style={styles.alertsGrid}>
-        {cobrosPendientes.length > 0 && (
+        {/* Alertas Importantes */}
+        <View style={styles.alertsGrid}>
+          {cobrosPendientes.length > 0 && (
+            <TouchableOpacity
+              style={styles.alertCard}
+              onPress={() => navigation.navigate('CobrosList')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.alertEmoji}>⚠️</Text>
+              <View style={styles.alertContent}>
+                <Text style={styles.alertTitle}>
+                  {cobrosPendientes.length} Cobros Pendientes
+                </Text>
+                <Text style={styles.alertSubtitle}>
+                  Total deuda: {formatMoney(totalCobrosPendientes)}
+                </Text>
+              </View>
+              <View style={styles.alertButton}>
+                <Text style={styles.alertButtonText}>Gestionar</Text>
+              </View>
+            </TouchableOpacity>
+          )}
+
+          {/* Alerta Stock (Ejemplo: Navega a Resumen Stock) */}
           <TouchableOpacity
-            style={styles.alertCard}
-            onPress={() => navigation.navigate('CobrosList')}
+            style={[styles.alertCard, styles.alertCardInfo]}
+            onPress={() => navigation.navigate('ResumenStock')}
             activeOpacity={0.7}
           >
-            <Text style={styles.alertEmoji}>⚠️</Text>
+            <Text style={styles.alertEmoji}>📦</Text>
             <View style={styles.alertContent}>
-              <Text style={styles.alertTitle}>
-                {cobrosPendientes.length} Cobros Pendientes
+              <Text style={[styles.alertTitle, { color: '#1e40af' }]}>
+                Control de Stock
               </Text>
-              <Text style={styles.alertSubtitle}>
-                Total: {totalCobrosPendientes.toFixed(2).replace('.', ',')} €
+              <Text style={[styles.alertSubtitle, { color: '#1e40af' }]}>
+                Revisar inventario actual
               </Text>
             </View>
-            <TouchableOpacity style={styles.alertButton}>
-              <Text style={styles.alertButtonText}>Ver</Text>
-            </TouchableOpacity>
+            <View style={[styles.alertButton, { backgroundColor: '#3b82f6' }]}>
+              <Text style={styles.alertButtonText}>Ver Stock</Text>
+            </View>
           </TouchableOpacity>
-        )}
+        </View>
 
-        <TouchableOpacity
-          style={[styles.alertCard, styles.alertCardDanger]}
-          onPress={() => navigation.navigate('ResumenStock')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.alertEmoji}>📦</Text>
-          <View style={styles.alertContent}>
-            <Text style={[styles.alertTitle, { color: '#991b1b' }]}>
-              Stock bajo en productos
-            </Text>
-            <Text style={[styles.alertSubtitle, { color: '#991b1b' }]}>
-              Requiere atención
-            </Text>
-          </View>
-          <TouchableOpacity style={[styles.alertButton, { backgroundColor: '#ef4444' }]}>
-            <Text style={styles.alertButtonText}>Ver</Text>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </View>
-
-      {/* Stats cards */}
-      <View style={styles.statsGrid}>
-        <TouchableOpacity
-          style={[styles.statCard, { width: cardWidth }]}
-          onPress={() => navigation.navigate('ResumenDia')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.statLabel}>Ventas Hoy</Text>
-          <Text style={styles.statValue}>{totalVentas.toFixed(2).replace('.', ',')} €</Text>
-          <Text style={styles.statChange}>{numeroVentas} ventas</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.statCard, { width: cardWidth }]}
-          onPress={() => navigation.navigate('Gastos')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.statLabel}>Gastos Hoy</Text>
-          <Text style={styles.statValue}>{totalGastos.toFixed(2).replace('.', ',')} €</Text>
-          <Text style={[styles.statChange, styles.statChangeWarning]}>
-            {gastos.length} gastos
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.statCard, { width: cardWidth }]}
-          onPress={() => navigation.navigate('ResumenDia')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.statLabel}>Nº de Ventas</Text>
-          <Text style={styles.statValue}>{numeroVentas}</Text>
-          <Text style={styles.statChange}>Total hoy</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.statCard, { width: cardWidth }]}
-          onPress={() => navigation.navigate('Clientes')}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.statLabel}>Clientes</Text>
-          <Text style={styles.statValue}>{numeroVentas}/15</Text>
-          <Text style={styles.statChange}>Visitados hoy</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Accesos rápidos - MEJORADOS con navegación correcta */}
-      <View style={styles.quickAccessContainer}>
-        <Text style={styles.sectionTitle}>Accesos Rápidos</Text>
-        <View style={styles.quickAccessGrid}>
-          <QuickAccessButton
-            label="Notas Venta"
-            icon="📋"
-            onPress={() => navigation.navigate('Ventas')}
-            gradient={true}
-            width={quickAccessWidth}
-          />
-          <QuickAccessButton
-            label="Resumen Día"
-            icon="📊"
+        {/* KPIs / Estadísticas */}
+        <View style={styles.statsGrid}>
+          {/* Ventas Hoy */}
+          <TouchableOpacity
+            style={[styles.statCard, { width: cardWidth }]}
             onPress={() => navigation.navigate('ResumenDia')}
-            gradient={false}
-            width={quickAccessWidth}
-          />
-          <QuickAccessButton
-            label="Cobros"
-            icon="💰"
-            onPress={() => navigation.navigate('CobrosList')}
-            width={quickAccessWidth}
-          />
-          <QuickAccessButton
-            label="Gastos"
-            icon="📈"
-            onPress={() => navigation.navigate('Gastos')}
-            width={quickAccessWidth}
-          />
-          <QuickAccessButton
-            label="Clientes"
-            icon="👥"
-            onPress={() => navigation.navigate('Clientes')}
-            width={quickAccessWidth}
-          />
-          <QuickAccessButton
-            label="Artículos"
-            icon="📦"
-            onPress={() => navigation.navigate('Articulos')}
-            width={quickAccessWidth}
-          />
-        </View>
-      </View>
+            activeOpacity={0.7}
+          >
+            <Text style={styles.statLabel}>Ventas (Hoy)</Text>
+            <Text style={styles.statValue}>{formatMoney(totalVentasDia)}</Text>
+            <Text style={styles.statChange}>{numeroVentasHoy} operaciones</Text>
+          </TouchableOpacity>
 
-      {/* Ventas recientes */}
-      <View style={styles.recentSalesContainer}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Ventas Recientes</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('ResumenDia')}>
-            <Text style={styles.seeAllText}>Ver todas</Text>
+          {/* Gastos Totales */}
+          <TouchableOpacity
+            style={[styles.statCard, { width: cardWidth }]}
+            onPress={() => navigation.navigate('Gastos')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.statLabel}>Gastos Acumulados</Text>
+            <Text style={styles.statValue}>{formatMoney(totalGastos)}</Text>
+            <Text style={[styles.statChange, styles.statChangeWarning]}>
+              {gastos.length} registros
+            </Text>
+          </TouchableOpacity>
+
+          {/* Clientes Atendidos */}
+          <TouchableOpacity
+            style={[styles.statCard, { width: cardWidth }]}
+            onPress={() => navigation.navigate('Clientes')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.statLabel}>Clientes Atendidos</Text>
+            <Text style={styles.statValue}>
+              {clientesAtendidosCount} <Text style={{fontSize: 16, color: '#94a3b8'}}>/ {totalClientesCartera}</Text>
+            </Text>
+            <Text style={styles.statChange}>Hoy</Text>
+          </TouchableOpacity>
+
+          {/* Notas Pendientes (Total Cartera) */}
+          <TouchableOpacity
+            style={[styles.statCard, { width: cardWidth }]}
+            onPress={() => navigation.navigate('Ventas')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.statLabel}>Notas Pendientes</Text>
+            <Text style={styles.statValue}>
+              {notasVenta.filter(n => n.estado === 'pendiente').length}
+            </Text>
+            <Text style={[styles.statChange, { color: '#f59e0b' }]}>
+              Por cobrar/cerrar
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {notasVenta.slice(0, 5).map((nota, index) => (
-          <View
-            key={nota.id}
-            style={[
-              styles.saleItem,
-              nota.estado === 'anulada' && styles.saleItemCancelled
-            ]}
-          >
-            <View style={[styles.saleIcon, nota.estado === 'anulada' && styles.saleIconCancelled]}>
-              <Text style={styles.saleIconText}>
-                {nota.estado === 'anulada' ? 'X' : 'P'}
-              </Text>
-            </View>
-            <View style={styles.saleInfo}>
-              <Text style={styles.saleClient} numberOfLines={1}>
-                {nota.id} - {nota.cliente}
-              </Text>
-              <Text style={styles.saleTime}>{nota.fecha}</Text>
-            </View>
-            <Text
-              style={[
-                styles.saleAmount,
-                nota.estado === 'anulada' && styles.saleAmountCancelled
-              ]}
-            >
-              {nota.precio}
-            </Text>
+        {/* Accesos Rápidos */}
+        <View style={styles.quickAccessContainer}>
+          <Text style={styles.sectionTitle}>Menú Rápido</Text>
+          <View style={styles.quickAccessGrid}>
+            <QuickAccessButton
+              label="Notas Venta"
+              icon="📋"
+              onPress={() => navigation.navigate('Ventas')}
+              gradient={true}
+              width={quickAccessWidth}
+            />
+            <QuickAccessButton
+              label="Resumen Día"
+              icon="📊"
+              onPress={() => navigation.navigate('ResumenDia')}
+              width={quickAccessWidth}
+            />
+            <QuickAccessButton
+              label="Cobros"
+              icon="💰"
+              onPress={() => navigation.navigate('CobrosList')}
+              width={quickAccessWidth}
+            />
+            <QuickAccessButton
+              label="Gastos"
+              icon="📈"
+              onPress={() => navigation.navigate('Gastos')}
+              width={quickAccessWidth}
+            />
+            <QuickAccessButton
+              label="Clientes"
+              icon="👥"
+              onPress={() => navigation.navigate('Clientes')}
+              width={quickAccessWidth}
+            />
+            <QuickAccessButton
+              label="Artículos"
+              icon="📦"
+              onPress={() => navigation.navigate('Articulos')}
+              width={quickAccessWidth}
+            />
           </View>
-        ))}
-      </View>
+        </View>
+
+        {/* Últimas Ventas */}
+        <View style={styles.recentSalesContainer}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Últimas Operaciones</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Ventas')}>
+              <Text style={styles.seeAllText}>Ver todas</Text>
+            </TouchableOpacity>
+          </View>
+
+          {notasVenta.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>No hay ventas registradas aún.</Text>
+            </View>
+          ) : (
+            notasVenta.slice(0, 5).map((nota) => (
+              <TouchableOpacity
+                key={nota.id}
+                style={[
+                  styles.saleItem,
+                  nota.estado === 'anulada' && styles.saleItemCancelled
+                ]}
+                onPress={() => navigation.navigate('VerNota', { ventaData: nota })}
+              >
+                <View style={[styles.saleIcon, nota.estado === 'anulada' && styles.saleIconCancelled]}>
+                  <Text style={styles.saleIconText}>
+                    {nota.estado === 'anulada' ? 'X' : 'P'}
+                  </Text>
+                </View>
+                <View style={styles.saleInfo}>
+                  <Text style={styles.saleClient} numberOfLines={1}>
+                    {nota.cliente}
+                  </Text>
+                  <Text style={styles.saleTime}>{nota.fecha} • {nota.id}</Text>
+                </View>
+                <View style={{alignItems: 'flex-end'}}>
+                  <Text
+                    style={[
+                      styles.saleAmount,
+                      nota.estado === 'anulada' && styles.saleAmountCancelled
+                    ]}
+                  >
+                    {nota.precio}
+                  </Text>
+                  <Text style={[
+                    styles.saleStatus, 
+                    nota.estado === 'pendiente' ? {color: '#f59e0b'} : {color: '#10b981'}
+                  ]}>
+                    {nota.estado === 'anulada' ? 'Anulada' : nota.estado === 'pendiente' ? 'Pendiente' : 'Pagado'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
       </ScrollView>
     </ScreenWithSidebar>
   );
 }
 
-// Componente auxiliar para botones de acceso rápido
+// Componente auxiliar para botones
 const QuickAccessButton = ({
   label,
   icon,
@@ -378,13 +429,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#ffffff'
   },
-  containerTabletLandscape: {
-    alignItems: 'center',
-  },
   content: {
     width: '100%',
     paddingBottom: 40
   },
+  // Sync Status
   syncStatus: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -393,7 +442,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     backgroundColor: '#f8fafc',
     borderRadius: 20,
-    alignSelf: 'flex-start'
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#e2e8f0'
   },
   syncDot: {
     width: 8,
@@ -405,7 +456,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#10b981'
   },
   syncDotOffline: {
-    backgroundColor: '#f59e0b'
+    backgroundColor: '#ef4444'
   },
   syncText: {
     fontSize: 12,
@@ -413,55 +464,39 @@ const styles = StyleSheet.create({
     fontWeight: '600'
   },
   pendingBadge: {
-    backgroundColor: '#ef4444',
+    backgroundColor: '#f59e0b',
     borderRadius: 10,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 2,
     marginLeft: 8
   },
   pendingText: {
     fontSize: 10,
     color: '#ffffff',
-    fontWeight: '600'
+    fontWeight: '700'
   },
-  headerActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    marginBottom: 20
-  },
-  actionButton: {
-    backgroundColor: '#092090',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4
-  },
-  actionButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff'
-  },
+  // Hero
   heroSection: {
     borderRadius: 16,
     padding: 24,
-    marginBottom: 20
+    marginBottom: 20,
+    shadowColor: '#092090',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 5
   },
   welcomeText: {
     fontSize: 24,
     fontWeight: '700',
     color: '#ffffff',
-    marginBottom: 8
+    marginBottom: 4
   },
   dateText: {
     fontSize: 14,
-    color: '#ffffff',
-    opacity: 0.9,
-    marginBottom: 24
+    color: 'rgba(255,255,255,0.9)',
+    marginBottom: 24,
+    textTransform: 'capitalize'
   },
   heroButtons: {
     flexDirection: 'row',
@@ -473,17 +508,18 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 20,
-    elevation: 2,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4
+    shadowRadius: 4,
+    elevation: 2
   },
   heroButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#092090'
   },
+  // Alerts
   alertsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -498,14 +534,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#fffbeb',
     borderWidth: 1,
     borderColor: '#fbbf24',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 16,
-    paddingHorizontal: 20,
     gap: 12,
   },
-  alertCardDanger: {
-    backgroundColor: '#fef2f2',
-    borderColor: '#fca5a5',
+  alertCardInfo: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#bfdbfe',
   },
   alertEmoji: {
     fontSize: 24,
@@ -514,69 +549,76 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   alertTitle: {
-    fontFamily: 'Inter',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#92400e',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   alertSubtitle: {
-    fontFamily: 'Inter',
     fontSize: 12,
     color: '#92400e',
-    opacity: 0.8,
+    opacity: 0.9,
   },
   alertButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     backgroundColor: '#f59e0b',
     borderRadius: 20,
   },
   alertButtonText: {
-    fontFamily: 'Inter',
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: '#ffffff',
   },
+  // Stats
   statsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginHorizontal: -6,
-    marginBottom: 20
+    marginBottom: 30
   },
   statCard: {
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 12,
-    padding: 16,
-    margin: 6
+    borderRadius: 16,
+    padding: 20,
+    margin: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1
   },
   statLabel: {
     fontSize: 12,
-    color: '#697b92',
-    marginBottom: 8
+    color: '#64748b',
+    marginBottom: 8,
+    fontWeight: '600',
+    textTransform: 'uppercase'
   },
   statValue: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
-    color: '#1a1a1a',
+    color: '#1e293b',
     marginBottom: 4
   },
   statChange: {
     fontSize: 12,
-    color: '#10b981'
+    color: '#10b981',
+    fontWeight: '500'
   },
   statChangeWarning: {
     color: '#f59e0b'
   },
+  // Quick Access
   quickAccessContainer: {
-    marginBottom: 20
+    marginBottom: 30
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: '700',
+    color: '#1e293b',
     marginBottom: 16
   },
   quickAccessGrid: {
@@ -586,31 +628,36 @@ const styles = StyleSheet.create({
   },
   quickAccessButton: {
     margin: 6,
-    borderRadius: 12,
-    overflow: 'hidden'
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2
   },
   quickAccessGradient: {
     padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 80
+    minHeight: 90
   },
   quickAccessButtonInner: {
     backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#092090',
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 16,
     padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 80
+    minHeight: 90
   },
   quickAccessIconGradient: {
-    fontSize: 24,
+    fontSize: 28,
     marginBottom: 8
   },
   quickAccessIcon: {
-    fontSize: 24,
+    fontSize: 28,
     marginBottom: 8
   },
   quickAccessLabelGradient: {
@@ -622,9 +669,10 @@ const styles = StyleSheet.create({
   quickAccessLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#092090',
+    color: '#475569',
     textAlign: 'center'
   },
+  // Recent Sales
   recentSalesContainer: {
     marginBottom: 20
   },
@@ -642,54 +690,73 @@ const styles = StyleSheet.create({
   saleItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10
   },
   saleItemCancelled: {
     backgroundColor: '#fef2f2',
     borderColor: '#fecaca'
   },
   saleIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: '#092090',
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#e0e7ff',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 12
+    marginRight: 14
   },
   saleIconCancelled: {
-    backgroundColor: '#dc2626'
+    backgroundColor: '#fee2e2'
   },
   saleIconText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff'
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#092090'
   },
   saleInfo: {
     flex: 1
   },
   saleClient: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1a1a1a',
+    color: '#1e293b',
     marginBottom: 4
   },
   saleTime: {
     fontSize: 12,
-    color: '#697b92'
+    color: '#64748b'
   },
   saleAmount: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#092090'
+    fontWeight: '700',
+    color: '#092090',
+    marginBottom: 2
   },
   saleAmountCancelled: {
     color: '#dc2626',
     textDecorationLine: 'line-through'
+  },
+  saleStatus: {
+    fontSize: 11,
+    fontWeight: '600'
+  },
+  emptyState: {
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8fafc',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderStyle: 'dashed'
+  },
+  emptyStateText: {
+    color: '#94a3b8',
+    fontSize: 14
   }
 });
