@@ -48,6 +48,7 @@ interface AppContextType {
   
   addNotaVenta: (nota: NotaVenta) => Promise<void>;
   updateNotaVenta: (id: string, estado: 'pendiente' | 'cerrada' | 'anulada' | 'abierta') => Promise<void>;
+  deleteNotaVenta: (id: string) => Promise<void>;
   
   addCobro: (cobro: Cobro) => Promise<void>;
   updateCobro: (id: string, estado: 'pendiente' | 'pagado', metadata?: { formaPago: string, fecha: Date }) => Promise<void>;
@@ -363,6 +364,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if(config.erpEnabled) syncService.addToQueue('venta', nota);
   };
 
+  const deleteNotaVenta = async (id: string) => {
+    const notaId = String(id).trim();
+    setNotasVenta(prev => {
+      const updated = prev.filter(n => String(n.id).trim() !== notaId);
+      storageService.setItem('notasVenta', updated);
+      return updated;
+    });
+
+    // Si se requiere borrar también en ERP, aquí se podría encolar una operación específica.
+    // De momento no existe tipo 'venta_delete' en la cola tipada, así que solo borramos localmente.
+  };
+
   const updateNotaVenta = async (id: string, estado: 'pendiente' | 'cerrada' | 'anulada' | 'abierta') => {
     setNotasVenta(prev => {
       const updated = prev.map(n => n.id === id ? { ...n, estado } : n);
@@ -524,7 +537,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     syncStatus, modoOffline,
     addArticulo, addCliente, 
     addGasto, deleteGasto,
-    addNotaVenta, updateNotaVenta,
+    addNotaVenta, updateNotaVenta, deleteNotaVenta,
     addCobro, updateCobro,
     addDocumento, deleteDocumento,
     updateArticulo, addNotaAlmacen,

@@ -20,7 +20,7 @@ import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 import SeleccionarArticuloModal from '../../components/SeleccionarArticuloModal';
 import SeleccionarClienteModal from '../../components/SeleccionarClienteModal';
 
-// --- TIPOS Y CONSTANTES ---
+// ... (Tipos y Helpers se mantienen igual) ...
 interface ArticuloVenta {
   id: string;
   articuloId: string;
@@ -41,7 +41,6 @@ const TIPOS_NOTA = [
 
 const METODOS_PAGO_BASE = ['Efectivo', 'Tarjeta', 'Bizum', 'Transferencia'];
 
-// Helper para fecha local consistente DD/MM/YYYY, HH:MM:SS
 const getFechaActualFormateada = () => {
   const now = new Date();
   const day = String(now.getDate()).padStart(2, '0');
@@ -56,18 +55,18 @@ const getFechaActualFormateada = () => {
 export default function NuevaVentaScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { addNotaVenta, addCobro, clientes, articulos } = useApp();
+  
+  // IMPORTAR deleteNotaVenta DEL CONTEXTO
+  const { addNotaVenta, addCobro, clientes, articulos, deleteNotaVenta } = useApp();
 
-  // Datos iniciales si venimos de editar/borrador
   const ventaDataInicial = route.params?.ventaData;
 
-  // --- ESTADOS DOCUMENTO ---
+  // ... (Estados se mantienen igual, incluyendo descuento global) ...
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null);
   const [estadoPago, setEstadoPago] = useState<'pagado' | 'pendiente'>('pendiente'); 
   const [tipoNota, setTipoNota] = useState(TIPOS_NOTA[0]);
   const [formaPago, setFormaPago] = useState(''); 
 
-  // --- ESTADOS DE LÍNEA (ARTÍCULO) ---
   const [articuloSeleccionado, setArticuloSeleccionado] = useState<any>(null);
   const [codigoInput, setCodigoInput] = useState('');
   const [cant, setCant] = useState('');
@@ -78,21 +77,18 @@ export default function NuevaVentaScreen() {
 
   const [carrito, setCarrito] = useState<ArticuloVenta[]>([]);
   
-  // --- MODALES ---
+  const [enableGlobalDiscount, setEnableGlobalDiscount] = useState(false);
+  const [globalDiscountValue, setGlobalDiscountValue] = useState('');
+
   const [modalCliente, setModalCliente] = useState(false);
   const [modalArticulo, setModalArticulo] = useState(false);
   const [modalHistorial, setModalHistorial] = useState(false);
   const [modalSelectorVisible, setModalSelectorVisible] = useState(false);
   const [selectorType, setSelectorType] = useState<'tipoDoc' | 'formaPago' | null>(null);
 
-  // Flag para controlar guardado y evitar alerta al salir
   const [isSaved, setIsSaved] = useState(false);
 
-  // 1. NUEVOS ESTADOS PARA DESCUENTO GLOBAL
-  const [enableGlobalDiscount, setEnableGlobalDiscount] = useState(false);
-  const [globalDiscountValue, setGlobalDiscountValue] = useState('');
-
-  // --- CARGA INICIAL (EDICIÓN) ---
+  // ... (useEffect de carga inicial se mantiene) ...
   useEffect(() => {
     if (ventaDataInicial) {
       const cli = clientes.find(c => c.id === ventaDataInicial.clienteId) || { 
@@ -109,12 +105,10 @@ export default function NuevaVentaScreen() {
       const tipoFound = TIPOS_NOTA.find(t => t.value === ventaDataInicial.tipoNota);
       if (tipoFound) setTipoNota(tipoFound);
       
-      // Si venía como 'pendiente' o 'pagado', lo respetamos
       if (ventaDataInicial.estado === 'pagado' || ventaDataInicial.estado === 'pendiente') {
         setEstadoPago(ventaDataInicial.estado);
       }
 
-      // CARGAR DESCUENTO GLOBAL SI EXISTE
       if (ventaDataInicial.aplicarDescGlobal) {
         setEnableGlobalDiscount(true);
         setGlobalDiscountValue(ventaDataInicial.descGlobal || '');
@@ -122,41 +116,28 @@ export default function NuevaVentaScreen() {
     }
   }, [ventaDataInicial]);
 
-  // --- PROTECCIÓN DE NAVEGACIÓN ---
+  // ... (useEffect de protección de navegación se mantiene) ...
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
-      // Condiciones para PERMITIR salir sin alerta:
-      // 1. El carrito está vacío.
-      // 2. Ya se guardó la venta (isSaved es true).
-      // 3. La acción es un reemplazo de pantalla (navegación interna forzada).
       if (carrito.length === 0 || isSaved || e.data.action.type === 'REPLACE') {
         return;
       }
 
-      // Si no se cumple lo anterior, PREVENIR la salida y mostrar alerta
       e.preventDefault();
 
       Alert.alert(
         'Nota sin guardar',
-        'Tienes artículos pendientes. ¿Qué deseas hacer?',
+        '¿Tienes artículos pendientes. ¿Qué deseas hacer?',
         [
-          { 
-            text: 'Descartar', 
-            style: 'destructive', 
-            onPress: () => navigation.dispatch(e.data.action) // Sale sin guardar
-          },
+          { text: 'Descartar', style: 'destructive', onPress: () => navigation.dispatch(e.data.action) },
           { 
             text: 'Guardar Borrador', 
             onPress: async () => {
-              await guardarTemporalmente(); // Guarda con estado 'abierta'
-              navigation.dispatch(e.data.action); // Sale después de guardar
+              await guardarTemporalmente();
+              navigation.dispatch(e.data.action); 
             } 
           },
-          { 
-            text: 'Seguir editando', 
-            style: 'cancel', 
-            onPress: () => {} // Se queda en la pantalla
-          }
+          { text: 'Seguir editando', style: 'cancel', onPress: () => {} }
         ]
       );
     });
@@ -164,7 +145,7 @@ export default function NuevaVentaScreen() {
     return unsubscribe;
   }, [navigation, carrito, isSaved, clienteSeleccionado, formaPago, enableGlobalDiscount, globalDiscountValue]);
 
-  // --- EFECTOS ---
+  // ... (useMemo metodosDisponibles y useEffect se mantienen) ...
   const metodosDisponibles = useMemo(() => {
     if (estadoPago === 'pendiente') {
       return METODOS_PAGO_BASE.filter(m => m !== 'Efectivo');
@@ -178,22 +159,18 @@ export default function NuevaVentaScreen() {
     }
   }, [estadoPago, metodosDisponibles]);
 
-  // --- SELECTORES ---
+  // ... (Funciones de selectores, articulos y carrito se mantienen) ...
   const openSelector = (type: 'tipoDoc' | 'formaPago') => {
     setSelectorType(type);
     setModalSelectorVisible(true);
   };
 
   const handleSelection = (item: any) => {
-    if (selectorType === 'tipoDoc') {
-      setTipoNota(item);
-    } else if (selectorType === 'formaPago') {
-      setFormaPago(item);
-    }
+    if (selectorType === 'tipoDoc') setTipoNota(item);
+    else if (selectorType === 'formaPago') setFormaPago(item);
     setModalSelectorVisible(false);
   };
 
-  // --- GESTIÓN DE ARTÍCULOS ---
   const resetArticuloForm = () => {
     setArticuloSeleccionado(null);
     setCodigoInput('');
@@ -201,7 +178,6 @@ export default function NuevaVentaScreen() {
     setPrecio('');
     setDesc('');
     setNotaItem('');
-    // No reseteamos enableDiscount para comodidad
   };
 
   const handleSelectArticulo = (art: any) => {
@@ -265,11 +241,11 @@ export default function NuevaVentaScreen() {
     setCarrito(carrito.filter(i => i.id !== id));
   };
 
+  // ... (calcularTotales actualizado con descuento global se mantiene) ...
   const calcularTotales = () => {
     let subtotalLineas = 0;
     let descuentoLineas = 0;
 
-    // Calcular suma de líneas
     carrito.forEach(item => {
       const bruto = item.precioUnitario * item.cantidad;
       subtotalLineas += bruto;
@@ -279,11 +255,9 @@ export default function NuevaVentaScreen() {
       }
     });
 
-    // Base antes del descuento global
     let baseIntermedia = subtotalLineas - descuentoLineas;
     let descuentoGlobalMonto = 0;
 
-    // APLICAR DESCUENTO GLOBAL
     if (enableGlobalDiscount && globalDiscountValue) {
       const porcentaje = parseFloat(globalDiscountValue.replace(',', '.')) || 0;
       if (porcentaje > 0) {
@@ -296,20 +270,14 @@ export default function NuevaVentaScreen() {
     const iva = baseImponible * 0.21;
     const total = baseImponible + iva;
 
-    return { 
-      subtotal: subtotalLineas, 
-      descuentos: totalDescuentos, 
-      base: baseImponible, 
-      iva, 
-      total 
-    };
+    return { subtotal: subtotalLineas, descuentos: totalDescuentos, base: baseImponible, iva, total };
   };
   
   const totales = calcularTotales();
 
-  // --- GUARDAR COMO BORRADOR ---
+  // ... (guardarTemporalmente actualizado se mantiene) ...
   const guardarTemporalmente = async () => {
-    setIsSaved(true); // Evita bucle de alerta
+    setIsSaved(true); 
     const fechaActual = getFechaActualFormateada();
     const notaId = ventaDataInicial?.id || `TEMP-${Date.now().toString().slice(-6)}`;
 
@@ -319,7 +287,7 @@ export default function NuevaVentaScreen() {
       clienteId: clienteSeleccionado?.id,
       fecha: fechaActual,
       precio: `${totales.total.toFixed(2)} €`,
-      estado: 'abierta', // ESTADO CLAVE
+      estado: 'abierta', 
       tipoNota: tipoNota.value,
       formaPago: formaPago || 'Efectivo', 
       items: carrito, 
@@ -331,7 +299,7 @@ export default function NuevaVentaScreen() {
     await addNotaVenta(ventaTemp as any);
   };
 
-  // --- FINALIZAR VENTA ---
+  // --- FINALIZAR VENTA ACTUALIZADO ---
   const finalizarVenta = async () => {
     if (carrito.length === 0 || !clienteSeleccionado) return Alert.alert('Error', 'Faltan datos (Cliente o Artículos).');
     if (!formaPago) return Alert.alert('Error', 'Selecciona una forma de pago.');
@@ -339,12 +307,14 @@ export default function NuevaVentaScreen() {
     Alert.alert('Confirmar Venta', `Total: ${totales.total.toFixed(2)} €`, [{
       text: 'Finalizar', onPress: async () => {
         try {
-          setIsSaved(true); // Bloquear listener de salida
+          setIsSaved(true); 
           const fechaActual = getFechaActualFormateada();
           
-          // Si era temporal, usamos su ID, si no generamos uno nuevo oficial
-          const esTemporal = ventaDataInicial?.id?.startsWith('TEMP');
-          const notaId = (ventaDataInicial && !esTemporal) ? ventaDataInicial.id : `N${Date.now().toString().slice(-6)}`; 
+          // DETECTAR SI ES BORRADOR (ID empieza con TEMP o estado es abierta)
+          const esBorrador = ventaDataInicial?.id?.startsWith('TEMP') || ventaDataInicial?.estado === 'abierta';
+          
+          // Si era borrador, generamos un ID NUEVO (ej: N...). Si era edición de nota real, mantenemos ID.
+          const notaId = (ventaDataInicial && !esBorrador) ? ventaDataInicial.id : `N${Date.now().toString().slice(-6)}`; 
 
           const estadoNota = estadoPago === 'pagado' ? 'cerrada' : 'pendiente';
           
@@ -363,7 +333,13 @@ export default function NuevaVentaScreen() {
             descGlobal: globalDiscountValue
           };
           
+          // Guardar la nueva nota oficial
           await addNotaVenta(venta as any);
+
+          // SI ERA BORRADOR, ELIMINAR EL ORIGINAL PARA EVITAR DUPLICADOS
+          if (esBorrador && ventaDataInicial?.id) {
+             await deleteNotaVenta(ventaDataInicial.id);
+          }
 
           const nuevoCobro = {
             id: `C${Date.now().toString().slice(-6)}`, 
@@ -388,6 +364,8 @@ export default function NuevaVentaScreen() {
     }, { text: 'Cancelar' }]);
   };
 
+  // ... (El resto del renderizado UI se mantiene igual, con los estilos de descuento global agregados) ...
+
   return (
     <ScreenWithSidebar currentScreen="NuevaVenta" scrollable={false}>
       <KeyboardAvoidingView 
@@ -401,7 +379,7 @@ export default function NuevaVentaScreen() {
 
         <View style={styles.mainContent}>
           
-          {/* PANEL IZQUIERDO - FORMULARIO */}
+          {/* PANEL IZQUIERDO */}
           <View style={styles.leftPanel}>
             <View style={styles.scrollWrapper}>
               <ScrollView 
@@ -410,7 +388,7 @@ export default function NuevaVentaScreen() {
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={true}
               >
-                {/* CABECERA DOCUMENTO */}
+                {/* SECCIÓN CLIENTE Y CABECERA */}
                 <View style={styles.sectionCard}>
                     {/* CLIENTE */}
                     <View style={[styles.field, { zIndex: 20 }]}>
@@ -428,9 +406,8 @@ export default function NuevaVentaScreen() {
                         )}
                     </View>
 
-                    {/* FILA: ESTADO | FORMA PAGO | TIPO DOC */}
+                    {/* FILA DE OPCIONES */}
                     <View style={[styles.row, { marginBottom: 5 }]}>
-                        {/* Estado Pago */}
                         <View style={{flex: 1.2}}>
                             <Text style={styles.label}>Estado Pago</Text>
                             <View style={styles.switchRowCompact}>
@@ -443,7 +420,6 @@ export default function NuevaVentaScreen() {
                             </View>
                         </View>
 
-                        {/* Forma Pago (SELECTOR MODAL) */}
                         <View style={styles.col}>
                             <Text style={styles.label}>Forma Pago</Text>
                             <TouchableOpacity style={styles.selectCompact} onPress={() => openSelector('formaPago')}>
@@ -452,7 +428,6 @@ export default function NuevaVentaScreen() {
                             </TouchableOpacity>
                         </View>
 
-                        {/* Tipo Doc (SELECTOR MODAL) */}
                         <View style={styles.col}>
                             <Text style={styles.label}>Tipo Doc.</Text>
                             <TouchableOpacity style={styles.selectCompact} onPress={() => openSelector('tipoDoc')}>
@@ -466,12 +441,9 @@ export default function NuevaVentaScreen() {
                 <View style={styles.divider} />
                 <Text style={styles.secTitle}>Añadir Línea (Rápida)</Text>
 
-                {/* --- AÑADIR LÍNEA (GRID) --- */}
+                {/* GRID DE AÑADIR LÍNEA */}
                 <View style={styles.addLineContainer}>
-                    {/* FILA 1 */}
                     <View style={[styles.gridRow, { alignItems: 'flex-end' }]}>
-                        
-                        {/* ARTÍCULO - LUPA ARREGLADA */}
                         <View style={{flex: 3, marginRight: 8}}>
                             <Text style={styles.label}>Artículo / Código</Text>
                             <View style={styles.inputWithIcon}>
@@ -493,7 +465,6 @@ export default function NuevaVentaScreen() {
                             )}
                         </View>
 
-                        {/* CANTIDAD */}
                         <View style={{flex: 1, marginRight: 8}}>
                             <Text style={styles.label}>Cantidad</Text>
                             <TextInput 
@@ -505,7 +476,6 @@ export default function NuevaVentaScreen() {
                             />
                         </View>
 
-                        {/* PRECIO */}
                         <View style={{flex: 1, marginRight: 8}}>
                             <Text style={styles.label}>Precio</Text>
                             <TextInput 
@@ -517,7 +487,6 @@ export default function NuevaVentaScreen() {
                             />
                         </View>
 
-                        {/* DTO % (CON SWITCH) */}
                         <View style={{flex: 1}}>
                             <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5}}>
                                 <Text style={[styles.label, {marginBottom: 0}]}>DTO %</Text>
@@ -540,7 +509,6 @@ export default function NuevaVentaScreen() {
                         </View>
                     </View>
 
-                    {/* FILA 2: NOTA Y BOTÓN */}
                     <View style={[styles.gridRow, {marginTop: 12, alignItems: 'flex-end'}]}>
                         <View style={{flex: 3, marginRight: 12}}>
                             <Text style={styles.label}>Nota (Opcional)</Text>
@@ -565,7 +533,6 @@ export default function NuevaVentaScreen() {
               </ScrollView>
             </View>
 
-            {/* Footer */}
             <View style={styles.panelFooter}>
               <TouchableOpacity style={styles.btnSec} onPress={() => setModalHistorial(true)}><Text style={{color:'#64748b', fontWeight:'600'}}>Historial</Text></TouchableOpacity>
               <TouchableOpacity style={styles.btnPri} onPress={finalizarVenta}>
@@ -574,7 +541,7 @@ export default function NuevaVentaScreen() {
             </View>
           </View>
 
-          {/* PANEL DERECHO - RESUMEN */}
+          {/* PANEL DERECHO */}
           <View style={styles.rightPanel}>
             <Text style={styles.secTitle}>Resumen ({carrito.length})</Text>
             <View style={{flex: 1, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, marginBottom: 10}}>
@@ -600,33 +567,33 @@ export default function NuevaVentaScreen() {
               )}
             </View>
             
-            {/* 5. UI PARA DESCUENTO GLOBAL */}
+            {/* UI DESCUENTO GLOBAL */}
             <View style={styles.globalDiscountBox}>
-              <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
-                <Text style={styles.label}>Descuento Global</Text>
-                <Switch 
-                  value={enableGlobalDiscount} 
-                  onValueChange={setEnableGlobalDiscount}
-                  trackColor={{ false: "#e2e8f0", true: "#0C2ABF" }}
-                  thumbColor={"#fff"}
-                  style={{ transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }] }} 
-                />
-              </View>
-              
-              {enableGlobalDiscount && (
-                <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8}}>
-                  <Text style={{fontSize: 12, color: '#64748b'}}>Porcentaje:</Text>
-                  <TextInput 
-                    style={styles.inputGlobalDesc}
-                    value={globalDiscountValue}
-                    onChangeText={setGlobalDiscountValue}
-                    keyboardType="numeric"
-                    placeholder="0"
-                    maxLength={3}
-                  />
-                  <Text style={{fontSize: 14, fontWeight: 'bold', color: '#1e293b'}}>%</Text>
+                <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+                    <Text style={styles.label}>Descuento Global</Text>
+                    <Switch 
+                        value={enableGlobalDiscount} 
+                        onValueChange={setEnableGlobalDiscount}
+                        trackColor={{ false: "#e2e8f0", true: "#0C2ABF" }}
+                        thumbColor={"#fff"}
+                        style={{ transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }] }} 
+                    />
                 </View>
-              )}
+                
+                {enableGlobalDiscount && (
+                    <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8}}>
+                        <Text style={{fontSize: 12, color: '#64748b'}}>Porcentaje:</Text>
+                        <TextInput 
+                            style={styles.inputGlobalDesc}
+                            value={globalDiscountValue}
+                            onChangeText={setGlobalDiscountValue}
+                            keyboardType="numeric"
+                            placeholder="0"
+                            maxLength={3}
+                        />
+                        <Text style={{fontSize: 14, fontWeight: 'bold', color: '#1e293b'}}>%</Text>
+                    </View>
+                )}
             </View>
 
             <View style={styles.totalBox}>
@@ -635,7 +602,9 @@ export default function NuevaVentaScreen() {
               </View>
               {totales.descuentos > 0 && (
                   <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 5}}>
-                      <Text style={{color:'#10b981'}}>Descuentos</Text>
+                      <Text style={{color:'#10b981'}}>
+                        Descuentos {enableGlobalDiscount && globalDiscountValue ? `(Gbl ${globalDiscountValue}%)` : ''}
+                      </Text>
                       <Text style={{color:'#10b981'}}>-{totales.descuentos.toFixed(2)} €</Text>
                   </View>
               )}
@@ -655,7 +624,7 @@ export default function NuevaVentaScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* MODAL SELECTOR GENÉRICO (Para Dropdowns) */}
+      {/* MODALES */}
       <Modal visible={modalSelectorVisible} transparent animationType="fade" onRequestClose={() => setModalSelectorVisible(false)}>
         <TouchableOpacity style={styles.modalBg} onPress={() => setModalSelectorVisible(false)} activeOpacity={1}>
             <View style={styles.selectorModalCard}>
@@ -663,25 +632,28 @@ export default function NuevaVentaScreen() {
                     {selectorType === 'tipoDoc' ? 'Seleccionar Tipo de Documento' : 'Seleccionar Forma de Pago'}
                 </Text>
                 <FlatList
-                    data={selectorType === 'tipoDoc' ? TIPOS_NOTA : metodosDisponibles}
-                    keyExtractor={(item) => typeof item === 'string' ? item : item.value}
-                    renderItem={({ item }) => (
-                        <TouchableOpacity 
-                            style={styles.selectorItem} 
-                            onPress={() => handleSelection(item)}
-                        >
-                            <Text style={styles.selectorItemText}>
-                                {typeof item === 'string' ? item : item.label}
-                            </Text>
-                        </TouchableOpacity>
-                    )}
+                  data={
+                    selectorType === 'tipoDoc'
+                      ? TIPOS_NOTA
+                      : metodosDisponibles.map(m => ({ label: m, value: m }))
+                  }
+                  keyExtractor={(item) => item.value}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity 
+                      style={styles.selectorItem} 
+                      onPress={() => handleSelection(item)}
+                    >
+                      <Text style={styles.selectorItemText}>
+                        {item.label}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 />
                 <TouchableOpacity style={styles.closeBtn} onPress={() => setModalSelectorVisible(false)}><Text>Cancelar</Text></TouchableOpacity>
             </View>
         </TouchableOpacity>
       </Modal>
 
-      {/* OTROS MODALES */}
       <SeleccionarClienteModal
         visible={modalCliente}
         onClose={() => setModalCliente(false)}
@@ -805,14 +777,23 @@ const styles = StyleSheet.create({
   rowItem: { flexDirection: 'row', padding: 12, borderBottomWidth: 1, borderColor: '#f8fafc', alignItems: 'center', justifyContent: 'space-between' },
   totalBox: { marginTop: 'auto', padding: 20, backgroundColor: '#f8fafc', borderRadius: 12 },
 
+  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  modalCard: { width: 400, backgroundColor: '#fff', borderRadius: 12, padding: 24, maxHeight: '80%', elevation: 5 },
+  closeBtn: { marginTop: 20, padding: 12, backgroundColor: '#f1f5f9', alignItems: 'center', borderRadius: 8 },
+
+  selectorModalCard: { width: 320, backgroundColor: '#fff', borderRadius: 12, padding: 0, elevation: 10, maxHeight: '60%' },
+  selectorTitle: { fontSize: 15, fontWeight: '700', color: '#1e293b', padding: 16, textAlign: 'center', borderBottomWidth: 1, borderColor: '#f1f5f9', backgroundColor: '#f8fafc', borderTopLeftRadius: 12, borderTopRightRadius: 12 },
+  selectorItem: { padding: 16, borderBottomWidth: 1, borderColor: '#f1f5f9' },
+  selectorItemText: { fontSize: 16, color: '#334155', textAlign: 'center' },
+
   globalDiscountBox: {
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 12,
     padding: 12,
     marginBottom: 10,
-    marginTop: 10
+    marginTop: 'auto'
   },
   inputGlobalDesc: {
     backgroundColor: '#f1f5f9',
@@ -826,14 +807,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     color: '#092090'
-  },
-
-  modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
-  modalCard: { width: 400, backgroundColor: '#fff', borderRadius: 12, padding: 24, maxHeight: '80%', elevation: 5 },
-  closeBtn: { marginTop: 20, padding: 12, backgroundColor: '#f1f5f9', alignItems: 'center', borderRadius: 8 },
-
-  selectorModalCard: { width: 320, backgroundColor: '#fff', borderRadius: 12, padding: 0, elevation: 10, maxHeight: '60%' },
-  selectorTitle: { fontSize: 15, fontWeight: '700', color: '#1e293b', padding: 16, textAlign: 'center', borderBottomWidth: 1, borderColor: '#f1f5f9', backgroundColor: '#f8fafc', borderTopLeftRadius: 12, borderTopRightRadius: 12 },
-  selectorItem: { padding: 16, borderBottomWidth: 1, borderColor: '#f1f5f9' },
-  selectorItemText: { fontSize: 16, color: '#334155', textAlign: 'center' }
+  }
 });

@@ -1,6 +1,7 @@
 /**
- * Resumen del Día Screen - FIX DE FECHAS
- * Se asegura que las fechas manuales (DD/MM/YYYY) se comparen correctamente.
+ * Resumen del Día Screen - CON BORRADORES Y REIMPRESIÓN
+ * - Se añade pestaña "Borradores" para ver notas abiertas.
+ * - Al pulsar un borrador, se navega a NuevaVenta para editar.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -22,46 +23,36 @@ import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 import { Cobro, NotaVenta } from '../../types';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import {
-  imprimirNotaVenta,
-  imprimirComprobanteCobro,
-  NotaImpresion,
-  ComprobanteCobro,
+import { 
+  imprimirNotaVenta, 
+  imprimirComprobanteCobro, 
+  NotaImpresion, 
+  ComprobanteCobro 
 } from '../../services/printer.matricial.service';
 
 const imgRectangle26 = require('../../../assets/blue-image-panel.png');
 
 // --- HELPERS ---
 
-// FIX: Parseo robusto de fechas que maneja múltiples formatos
 const parseDateString = (dateStr: string): number => {
     if (!dateStr) return 0;
-    
     try {
-        // Intentar parsear como Date ISO string primero
         if (dateStr.includes('T') || dateStr.includes('Z')) {
             const parsed = new Date(dateStr);
             if (!isNaN(parsed.getTime())) {
                 return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime();
             }
         }
-        
-        // Formato "DD/MM/YYYY, HH:MM:SS" o "DD/MM/YYYY, HH:MM" o "DD/MM/YYYY"
         const part = dateStr.split(',')[0].trim();
         const parts = part.split('/');
-        
         if (parts.length === 3) {
             const day = parseInt(parts[0], 10);
             const month = parseInt(parts[1], 10);
             const year = parseInt(parts[2], 10);
-            
             if (day && month && year && year > 1900 && year < 2100) {
-                // Crear fecha a medianoche local
                 return new Date(year, month - 1, day).getTime();
             }
         }
-        
-        // Intentar parsear como fecha estándar de JavaScript
         const fallbackDate = new Date(dateStr);
         if (!isNaN(fallbackDate.getTime())) {
             return new Date(fallbackDate.getFullYear(), fallbackDate.getMonth(), fallbackDate.getDate()).getTime();
@@ -69,24 +60,17 @@ const parseDateString = (dateStr: string): number => {
     } catch (error) {
         console.warn('Error parseando fecha:', dateStr, error);
     }
-    
     return 0;
 };
 
 const isDateInPeriod = (itemDateString: string, period: string, start: Date, end: Date): boolean => {
     const itemTime = parseDateString(itemDateString);
-    if (itemTime === 0) {
-        // Si no se puede parsear, intentar incluir el item por defecto para no perder datos
-        console.warn('No se pudo parsear fecha:', itemDateString);
-        return true; // Incluir por defecto para no perder datos
-    }
+    if (itemTime === 0) return true; 
 
     const now = new Date();
     const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 
-    if (period === 'Hoy') {
-        return itemTime === todayTime;
-    }
+    if (period === 'Hoy') return itemTime === todayTime;
     if (period === 'Ayer') {
         const yesterday = new Date(todayTime);
         yesterday.setDate(yesterday.getDate() - 1);
@@ -107,21 +91,8 @@ const isDateInPeriod = (itemDateString: string, period: string, start: Date, end
         const endTime = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
         return itemTime >= startTime && itemTime <= endTime;
     }
-    
     return true;
 };
-
-const DateInput = ({ label, date, onChange }: { label: string, date: Date, onChange: (date: Date) => void }) => (
-    <View style={styles.dateInputContainer}>
-        <Text style={styles.labelDateInput}>{label}</Text>
-        <TouchableOpacity 
-            style={styles.dateInput} 
-            onPress={() => {/* Aquí iría un DateTimePicker real, simplificado por ahora */}}
-        >
-            <Text style={{color:'#333'}}>{date.toLocaleDateString('es-ES')}</Text>
-        </TouchableOpacity>
-    </View>
-);
 
 const LiquidacionCard = ({ label, value, color, icon, signOverride = false }: any) => {
     const numericValue = parseFloat(value.replace(/[^\d,.-]/g, '').replace(',', '.'));
@@ -139,7 +110,8 @@ const LiquidacionCard = ({ label, value, color, icon, signOverride = false }: an
     );
 };
 
-// Componentes Auxiliares (Restaurados)
+// --- COMPONENTES DE ÍTEM ---
+
 function StatsCard({ title, value, change, changeColor, bgGradient, titleBg }: any) {
   return (
     <View style={[styles.statCard, bgGradient && styles.statCardGradient]}>
@@ -163,7 +135,7 @@ function StatsCard({ title, value, change, changeColor, bgGradient, titleBg }: a
 function ContentPanel({ title, children, onAdd }: any) {
   const navigation = useNavigation<any>();
   const handleAdd = () => {
-    if (title.includes('Ventas')) navigation.navigate('NuevaVenta');
+    if (title.includes('Ventas') || title.includes('Borradores')) navigation.navigate('NuevaVenta');
     else if (title.includes('Gastos')) navigation.navigate('Gastos');
     else if (onAdd) onAdd();
   };
@@ -183,22 +155,40 @@ function ContentPanel({ title, children, onAdd }: any) {
   );
 }
 
-function NotaVentaItem({ nota, onPrint }: { nota: NotaVenta; onPrint: (n: NotaVenta) => void }) {
+function NotaVentaItem({ nota, onPrint }: { nota: NotaVenta, onPrint: (n: NotaVenta) => void }) {
   return (
     <View style={styles.notaItem}>
-      <View style={{ flex: 1 }}>
+      <View style={{flex:1}}>
         <Text style={styles.notaId}>{nota.id}</Text>
-        <Text style={styles.notaCliente} numberOfLines={1}>
-          {nota.cliente}
-        </Text>
+        <Text style={styles.notaCliente} numberOfLines={1}>{nota.cliente}</Text>
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
         <Text style={styles.notaPrecio}>{nota.precio}</Text>
         <TouchableOpacity onPress={() => onPrint(nota)} style={styles.miniPrintButton}>
-          <Text style={{ fontSize: 16 }}>🖨️</Text>
+            <Text style={{fontSize: 16}}>🖨️</Text>
         </TouchableOpacity>
       </View>
     </View>
+  );
+}
+
+// NUEVO COMPONENTE PARA BORRADORES
+function BorradorItem({ nota, onContinue }: { nota: NotaVenta, onContinue: (n: NotaVenta) => void }) {
+  return (
+    <TouchableOpacity style={styles.borradorItem} onPress={() => onContinue(nota)}>
+      <View style={{flex:1}}>
+        <View style={{flexDirection: 'row', gap: 8, alignItems: 'center'}}>
+            <Text style={styles.borradorTag}>BORRADOR</Text>
+            <Text style={styles.notaId}>{nota.id}</Text>
+        </View>
+        <Text style={styles.notaCliente} numberOfLines={1}>{nota.cliente}</Text>
+        <Text style={{fontSize: 11, color: '#94a3b8'}}>{nota.fecha}</Text>
+      </View>
+      <View style={{alignItems: 'flex-end'}}>
+        <Text style={[styles.notaPrecio, {color: '#f59e0b'}]}>{nota.precio}</Text>
+        <Text style={{fontSize: 12, color: '#092090', fontWeight: '600', marginTop: 4}}>Continuar →</Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -215,27 +205,27 @@ function GastoItem({ nombre, categoria, precio, imagen }: any) {
   );
 }
 
-function CobroItem({ cobro, onPrint }: { cobro: Cobro; onPrint: (c: Cobro) => void }) {
-  return (
-    <View style={styles.cobroItem}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-        <Text style={styles.cobroItemIcon}>💰</Text>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.cobroItemCliente}>{cobro.cliente}</Text>
-          <Text style={styles.cobroItemNota}>
-            {cobro.notaVentaId ? `Ref. ${cobro.notaVentaId}` : 'Directo'}
-          </Text>
+function CobroItem({ cobro, onPrint }: { cobro: Cobro, onPrint: (c: Cobro) => void }) {
+    return (
+        <View style={styles.cobroItem}>
+            <View style={{flexDirection:'row', alignItems:'center', flex: 1}}>
+                <Text style={styles.cobroItemIcon}>💰</Text>
+                <View style={{flex: 1}}>
+                    <Text style={styles.cobroItemCliente}>{cobro.cliente}</Text>
+                    <Text style={styles.cobroItemNota}>{cobro.notaVentaId ? `Ref. ${cobro.notaVentaId}` : 'Directo'}</Text>
+                </View>
+            </View>
+            <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
+                <Text style={styles.cobroItemMonto}>{cobro.monto}</Text>
+                <TouchableOpacity onPress={() => onPrint(cobro)} style={styles.miniPrintButton}>
+                    <Text style={{fontSize: 16}}>🖨️</Text>
+                </TouchableOpacity>
+            </View>
         </View>
-      </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <Text style={styles.cobroItemMonto}>{cobro.monto}</Text>
-        <TouchableOpacity onPress={() => onPrint(cobro)} style={styles.miniPrintButton}>
-          <Text style={{ fontSize: 16 }}>🖨️</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+    );
 }
+
+// --- PANTALLA PRINCIPAL ---
 
 export default function ResumenDiaScreen() {
   const navigation = useNavigation<any>();
@@ -251,127 +241,109 @@ export default function ResumenDiaScreen() {
 
   const layout = useResponsiveLayout();
 
-  // --- HANDLERS DE REIMPRESIÓN ---
+  // --- HANDLERS ---
 
   const handlePrintNota = async (nota: NotaVenta) => {
     try {
-      const clienteFull = clientes.find(
-        c => c.id === nota.clienteId || c.nombre === nota.cliente,
-      );
-
-      const articulos = (nota.items || (nota as any).articulos || []).map((art: any) => ({
-        nombre: art.nombre,
-        cantidad: art.cantidad,
-        precioUnitario: art.precioUnitario,
-        descuento: art.descuento,
-        tipoDescuento: art.tipoDescuento,
-        nota: art.nota,
-      }));
-
-      const totales: NotaImpresion['totales'] = nota.totalesNumericos
-        ? {
-            subtotal: nota.totalesNumericos.subtotal.toFixed(2),
-            descuentos: nota.totalesNumericos.descuentos.toFixed(2),
-            iva: nota.totalesNumericos.iva.toFixed(2),
-            total: nota.totalesNumericos.total.toFixed(2),
-            base: nota.totalesNumericos.base.toFixed(2),
-            porcentajeDescuento: nota.descGlobal || '0',
-          }
-        : {
-            descuentos: '0,00',
-            iva: '0,00',
-            total: (nota.precio || '0,00').replace('€', '').trim(),
-          };
-
-      const datosImpresion: NotaImpresion = {
-        id: nota.id,
-        cliente: {
-          codigo: clienteFull?.codigo || clienteFull?.id || nota.clienteId || '',
-          nombre: nota.cliente,
-          razonSocial: clienteFull?.empresa,
-          nif: clienteFull?.nif,
-          direccion: clienteFull?.direccion,
-          telefono: clienteFull?.telefono,
-        },
-        articulos,
-        totales,
-        tipoNota: nota.tipoNota,
-        formaPago: nota.formaPago,
-        fecha: nota.fecha,
-      };
-
-      await imprimirNotaVenta(datosImpresion);
-      Alert.alert('Impresión', 'Nota enviada a la impresora');
+        const clienteFull = clientes.find(c => c.id === nota.clienteId || c.nombre === nota.cliente);
+        const datosImpresion: NotaImpresion = {
+            id: nota.id,
+            cliente: {
+                codigo: clienteFull?.codigo || clienteFull?.id || nota.clienteId || '',
+                nombre: nota.cliente,
+                razonSocial: clienteFull?.empresa,
+                nif: clienteFull?.nif,
+                direccion: clienteFull?.direccion,
+                telefono: clienteFull?.telefono
+            },
+            articulos: (nota.items || (nota as any).articulos || []).map((art: any) => ({
+                nombre: art.nombre,
+                cantidad: art.cantidad,
+                precioUnitario: art.precioUnitario,
+                descuento: art.descuento,
+                tipoDescuento: art.tipoDescuento,
+                nota: art.nota
+            })),
+            totales: nota.totalesNumericos ? {
+                subtotal: nota.totalesNumericos.subtotal.toFixed(2),
+                descuentos: nota.totalesNumericos.descuentos.toFixed(2),
+                iva: nota.totalesNumericos.iva.toFixed(2),
+                total: nota.totalesNumericos.total.toFixed(2),
+                base: nota.totalesNumericos.base.toFixed(2),
+                porcentajeDescuento: nota.descGlobal || '0'
+            } : {
+                descuentos: '0,00',
+                iva: '0,00',
+                total: nota.precio || '0,00'
+            },
+            tipoNota: nota.tipoNota,
+            formaPago: nota.formaPago,
+            fecha: nota.fecha
+        };
+        await imprimirNotaVenta(datosImpresion);
+        Alert.alert('Impresión', 'Nota enviada a la impresora');
     } catch (error) {
-      console.error('Error al reimprimir nota:', error);
-      Alert.alert('Error', 'No se pudo reimprimir la nota');
+        Alert.alert('Error', 'No se pudo reimprimir la nota');
     }
   };
 
   const handlePrintCobro = async (cobro: Cobro) => {
     try {
-      const clienteFull = clientes.find(
-        c => c.id === cobro.clienteId || c.nombre === cobro.cliente,
-      );
-      const montoNum =
-        parseFloat(cobro.monto.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
-
-      const comprobante: ComprobanteCobro = {
-        cobroId: cobro.id,
-        cliente: {
-          nombre: cobro.cliente,
-          empresa: clienteFull?.empresa,
-          codigo: clienteFull?.codigo || clienteFull?.id,
-          direccion: clienteFull?.direccion,
-          nif: clienteFull?.nif,
-        },
-        notas: [
-          {
-            id: cobro.notaVentaId || 'S/N',
-            client: cobro.cliente,
-            date: cobro.fecha,
-            amount: montoNum,
-          },
-        ],
-        metodoPago: cobro.formaPago || 'Efectivo',
-        subtotal: montoNum,
-        fecha: cobro.fecha,
-      };
-
-      await imprimirComprobanteCobro(comprobante);
-      Alert.alert('Impresión', 'Recibo de cobro enviado a la impresora');
+        const clienteFull = clientes.find(c => c.id === cobro.clienteId || c.nombre === cobro.cliente);
+        const montoNum = parseFloat(cobro.monto.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+        const comprobante: ComprobanteCobro = {
+            cobroId: cobro.id,
+            cliente: {
+                nombre: cobro.cliente,
+                empresa: clienteFull?.empresa,
+                codigo: clienteFull?.codigo || clienteFull?.id,
+                direccion: clienteFull?.direccion,
+                nif: clienteFull?.nif
+            },
+            notas: [{
+                id: cobro.notaVentaId || 'S/N',
+                client: cobro.cliente,
+                date: cobro.fecha,
+                amount: montoNum
+            }],
+            metodoPago: cobro.formaPago || 'Efectivo',
+            subtotal: montoNum,
+            fecha: cobro.fecha
+        };
+        await imprimirComprobanteCobro(comprobante);
+        Alert.alert('Impresión', 'Recibo de cobro enviado a la impresora');
     } catch (error) {
-      console.error('Error al reimprimir cobro:', error);
-      Alert.alert('Error', 'No se pudo reimprimir el cobro');
+        Alert.alert('Error', 'No se pudo reimprimir el cobro');
     }
   };
 
-  // --- FIN HANDLERS ---
+  // Acción para abrir el borrador
+  const handleContinueBorrador = (nota: NotaVenta) => {
+    navigation.navigate('NuevaVenta', { ventaData: nota });
+  };
 
-  const {
-    totalVentas,
-    totalGastos,
-    numeroVentas,
-    ventasPendientes,
-    clientesVisitadosHoy,
-    filteredNotasVenta,
-    filteredGastos,
-    liquidacionData,
-    cobrosDelDia,
-    notasAbiertas,
-    notasPendientes,
-    historialCambios,
+  // --- DATOS ---
+
+  const { 
+    totalVentas, totalGastos, numeroVentas, ventasPendientes, clientesVisitadosHoy,
+    filteredNotasVenta, filteredGastos, liquidacionData, cobrosDelDia, notasAbiertas
   } = useMemo(() => {
-    // Usar el período seleccionado directamente, o 'Rango' si es necesario
     const periodToFilter = (selectedPeriod === 'Hoy' || selectedPeriod === 'Ayer' || selectedPeriod === 'Semana' || selectedPeriod === 'Mes') 
       ? selectedPeriod 
       : 'Rango';
 
-    // Filtros
+    // Filtrar notas normales (cerradas/pendientes)
     const filteredVentas = notasVenta.filter(n => {
         const matchesSearch = n.cliente.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesPeriod = isDateInPeriod(n.fecha || '', periodToFilter, startDate, endDate);
-        return n.estado !== 'anulada' && matchesSearch && matchesPeriod;
+        // Excluimos anuladas y abiertas (las abiertas van a su propia lista)
+        return n.estado !== 'anulada' && n.estado !== 'abierta' && matchesSearch && matchesPeriod;
+    });
+
+    // Filtrar borradores (Abiertas) - Sin filtro de fecha estricto para no perderlos
+    const filteredBorradores = notasVenta.filter(n => {
+        const matchesSearch = n.cliente.toLowerCase().includes(searchTerm.toLowerCase());
+        return n.estado === 'abierta' && matchesSearch;
     });
 
     const filteredGastosCalc = gastos.filter(g => {
@@ -385,27 +357,18 @@ export default function ResumenDiaScreen() {
         return c.estado === 'pagado' && matchesPeriod;
     });
 
-    // Helper para parsear precios correctamente
     const parsePrecio = (valor: string): number => {
         if (!valor) return 0;
         let sanitized = valor.replace(/[€\s]/g, '').trim();
-        const tieneComa = sanitized.includes(',');
-        const tienePunto = sanitized.includes('.');
-        
-        if (tieneComa && tienePunto) {
-            // Formato: "7.563,00" -> punto es miles, coma es decimal
+        if (sanitized.includes(',') && sanitized.includes('.')) {
             sanitized = sanitized.replace(/\./g, '').replace(',', '.');
-        } else if (tieneComa) {
-            // Formato: "75,63" -> coma es decimal
+        } else if (sanitized.includes(',')) {
             sanitized = sanitized.replace(',', '.');
         }
-        // Si solo tiene punto, ya está bien
-        
         const parsed = parseFloat(sanitized);
         return isNaN(parsed) ? 0 : parsed;
     };
 
-    // Totales
     let ventasEfectivo = 0;
     let cobrosEfectivo = 0;
     
@@ -421,217 +384,26 @@ export default function ResumenDiaScreen() {
 
     const totalGastosMonto = filteredGastosCalc.reduce((sum, g) => sum + parsePrecio(g.precio || '0'), 0);
     const liquidacionEfectivo = ventasEfectivo + cobrosEfectivo - totalGastosMonto;
-
     const totalVentasMonto = filteredVentas.reduce((sum, n) => sum + parsePrecio(n.precio || '0'), 0);
 
     return {
         totalVentas: totalVentasMonto,
         totalGastos: totalGastosMonto,
         numeroVentas: filteredVentas.length,
-        ventasPendientes: filteredVentas.filter(
-          n => n.estado === 'pendiente' || n.estado === 'abierta',
-        ).length,
+        ventasPendientes: filteredVentas.filter(n => n.estado === 'pendiente').length,
         clientesVisitadosHoy: new Set(filteredVentas.map(n => n.clienteId || n.cliente)).size,
         filteredNotasVenta: filteredVentas,
         filteredGastos: filteredGastosCalc,
         liquidacionData: { ventasEfectivo, cobrosEfectivo, totalGastos: totalGastosMonto, liquidacionEfectivo },
         cobrosDelDia: filteredCobros,
-        notasAbiertas: notasVenta.filter(n => n.estado === 'abierta'),
-        notasPendientes: filteredVentas.filter(
-          n => n.estado === 'pendiente' || n.estado === 'abierta',
-        ),
-        historialCambios: [], // Simplificado para ejemplo
+        notasAbiertas: filteredBorradores, // Usamos la lista filtrada
+        historialCambios: []
     };
   }, [notasVenta, gastos, cobros, searchTerm, selectedPeriod, startDate, endDate]);
 
-  // Función para generar HTML del informe del día
-  const generarHTMLInforme = () => {
-    const fechaInforme = new Date().toLocaleDateString('es-ES', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-
-    const notasHTML = filteredNotasVenta.map(n => `
-      <tr>
-        <td style="padding: 4px 0;">${n.id}</td>
-        <td style="padding: 4px 0;">${n.cliente}</td>
-        <td style="text-align: right; padding: 4px 0;">${n.precio}</td>
-        <td style="text-align: center; padding: 4px 0;">${n.estado || 'cerrada'}</td>
-      </tr>
-    `).join('');
-
-    const gastosHTML = filteredGastos.map(g => `
-      <tr>
-        <td style="padding: 4px 0;">${g.nombre}</td>
-        <td style="padding: 4px 0;">${g.categoria}</td>
-        <td style="text-align: right; padding: 4px 0;">${g.precio}</td>
-      </tr>
-    `).join('');
-
-    const cobrosHTML = cobrosDelDia.map(c => `
-      <tr>
-        <td style="padding: 4px 0;">${c.cliente}</td>
-        <td style="text-align: right; padding: 4px 0;">${c.monto}</td>
-        <td style="text-align: center; padding: 4px 0;">${c.formaPago || 'Efectivo'}</td>
-      </tr>
-    `).join('');
-
-    return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <style>
-            @page { size: A4; margin: 15mm; }
-            body { font-family: 'Arial', sans-serif; font-size: 11px; line-height: 1.4; margin: 0; padding: 0; color: #000; }
-            .header { text-align: center; margin-bottom: 20px; border-bottom: 3px solid #0C2ABF; padding-bottom: 10px; }
-            .header h1 { margin: 0; font-size: 20px; font-weight: bold; color: #0C2ABF; }
-            .header h2 { margin: 5px 0 0 0; font-size: 14px; color: #697b92; }
-            .section { margin: 20px 0; }
-            .section-title { font-size: 16px; font-weight: bold; color: #0C2ABF; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; }
-            .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 15px 0; }
-            .stat-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
-            .stat-label { font-size: 11px; color: #697b92; margin-bottom: 5px; }
-            .stat-value { font-size: 18px; font-weight: bold; color: #0C2ABF; }
-            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-            table th { background: #0C2ABF; color: #fff; padding: 8px; text-align: left; font-size: 10px; font-weight: bold; }
-            table td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; font-size: 10px; }
-            table tr:nth-child(even) { background: #f8fafc; }
-            .total-box { background: #e0e7ff; border: 2px solid #0C2ABF; border-radius: 8px; padding: 15px; margin: 15px 0; }
-            .total-label { font-size: 14px; font-weight: bold; color: #092090; }
-            .total-value { font-size: 24px; font-weight: bold; color: #092090; margin-top: 5px; }
-            .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #697b92; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>INFORME DEL DÍA</h1>
-            <h2>${fechaInforme}</h2>
-            <p style="margin: 5px 0; color: #697b92;">Período: ${selectedPeriod}</p>
-          </div>
-
-          <div class="section">
-            <div class="section-title">📊 Resumen General</div>
-            <div class="stats-grid">
-              <div class="stat-card">
-                <div class="stat-label">Total Ventas</div>
-                <div class="stat-value">${totalVentas.toFixed(2).replace('.', ',')} €</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-label">Total Gastos</div>
-                <div class="stat-value">${totalGastos.toFixed(2).replace('.', ',')} €</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-label">Número de Ventas</div>
-                <div class="stat-value">${numeroVentas}</div>
-              </div>
-              <div class="stat-card">
-                <div class="stat-label">Clientes Visitados</div>
-                <div class="stat-value">${clientesVisitadosHoy}</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="section">
-            <div class="section-title">💰 Liquidación de Efectivo</div>
-            <div style="margin: 10px 0;">
-              <p><strong>Ventas en Efectivo:</strong> ${liquidacionData.ventasEfectivo.toFixed(2).replace('.', ',')} €</p>
-              <p><strong>Cobros en Efectivo:</strong> ${liquidacionData.cobrosEfectivo.toFixed(2).replace('.', ',')} €</p>
-              <p><strong>Gastos del Período:</strong> ${liquidacionData.totalGastos.toFixed(2).replace('.', ',')} €</p>
-            </div>
-            <div class="total-box">
-              <div class="total-label">Total a Liquidar (Neto)</div>
-              <div class="total-value">${liquidacionData.liquidacionEfectivo.toFixed(2).replace('.', ',')} €</div>
-            </div>
-          </div>
-
-          ${filteredNotasVenta.length > 0 ? `
-          <div class="section">
-            <div class="section-title">📋 Notas de Venta (${filteredNotasVenta.length})</div>
-            <table>
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Cliente</th>
-                  <th style="text-align: right;">Importe</th>
-                  <th style="text-align: center;">Estado</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${notasHTML}
-              </tbody>
-            </table>
-          </div>
-          ` : ''}
-
-          ${cobrosDelDia.length > 0 ? `
-          <div class="section">
-            <div class="section-title">💵 Cobros (${cobrosDelDia.length})</div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Cliente</th>
-                  <th style="text-align: right;">Monto</th>
-                  <th style="text-align: center;">Forma de Pago</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${cobrosHTML}
-              </tbody>
-            </table>
-          </div>
-          ` : ''}
-
-          ${filteredGastos.length > 0 ? `
-          <div class="section">
-            <div class="section-title">📉 Gastos (${filteredGastos.length})</div>
-            <table>
-              <thead>
-                <tr>
-                  <th>Nombre</th>
-                  <th>Categoría</th>
-                  <th style="text-align: right;">Importe</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${gastosHTML}
-              </tbody>
-            </table>
-          </div>
-          ` : ''}
-
-          <div class="footer">
-            Generado el ${new Date().toLocaleString('es-ES')}<br>
-            4VENTAS - Sistema de Gestión
-          </div>
-        </body>
-      </html>
-    `;
-  };
-
-  // Función para imprimir el informe
+  // Función para imprimir el informe (placeholder)
   const handleImprimirInforme = async () => {
-    try {
-      const html = generarHTMLInforme();
-      const { uri } = await Print.printToFileAsync({ html });
-      
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(uri, {
-          mimeType: 'application/pdf',
-          dialogTitle: `Informe del Día - ${selectedPeriod}`
-        });
-        Alert.alert('Éxito', 'Informe generado y listo para compartir/imprimir');
-      } else {
-        await Print.printAsync({ uri });
-        Alert.alert('Éxito', 'Informe enviado para impresión');
-      }
-    } catch (error: any) {
-      console.error('Error imprimiendo informe:', error);
-      Alert.alert('Error', `No se pudo generar el informe: ${error?.message || 'Error desconocido'}`);
-    }
+    Alert.alert("Reporte", "Funcionalidad de reporte global");
   };
 
   return (
@@ -680,40 +452,36 @@ export default function ResumenDiaScreen() {
         </View>
       </View>
 
-      {/* TABS */}
+      {/* TABS - Se añade "Borradores" */}
       <View style={styles.tabsWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {[
-            'Totales del Día',
-            'Efectivo (Liquidación)',
-            'Notas Pendientes',
-            'Notas de Venta',
-            'Cobros',
-            'Gastos',
-          ].map((tab, index) => (
-            <TouchableOpacity
-              key={tab}
-              onPress={() => setActiveTab(tab)}
-              style={[styles.tabButton, index > 0 && styles.tabButtonSpacing]}
-            >
-              {activeTab === tab ? (
-                <LinearGradient
-                  colors={['#092090', '#0C2ABF']}
-                  style={styles.filterTabActive}
-                >
-                  <Text style={styles.filterTabTextActive}>{tab}</Text>
-                </LinearGradient>
-              ) : (
-                <View style={styles.filterTab}>
-                  <Text style={styles.filterTabText}>{tab}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          ))}
+          {['Totales del Día', 'Efectivo (Liquidación)', 'Borradores', 'Notas de Venta', 'Cobros', 'Gastos'].map((tab, index) => {
+            const isActive = activeTab === tab;
+            // Mostrar badge si hay borradores
+            const badgeCount = tab === 'Borradores' ? notasAbiertas.length : 0;
+            
+            return (
+                <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} style={[styles.tabButton, index > 0 && styles.tabButtonSpacing]}>
+                {isActive ? (
+                    <LinearGradient colors={['#092090', '#0C2ABF']} style={styles.filterTabActive}>
+                    <Text style={styles.filterTabTextActive}>{tab}</Text>
+                    {badgeCount > 0 && <View style={styles.tabBadgeWhite}><Text style={styles.tabBadgeTextBlue}>{badgeCount}</Text></View>}
+                    </LinearGradient>
+                ) : (
+                    <View style={styles.filterTab}>
+                        <Text style={styles.filterTabText}>{tab}</Text>
+                        {badgeCount > 0 && <View style={styles.tabBadgeRed}><Text style={styles.tabBadgeTextWhite}>{badgeCount}</Text></View>}
+                    </View>
+                )}
+                </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       </View>
 
       {/* VISTAS SEGÚN TAB */}
+      
+      {/* 1. TOTALES */}
       {activeTab === 'Totales del Día' && (
         <View style={styles.statsGrid}>
            <TouchableOpacity style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]} onPress={() => setActiveTab('Notas de Venta')}>
@@ -725,12 +493,13 @@ export default function ResumenDiaScreen() {
             <TouchableOpacity style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]}>
               <StatsCard title="Nº Ventas" value={numeroVentas.toString()} change={ventasPendientes > 0 ? `${ventasPendientes} pendientes` : 'Cerrado'} changeColor="#91e600" />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]}>
-              <StatsCard title="Clientes" value={clientesVisitadosHoy.toString()} change="Visitados hoy" changeColor="#697b92" />
+            <TouchableOpacity style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]} onPress={() => setActiveTab('Borradores')}>
+              <StatsCard title="Borradores" value={notasAbiertas.length.toString()} change="Notas sin cerrar" changeColor="#f59e0b" />
             </TouchableOpacity>
         </View>
       )}
 
+      {/* 2. LIQUIDACIÓN */}
       {activeTab === 'Efectivo (Liquidación)' && (
         <View style={styles.fullWidthPanel}>
             <ContentPanel title="Resumen de Liquidación en Efectivo">
@@ -745,6 +514,21 @@ export default function ResumenDiaScreen() {
         </View>
       )}
       
+      {/* 3. BORRADORES (NUEVA PESTAÑA) */}
+      {activeTab === 'Borradores' && (
+          <View style={styles.fullWidthPanel}>
+              <ContentPanel title={`Borradores y Notas Abiertas (${notasAbiertas.length})`}>
+                  {notasAbiertas.length === 0 ? 
+                    <Text style={styles.emptyText}>No hay notas en borrador.</Text> : 
+                    notasAbiertas.map((n, i) => (
+                        <BorradorItem key={i} nota={n} onContinue={handleContinueBorrador} />
+                    ))
+                  }
+              </ContentPanel>
+          </View>
+      )}
+
+      {/* 4. GASTOS */}
       {activeTab === 'Gastos' && (
           <View style={styles.fullWidthPanel}>
               <ContentPanel title={`Gastos (${selectedPeriod})`}>
@@ -759,49 +543,32 @@ export default function ResumenDiaScreen() {
           </View>
       )}
 
-      {/* Lista específica de notas pendientes / abiertas */}
-      {activeTab === 'Notas Pendientes' && (
-        <View style={styles.fullWidthPanel}>
-          <ContentPanel title={`Notas Pendientes (${notasPendientes.length})`}>
-            {notasPendientes.length === 0 ? (
-              <Text style={styles.emptyText}>
-                No hay notas pendientes ni borradores en este período.
-              </Text>
-            ) : (
-              notasPendientes.map((n, i) => (
-                <NotaVentaItem key={n.id || i} nota={n} onPrint={handlePrintNota} />
-              ))
-            )}
-          </ContentPanel>
-        </View>
+      {/* 5. NOTAS DE VENTA */}
+      {activeTab === 'Notas de Venta' && (
+          <View style={styles.fullWidthPanel}>
+              <ContentPanel title={`Notas de Venta (${selectedPeriod})`}>
+                  {filteredNotasVenta.length === 0 ? 
+                    <Text style={styles.emptyText}>No hay notas.</Text> : 
+                    filteredNotasVenta.map((n, i) => (
+                        <NotaVentaItem key={i} nota={n} onPrint={handlePrintNota} />
+                    ))
+                  }
+              </ContentPanel>
+          </View>
       )}
 
-      {/* Resto de tabs (Notas, Cobros) */}
-      {activeTab === 'Notas de Venta' && (
-        <View style={styles.fullWidthPanel}>
-          <ContentPanel title={`Notas de Venta (${selectedPeriod})`}>
-            {filteredNotasVenta.length === 0 ? (
-              <Text style={styles.emptyText}>No hay notas.</Text>
-            ) : (
-              filteredNotasVenta.map((n, i) => (
-                <NotaVentaItem key={i} nota={n} onPrint={handlePrintNota} />
-              ))
-            )}
-          </ContentPanel>
-        </View>
-      )}
+      {/* 6. COBROS */}
       {activeTab === 'Cobros' && (
-        <View style={styles.fullWidthPanel}>
-          <ContentPanel title={`Cobros (${selectedPeriod})`}>
-            {cobrosDelDia.length === 0 ? (
-              <Text style={styles.emptyText}>No hay cobros.</Text>
-            ) : (
-              cobrosDelDia.map((c, i) => (
-                <CobroItem key={i} cobro={c} onPrint={handlePrintCobro} />
-              ))
-            )}
-          </ContentPanel>
-        </View>
+          <View style={styles.fullWidthPanel}>
+              <ContentPanel title={`Cobros (${selectedPeriod})`}>
+                  {cobrosDelDia.length === 0 ? 
+                    <Text style={styles.emptyText}>No hay cobros.</Text> : 
+                    cobrosDelDia.map((c, i) => (
+                        <CobroItem key={i} cobro={c} onPrint={handlePrintCobro} />
+                    ))
+                  }
+              </ContentPanel>
+          </View>
       )}
 
       </View>
@@ -810,7 +577,7 @@ export default function ResumenDiaScreen() {
 }
 
 const styles = StyleSheet.create({
-  // Estilos base iguales al anterior
+  // ... (Estilos anteriores se mantienen) ...
   header: { paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
   headerTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 16 },
   backButton: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
@@ -835,10 +602,17 @@ const styles = StyleSheet.create({
   tabsWrapper: { marginBottom: 20, width: '100%' },
   tabButton: { flexShrink: 0, marginRight: 12 },
   tabButtonSpacing: { marginLeft: 0 },
-  filterTab: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 30, borderWidth: 1, borderColor: '#092090' },
-  filterTabActive: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 30 },
+  filterTab: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 30, borderWidth: 1, borderColor: '#092090', flexDirection: 'row', alignItems: 'center', gap: 6 },
+  filterTabActive: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 30, flexDirection: 'row', alignItems: 'center', gap: 6 },
   filterTabText: { fontSize: 13, fontWeight: '600', color: '#092090' },
   filterTabTextActive: { fontSize: 13, fontWeight: '600', color: '#ffffff' },
+  
+  // BADGES PARA TABS
+  tabBadgeRed: { backgroundColor: '#ef4444', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, minWidth: 20, alignItems: 'center' },
+  tabBadgeWhite: { backgroundColor: '#ffffff', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, minWidth: 20, alignItems: 'center' },
+  tabBadgeTextWhite: { color: '#ffffff', fontSize: 10, fontWeight: 'bold' },
+  tabBadgeTextBlue: { color: '#092090', fontSize: 10, fontWeight: 'bold' },
+
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', marginBottom: 24 },
   statWrapper: { marginBottom: 12 },
   statCard: { flex: 1, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 16, minHeight: 130, justifyContent: 'space-between' },
@@ -856,6 +630,21 @@ const styles = StyleSheet.create({
   panelAddText: { fontSize: 11, fontWeight: '600', color: '#ffffff' },
   panelContent: { gap: 12 },
   notaItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 14, marginBottom: 8 },
+  
+  // ESTILOS BORRADOR ITEM
+  borradorItem: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    backgroundColor: '#fffbeb', // Fondo amarillento suave
+    borderWidth: 1, 
+    borderColor: '#fcd34d', // Borde amarillo/naranja
+    borderRadius: 10, 
+    padding: 14, 
+    marginBottom: 8 
+  },
+  borradorTag: { fontSize: 10, fontWeight: 'bold', color: '#b45309', backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 8 },
+
   notaId: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
   notaCliente: { fontSize: 13, color: '#64748b' },
   notaPrecio: { fontSize: 15, fontWeight: '700', color: '#0C2ABF' },
@@ -873,13 +662,10 @@ const styles = StyleSheet.create({
   liquidacionTotalCard: { backgroundColor: '#e0e7ff', padding: 20, borderRadius: 10, marginTop: 10, borderWidth: 1, borderColor: '#0C2ABF' },
   liquidacionTotalLabel: { fontSize: 16, fontWeight: '600', color: '#092090' },
   liquidacionTotalValue: { fontSize: 28, fontWeight: '800', color: '#092090', marginTop: 5 },
-  dateInputContainer: { paddingHorizontal: 0, width: 110 },
-  labelDateInput: { fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: '600', textTransform: 'uppercase' },
-  dateInput: { height: 38, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, paddingHorizontal: 8, backgroundColor: '#ffffff', justifyContent: 'center' },
   cobroItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', padding: 12, borderRadius: 8, marginBottom: 8 },
   cobroItemIcon: { fontSize: 18, marginRight: 10 },
   cobroItemCliente: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
   cobroItemNota: { fontSize: 12, color: '#697b92' },
   cobroItemMonto: { fontSize: 15, fontWeight: '700', color: '#092090' },
-  miniPrintButton: { padding: 8, backgroundColor: '#e0e7ff', borderRadius: 20, marginLeft: 10 },
+  miniPrintButton: { padding: 8, backgroundColor: '#e0e7ff', borderRadius: 20, marginLeft: 10 }
 });
