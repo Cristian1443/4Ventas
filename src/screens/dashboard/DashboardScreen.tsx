@@ -299,7 +299,7 @@ export default function DashboardScreen() {
             <Text style={styles.statChange}>Hoy</Text>
           </TouchableOpacity>
 
-          {/* Notas Pendientes (Total Cartera) */}
+          {/* Notas Pendientes (Total Cartera, incluye abiertas/borradores) */}
           <TouchableOpacity
             style={[styles.statCard, { width: cardWidth }]}
             onPress={() => navigation.navigate('Ventas')}
@@ -307,10 +307,10 @@ export default function DashboardScreen() {
           >
             <Text style={styles.statLabel}>Notas Pendientes</Text>
             <Text style={styles.statValue}>
-              {notasVenta.filter(n => n.estado === 'pendiente').length}
+              {notasVenta.filter(n => n.estado === 'pendiente' || n.estado === 'abierta').length}
             </Text>
             <Text style={[styles.statChange, { color: '#f59e0b' }]}>
-              Por cobrar/cerrar
+              Por cobrar / sin cerrar
             </Text>
           </TouchableOpacity>
         </View>
@@ -411,11 +411,25 @@ export default function DashboardScreen() {
                   >
                     {nota.precio}
                   </Text>
-                  <Text style={[
-                    styles.saleStatus, 
-                    nota.estado === 'pendiente' ? {color: '#f59e0b'} : {color: '#10b981'}
-                  ]}>
-                    {nota.estado === 'anulada' ? 'Anulada' : nota.estado === 'pendiente' ? 'Pendiente' : 'Pagado'}
+                  <Text
+                    style={[
+                      styles.saleStatus,
+                      nota.estado === 'anulada'
+                        ? { color: '#dc2626' }
+                        : nota.estado === 'pendiente'
+                        ? { color: '#f59e0b' }
+                        : nota.estado === 'abierta'
+                        ? { color: '#3b82f6' }
+                        : { color: '#10b981' }
+                    ]}
+                  >
+                    {nota.estado === 'anulada'
+                      ? 'Anulada'
+                      : nota.estado === 'pendiente'
+                      ? 'Pendiente'
+                      : nota.estado === 'abierta'
+                      ? 'Borrador'
+                      : 'Pagado'}
                   </Text>
                 </View>
               </TouchableOpacity>

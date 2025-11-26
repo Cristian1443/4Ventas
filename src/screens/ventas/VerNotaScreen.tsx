@@ -458,7 +458,8 @@ export default function VerNotaScreen() {
                 {parseFloat(totales.descuentos.replace(',', '.')) > 0 && (
                   <View style={styles.totalItem}>
                     <Text style={styles.totalLabel}>
-                      Descuentos {totales.porcentajeDescuento !== '0' ? `(${totales.porcentajeDescuento}%)` : ''}:
+                      {/* Mostrar el % global si aplica */}
+                      Descuentos {totales.porcentajeDescuento !== '0' ? `(Global ${totales.porcentajeDescuento}%)` : ''}:
                     </Text>
                     <Text style={styles.totalValue}>
                       -{totales.descuentos} €

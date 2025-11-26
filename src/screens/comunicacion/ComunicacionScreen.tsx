@@ -18,7 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
 export default function ComunicacionScreen() {
@@ -32,7 +32,8 @@ export default function ComunicacionScreen() {
     forzarSincronizacion,
     syncStatus,
     modoOffline,
-    config
+    config,
+    logout
   } = useApp();
 
   const [showExportModal, setShowExportModal] = useState(false);
@@ -40,6 +41,28 @@ export default function ComunicacionScreen() {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [exportType, setExportType] = useState<'ventas' | 'gastos' | 'todo'>('ventas');
   const [internalSyncState, setInternalSyncState] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+
+  // HANDLER PARA CERRAR SESIÓN
+  const handleLogout = () => {
+    Alert.alert(
+      'Cerrar Sesión',
+      '¿Estás seguro de que quieres salir?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Salir', 
+          style: 'destructive', 
+          onPress: () => {
+            logout();
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Login' }],
+            });
+          } 
+        }
+      ]
+    );
+  };
 
   // EXPORTACIÓN: Usa datos reales del contexto
   const handleExport = async () => {
@@ -72,8 +95,12 @@ export default function ComunicacionScreen() {
 
     try {
       const jsonString = JSON.stringify(dataToExport, null, 2);
-      const fileUri = FileSystem.cacheDirectory + filename;
-      await FileSystem.writeAsStringAsync(fileUri, jsonString, { encoding: FileSystem.EncodingType.UTF8 });
+      const baseDir =
+        (FileSystemLegacy as any).cacheDirectory ||
+        FileSystemLegacy.documentDirectory ||
+        '';
+      const fileUri = `${baseDir}${filename}`;
+      await FileSystemLegacy.writeAsStringAsync(fileUri, jsonString);
       
       const canShare = await Sharing.isAvailableAsync();
       if (canShare) {
@@ -247,6 +274,13 @@ export default function ComunicacionScreen() {
               </View>
             </View>
           </View>
+
+          {/* BOTÓN DE CERRAR SESIÓN */}
+          <View style={styles.logoutContainer}>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutText}>Cerrar Sesión</Text>
+            </TouchableOpacity>
+          </View>
         </ScrollView>
       </View>
 
@@ -324,7 +358,7 @@ export default function ComunicacionScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Modal de importación */}
+      {/* Modal de importación */}  
       <Modal
         visible={showImportModal}
         transparent
@@ -460,5 +494,24 @@ const styles = StyleSheet.create({
   syncModalText: { fontSize: 18, fontWeight: '600', color: '#1a1a1a', marginBottom: 8 },
   syncModalSubtext: { fontSize: 14, color: '#697b92' },
   syncModalTextSuccess: { color: '#10b981' },
-  syncModalTextError: { color: '#dc2626' }
+  syncModalTextError: { color: '#dc2626' },
+
+  // ESTILOS PARA EL BOTÓN DE CERRAR SESIÓN
+  logoutContainer: { marginTop: 30, marginBottom: 20 },
+  logoutButton: {
+    paddingVertical: 15,
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: '#dc2626', // Rojo intenso
+    shadowColor: '#dc2626',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4
+  },
+  logoutText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 16
+  }
 });

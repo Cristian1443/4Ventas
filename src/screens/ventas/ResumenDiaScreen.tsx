@@ -22,6 +22,12 @@ import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 import { Cobro, NotaVenta } from '../../types';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import {
+  imprimirNotaVenta,
+  imprimirComprobanteCobro,
+  NotaImpresion,
+  ComprobanteCobro,
+} from '../../services/printer.matricial.service';
 
 const imgRectangle26 = require('../../../assets/blue-image-panel.png');
 
@@ -177,14 +183,21 @@ function ContentPanel({ title, children, onAdd }: any) {
   );
 }
 
-function NotaVentaItem({ id, cliente, precio }: NotaVenta) {
+function NotaVentaItem({ nota, onPrint }: { nota: NotaVenta; onPrint: (n: NotaVenta) => void }) {
   return (
     <View style={styles.notaItem}>
-      <View style={{flex:1}}>
-        <Text style={styles.notaId}>{id}</Text>
-        <Text style={styles.notaCliente} numberOfLines={1}>{cliente}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.notaId}>{nota.id}</Text>
+        <Text style={styles.notaCliente} numberOfLines={1}>
+          {nota.cliente}
+        </Text>
       </View>
-      <Text style={styles.notaPrecio}>{precio}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Text style={styles.notaPrecio}>{nota.precio}</Text>
+        <TouchableOpacity onPress={() => onPrint(nota)} style={styles.miniPrintButton}>
+          <Text style={{ fontSize: 16 }}>🖨️</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -202,25 +215,32 @@ function GastoItem({ nombre, categoria, precio, imagen }: any) {
   );
 }
 
-function CobroItem({ cobro }: { cobro: Cobro }) {
-    return (
-        <View style={styles.cobroItem}>
-            <View style={{flexDirection:'row', alignItems:'center'}}>
-                <Text style={styles.cobroItemIcon}>💰</Text>
-                <View style={{flex: 1}}>
-                    <Text style={styles.cobroItemCliente}>{cobro.cliente}</Text>
-                    <Text style={styles.cobroItemNota}>{cobro.notaVentaId ? `Ref. ${cobro.notaVentaId}` : 'Directo'}</Text>
-                </View>
-            </View>
-            <Text style={styles.cobroItemMonto}>{cobro.monto}</Text>
+function CobroItem({ cobro, onPrint }: { cobro: Cobro; onPrint: (c: Cobro) => void }) {
+  return (
+    <View style={styles.cobroItem}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+        <Text style={styles.cobroItemIcon}>💰</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.cobroItemCliente}>{cobro.cliente}</Text>
+          <Text style={styles.cobroItemNota}>
+            {cobro.notaVentaId ? `Ref. ${cobro.notaVentaId}` : 'Directo'}
+          </Text>
         </View>
-    );
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Text style={styles.cobroItemMonto}>{cobro.monto}</Text>
+        <TouchableOpacity onPress={() => onPrint(cobro)} style={styles.miniPrintButton}>
+          <Text style={{ fontSize: 16 }}>🖨️</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
 }
 
 export default function ResumenDiaScreen() {
   const navigation = useNavigation<any>();
   const { isTablet, isSmallDevice } = useResponsiveLayout();
-  const { notasVenta, gastos, cobros } = useApp();
+  const { notasVenta, gastos, cobros, clientes } = useApp();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('Totales del Día'); 
@@ -231,9 +251,116 @@ export default function ResumenDiaScreen() {
 
   const layout = useResponsiveLayout();
 
-  const { 
-    totalVentas, totalGastos, numeroVentas, ventasPendientes, clientesVisitadosHoy,
-    filteredNotasVenta, filteredGastos, liquidacionData, cobrosDelDia, notasAbiertas, historialCambios
+  // --- HANDLERS DE REIMPRESIÓN ---
+
+  const handlePrintNota = async (nota: NotaVenta) => {
+    try {
+      const clienteFull = clientes.find(
+        c => c.id === nota.clienteId || c.nombre === nota.cliente,
+      );
+
+      const articulos = (nota.items || (nota as any).articulos || []).map((art: any) => ({
+        nombre: art.nombre,
+        cantidad: art.cantidad,
+        precioUnitario: art.precioUnitario,
+        descuento: art.descuento,
+        tipoDescuento: art.tipoDescuento,
+        nota: art.nota,
+      }));
+
+      const totales: NotaImpresion['totales'] = nota.totalesNumericos
+        ? {
+            subtotal: nota.totalesNumericos.subtotal.toFixed(2),
+            descuentos: nota.totalesNumericos.descuentos.toFixed(2),
+            iva: nota.totalesNumericos.iva.toFixed(2),
+            total: nota.totalesNumericos.total.toFixed(2),
+            base: nota.totalesNumericos.base.toFixed(2),
+            porcentajeDescuento: nota.descGlobal || '0',
+          }
+        : {
+            descuentos: '0,00',
+            iva: '0,00',
+            total: (nota.precio || '0,00').replace('€', '').trim(),
+          };
+
+      const datosImpresion: NotaImpresion = {
+        id: nota.id,
+        cliente: {
+          codigo: clienteFull?.codigo || clienteFull?.id || nota.clienteId || '',
+          nombre: nota.cliente,
+          razonSocial: clienteFull?.empresa,
+          nif: clienteFull?.nif,
+          direccion: clienteFull?.direccion,
+          telefono: clienteFull?.telefono,
+        },
+        articulos,
+        totales,
+        tipoNota: nota.tipoNota,
+        formaPago: nota.formaPago,
+        fecha: nota.fecha,
+      };
+
+      await imprimirNotaVenta(datosImpresion);
+      Alert.alert('Impresión', 'Nota enviada a la impresora');
+    } catch (error) {
+      console.error('Error al reimprimir nota:', error);
+      Alert.alert('Error', 'No se pudo reimprimir la nota');
+    }
+  };
+
+  const handlePrintCobro = async (cobro: Cobro) => {
+    try {
+      const clienteFull = clientes.find(
+        c => c.id === cobro.clienteId || c.nombre === cobro.cliente,
+      );
+      const montoNum =
+        parseFloat(cobro.monto.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+
+      const comprobante: ComprobanteCobro = {
+        cobroId: cobro.id,
+        cliente: {
+          nombre: cobro.cliente,
+          empresa: clienteFull?.empresa,
+          codigo: clienteFull?.codigo || clienteFull?.id,
+          direccion: clienteFull?.direccion,
+          nif: clienteFull?.nif,
+        },
+        notas: [
+          {
+            id: cobro.notaVentaId || 'S/N',
+            client: cobro.cliente,
+            date: cobro.fecha,
+            amount: montoNum,
+          },
+        ],
+        metodoPago: cobro.formaPago || 'Efectivo',
+        subtotal: montoNum,
+        fecha: cobro.fecha,
+      };
+
+      await imprimirComprobanteCobro(comprobante);
+      Alert.alert('Impresión', 'Recibo de cobro enviado a la impresora');
+    } catch (error) {
+      console.error('Error al reimprimir cobro:', error);
+      Alert.alert('Error', 'No se pudo reimprimir el cobro');
+    }
+  };
+
+  // --- FIN HANDLERS ---
+
+  const {
+    totalVentas,
+    totalGastos,
+    numeroVentas,
+    ventasPendientes,
+    clientesVisitadosHoy,
+    filteredNotasVenta,
+    filteredGastos,
+    liquidacionData,
+    cobrosDelDia,
+    notasAbiertas,
+    notasPendientes,
+    historialCambios,
   } = useMemo(() => {
     // Usar el período seleccionado directamente, o 'Rango' si es necesario
     const periodToFilter = (selectedPeriod === 'Hoy' || selectedPeriod === 'Ayer' || selectedPeriod === 'Semana' || selectedPeriod === 'Mes') 
@@ -301,14 +428,19 @@ export default function ResumenDiaScreen() {
         totalVentas: totalVentasMonto,
         totalGastos: totalGastosMonto,
         numeroVentas: filteredVentas.length,
-        ventasPendientes: filteredVentas.filter(n => n.estado === 'pendiente').length,
+        ventasPendientes: filteredVentas.filter(
+          n => n.estado === 'pendiente' || n.estado === 'abierta',
+        ).length,
         clientesVisitadosHoy: new Set(filteredVentas.map(n => n.clienteId || n.cliente)).size,
         filteredNotasVenta: filteredVentas,
         filteredGastos: filteredGastosCalc,
         liquidacionData: { ventasEfectivo, cobrosEfectivo, totalGastos: totalGastosMonto, liquidacionEfectivo },
         cobrosDelDia: filteredCobros,
         notasAbiertas: notasVenta.filter(n => n.estado === 'abierta'),
-        historialCambios: [] // Simplificado para ejemplo
+        notasPendientes: filteredVentas.filter(
+          n => n.estado === 'pendiente' || n.estado === 'abierta',
+        ),
+        historialCambios: [], // Simplificado para ejemplo
     };
   }, [notasVenta, gastos, cobros, searchTerm, selectedPeriod, startDate, endDate]);
 
@@ -551,14 +683,30 @@ export default function ResumenDiaScreen() {
       {/* TABS */}
       <View style={styles.tabsWrapper}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          {['Totales del Día', 'Efectivo (Liquidación)', 'Notas de Venta', 'Cobros', 'Gastos'].map((tab, index) => (
-            <TouchableOpacity key={tab} onPress={() => setActiveTab(tab)} style={[styles.tabButton, index > 0 && styles.tabButtonSpacing]}>
+          {[
+            'Totales del Día',
+            'Efectivo (Liquidación)',
+            'Notas Pendientes',
+            'Notas de Venta',
+            'Cobros',
+            'Gastos',
+          ].map((tab, index) => (
+            <TouchableOpacity
+              key={tab}
+              onPress={() => setActiveTab(tab)}
+              style={[styles.tabButton, index > 0 && styles.tabButtonSpacing]}
+            >
               {activeTab === tab ? (
-                <LinearGradient colors={['#092090', '#0C2ABF']} style={styles.filterTabActive}>
+                <LinearGradient
+                  colors={['#092090', '#0C2ABF']}
+                  style={styles.filterTabActive}
+                >
                   <Text style={styles.filterTabTextActive}>{tab}</Text>
                 </LinearGradient>
               ) : (
-                <View style={styles.filterTab}><Text style={styles.filterTabText}>{tab}</Text></View>
+                <View style={styles.filterTab}>
+                  <Text style={styles.filterTabText}>{tab}</Text>
+                </View>
               )}
             </TouchableOpacity>
           ))}
@@ -611,20 +759,49 @@ export default function ResumenDiaScreen() {
           </View>
       )}
 
-      {/* Resto de tabs (Notas, Cobros) igual que antes... */}
+      {/* Lista específica de notas pendientes / abiertas */}
+      {activeTab === 'Notas Pendientes' && (
+        <View style={styles.fullWidthPanel}>
+          <ContentPanel title={`Notas Pendientes (${notasPendientes.length})`}>
+            {notasPendientes.length === 0 ? (
+              <Text style={styles.emptyText}>
+                No hay notas pendientes ni borradores en este período.
+              </Text>
+            ) : (
+              notasPendientes.map((n, i) => (
+                <NotaVentaItem key={n.id || i} nota={n} onPrint={handlePrintNota} />
+              ))
+            )}
+          </ContentPanel>
+        </View>
+      )}
+
+      {/* Resto de tabs (Notas, Cobros) */}
       {activeTab === 'Notas de Venta' && (
-          <View style={styles.fullWidthPanel}>
-              <ContentPanel title={`Notas de Venta (${selectedPeriod})`}>
-                  {filteredNotasVenta.length === 0 ? <Text style={styles.emptyText}>No hay notas.</Text> : filteredNotasVenta.map((n, i) => <NotaVentaItem key={i} {...n} />)}
-              </ContentPanel>
-          </View>
+        <View style={styles.fullWidthPanel}>
+          <ContentPanel title={`Notas de Venta (${selectedPeriod})`}>
+            {filteredNotasVenta.length === 0 ? (
+              <Text style={styles.emptyText}>No hay notas.</Text>
+            ) : (
+              filteredNotasVenta.map((n, i) => (
+                <NotaVentaItem key={i} nota={n} onPrint={handlePrintNota} />
+              ))
+            )}
+          </ContentPanel>
+        </View>
       )}
       {activeTab === 'Cobros' && (
-          <View style={styles.fullWidthPanel}>
-              <ContentPanel title={`Cobros (${selectedPeriod})`}>
-                  {cobrosDelDia.length === 0 ? <Text style={styles.emptyText}>No hay cobros.</Text> : cobrosDelDia.map((c, i) => <CobroItem key={i} cobro={c} />)}
-              </ContentPanel>
-          </View>
+        <View style={styles.fullWidthPanel}>
+          <ContentPanel title={`Cobros (${selectedPeriod})`}>
+            {cobrosDelDia.length === 0 ? (
+              <Text style={styles.emptyText}>No hay cobros.</Text>
+            ) : (
+              cobrosDelDia.map((c, i) => (
+                <CobroItem key={i} cobro={c} onPrint={handlePrintCobro} />
+              ))
+            )}
+          </ContentPanel>
+        </View>
       )}
 
       </View>
@@ -703,5 +880,6 @@ const styles = StyleSheet.create({
   cobroItemIcon: { fontSize: 18, marginRight: 10 },
   cobroItemCliente: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
   cobroItemNota: { fontSize: 12, color: '#697b92' },
-  cobroItemMonto: { fontSize: 15, fontWeight: '700', color: '#092090' }
+  cobroItemMonto: { fontSize: 15, fontWeight: '700', color: '#092090' },
+  miniPrintButton: { padding: 8, backgroundColor: '#e0e7ff', borderRadius: 20, marginLeft: 10 },
 });

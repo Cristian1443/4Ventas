@@ -113,12 +113,26 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     { id: 'c2', codigo: '430005', nombre: 'Eventos y Bodas SL', empresa: 'Eventos y Bodas SL', direccion: 'Av. América 45, Madrid', telefono: '600999888', email: 'info@eventosbodas.com', nif: 'B98765432', codigoPostal: '28002', provincia: 'Madrid' }
   ];
 
+  // ACTUALIZADO: Productos reales de la tienda con Código Corto global
   const initialArticulos: Articulo[] = [
-    { id: '10001', nombre: 'Monitor Curvo 27"', cantidad: 50, categoria: 'Electrónica', precio: '250,00 €', stockMinimo: 10, codigoCorto: 'MON27' },
-    { id: '10002', nombre: 'Teclado Mecánico RGB', cantidad: 12, categoria: 'Accesorios', precio: '75,50 €', stockMinimo: 5, codigoCorto: 'TECME' },
-    { id: '10003', nombre: 'Mouse Inalámbrico Ergonómico', cantidad: 8, categoria: 'Accesorios', precio: '30,00 €', stockMinimo: 15, codigoCorto: 'MOUWI' },
-    { id: '10004', nombre: 'Silla Gamer Pro', cantidad: 5, categoria: 'Mobiliario', precio: '199,99 €', stockMinimo: 5, codigoCorto: 'SIGAM' },
-    { id: '10005', nombre: 'Auriculares Noise Cancel', cantidad: 20, categoria: 'Audio', precio: '120,00 €', stockMinimo: 8, codigoCorto: 'AUNC' }
+    { 
+      id: '20001', 
+      nombre: 'Abaca Natural Rojo 50cm x 5m', 
+      cantidad: 45, 
+      categoria: 'Textil / Cintas', 
+      precio: '15,50 €', 
+      stockMinimo: 10, 
+      codigoCorto: 'ABA-001' 
+    },
+    { 
+      id: '20002', 
+      nombre: 'Agave Slices Naranja', 
+      cantidad: 30, 
+      categoria: 'Naturales / Secos', 
+      precio: '8,20 €', 
+      stockMinimo: 5, 
+      codigoCorto: 'AGA-002' 
+    }
   ];
   // -----------------------------------------------------------
 
@@ -192,7 +206,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     ]);
 
     if (cliSync) setClientes(cliSync);
-    if (artSync) setArticulos(artSync);
+    // Solo reemplazamos artículos si el ERP trae alguno; si viene vacío, mantenemos el catálogo local/tienda
+    if (artSync && artSync.length > 0) setArticulos(artSync);
     if (gasSync) setGastos(gasSync);
     if (docSync) setDocumentos(docSync);
     if (cobSync) setCobros(cobSync);
@@ -227,7 +242,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       ]);
       
       if (cliSync) setClientes(cliSync);
-      if (artSync) setArticulos(artSync);
+      // Igual que en refreshLocalDataFromSync: solo pisamos si hay artículos reales del ERP
+      if (artSync && artSync.length > 0) setArticulos(artSync);
       if (gasSync) setGastos(gasSync);
       if (docSync) setDocumentos(docSync);
       if (cobSync) setCobros(cobSync);

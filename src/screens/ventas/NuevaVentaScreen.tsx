@@ -88,6 +88,10 @@ export default function NuevaVentaScreen() {
   // Flag para controlar guardado y evitar alerta al salir
   const [isSaved, setIsSaved] = useState(false);
 
+  // 1. NUEVOS ESTADOS PARA DESCUENTO GLOBAL
+  const [enableGlobalDiscount, setEnableGlobalDiscount] = useState(false);
+  const [globalDiscountValue, setGlobalDiscountValue] = useState('');
+
   // --- CARGA INICIAL (EDICIÓN) ---
   useEffect(() => {
     if (ventaDataInicial) {
@@ -109,38 +113,56 @@ export default function NuevaVentaScreen() {
       if (ventaDataInicial.estado === 'pagado' || ventaDataInicial.estado === 'pendiente') {
         setEstadoPago(ventaDataInicial.estado);
       }
+
+      // CARGAR DESCUENTO GLOBAL SI EXISTE
+      if (ventaDataInicial.aplicarDescGlobal) {
+        setEnableGlobalDiscount(true);
+        setGlobalDiscountValue(ventaDataInicial.descGlobal || '');
+      }
     }
   }, [ventaDataInicial]);
 
   // --- PROTECCIÓN DE NAVEGACIÓN ---
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (e: any) => {
-      // Si no hay cambios, ya se guardó o es un reemplazo de pantalla, permitir salir
+      // Condiciones para PERMITIR salir sin alerta:
+      // 1. El carrito está vacío.
+      // 2. Ya se guardó la venta (isSaved es true).
+      // 3. La acción es un reemplazo de pantalla (navegación interna forzada).
       if (carrito.length === 0 || isSaved || e.data.action.type === 'REPLACE') {
         return;
       }
 
+      // Si no se cumple lo anterior, PREVENIR la salida y mostrar alerta
       e.preventDefault();
 
       Alert.alert(
         'Nota sin guardar',
-        '¿Qué deseas hacer con esta venta?',
+        'Tienes artículos pendientes. ¿Qué deseas hacer?',
         [
-          { text: 'Descartar', style: 'destructive', onPress: () => navigation.dispatch(e.data.action) },
           { 
-            text: 'Dejar Abierta (Borrador)', 
-            onPress: () => {
-              guardarTemporalmente();
-              navigation.dispatch(e.data.action); 
+            text: 'Descartar', 
+            style: 'destructive', 
+            onPress: () => navigation.dispatch(e.data.action) // Sale sin guardar
+          },
+          { 
+            text: 'Guardar Borrador', 
+            onPress: async () => {
+              await guardarTemporalmente(); // Guarda con estado 'abierta'
+              navigation.dispatch(e.data.action); // Sale después de guardar
             } 
           },
-          { text: 'Seguir editando', style: 'cancel', onPress: () => {} }
+          { 
+            text: 'Seguir editando', 
+            style: 'cancel', 
+            onPress: () => {} // Se queda en la pantalla
+          }
         ]
       );
     });
 
     return unsubscribe;
-  }, [navigation, carrito, isSaved, clienteSeleccionado, formaPago]);
+  }, [navigation, carrito, isSaved, clienteSeleccionado, formaPago, enableGlobalDiscount, globalDiscountValue]);
 
   // --- EFECTOS ---
   const metodosDisponibles = useMemo(() => {
@@ -247,6 +269,7 @@ export default function NuevaVentaScreen() {
     let subtotalLineas = 0;
     let descuentoLineas = 0;
 
+    // Calcular suma de líneas
     carrito.forEach(item => {
       const bruto = item.precioUnitario * item.cantidad;
       subtotalLineas += bruto;
@@ -256,11 +279,30 @@ export default function NuevaVentaScreen() {
       }
     });
 
-    const baseImponible = subtotalLineas - descuentoLineas;
+    // Base antes del descuento global
+    let baseIntermedia = subtotalLineas - descuentoLineas;
+    let descuentoGlobalMonto = 0;
+
+    // APLICAR DESCUENTO GLOBAL
+    if (enableGlobalDiscount && globalDiscountValue) {
+      const porcentaje = parseFloat(globalDiscountValue.replace(',', '.')) || 0;
+      if (porcentaje > 0) {
+        descuentoGlobalMonto = (baseIntermedia * porcentaje) / 100;
+      }
+    }
+
+    const totalDescuentos = descuentoLineas + descuentoGlobalMonto;
+    const baseImponible = subtotalLineas - totalDescuentos;
     const iva = baseImponible * 0.21;
     const total = baseImponible + iva;
 
-    return { subtotal: subtotalLineas, descuentos: descuentoLineas, base: baseImponible, iva, total };
+    return { 
+      subtotal: subtotalLineas, 
+      descuentos: totalDescuentos, 
+      base: baseImponible, 
+      iva, 
+      total 
+    };
   };
   
   const totales = calcularTotales();
@@ -281,7 +323,9 @@ export default function NuevaVentaScreen() {
       tipoNota: tipoNota.value,
       formaPago: formaPago || 'Efectivo', 
       items: carrito, 
-      totalesNumericos: totales
+      totalesNumericos: totales,
+      aplicarDescGlobal: enableGlobalDiscount,
+      descGlobal: globalDiscountValue
     };
 
     await addNotaVenta(ventaTemp as any);
@@ -314,7 +358,9 @@ export default function NuevaVentaScreen() {
             tipoNota: tipoNota.value,
             formaPago, 
             items: carrito, 
-            totalesNumericos: totales
+            totalesNumericos: totales,
+            aplicarDescGlobal: enableGlobalDiscount,
+            descGlobal: globalDiscountValue
           };
           
           await addNotaVenta(venta as any);
@@ -554,6 +600,35 @@ export default function NuevaVentaScreen() {
               )}
             </View>
             
+            {/* 5. UI PARA DESCUENTO GLOBAL */}
+            <View style={styles.globalDiscountBox}>
+              <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
+                <Text style={styles.label}>Descuento Global</Text>
+                <Switch 
+                  value={enableGlobalDiscount} 
+                  onValueChange={setEnableGlobalDiscount}
+                  trackColor={{ false: "#e2e8f0", true: "#0C2ABF" }}
+                  thumbColor={"#fff"}
+                  style={{ transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }] }} 
+                />
+              </View>
+              
+              {enableGlobalDiscount && (
+                <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8}}>
+                  <Text style={{fontSize: 12, color: '#64748b'}}>Porcentaje:</Text>
+                  <TextInput 
+                    style={styles.inputGlobalDesc}
+                    value={globalDiscountValue}
+                    onChangeText={setGlobalDiscountValue}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    maxLength={3}
+                  />
+                  <Text style={{fontSize: 14, fontWeight: 'bold', color: '#1e293b'}}>%</Text>
+                </View>
+              )}
+            </View>
+
             <View style={styles.totalBox}>
               <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 5}}>
                  <Text style={{color:'#64748b'}}>Subtotal</Text><Text>{totales.subtotal.toFixed(2)} €</Text>
@@ -729,6 +804,29 @@ const styles = StyleSheet.create({
 
   rowItem: { flexDirection: 'row', padding: 12, borderBottomWidth: 1, borderColor: '#f8fafc', alignItems: 'center', justifyContent: 'space-between' },
   totalBox: { marginTop: 'auto', padding: 20, backgroundColor: '#f8fafc', borderRadius: 12 },
+
+  globalDiscountBox: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    marginTop: 10
+  },
+  inputGlobalDesc: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    width: 60,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#092090'
+  },
 
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   modalCard: { width: 400, backgroundColor: '#fff', borderRadius: 12, padding: 24, maxHeight: '80%', elevation: 5 },
