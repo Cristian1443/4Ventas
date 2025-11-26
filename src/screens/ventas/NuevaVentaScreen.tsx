@@ -41,6 +41,18 @@ const TIPOS_NOTA = [
 
 const METODOS_PAGO_BASE = ['Efectivo', 'Tarjeta', 'Bizum', 'Transferencia'];
 
+// Helper para fecha local consistente DD/MM/YYYY, HH:MM:SS
+const getFechaActualFormateada = () => {
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
+};
+
 export default function NuevaVentaScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -256,7 +268,7 @@ export default function NuevaVentaScreen() {
   // --- GUARDAR COMO BORRADOR ---
   const guardarTemporalmente = async () => {
     setIsSaved(true); // Evita bucle de alerta
-    const fechaActual = new Date().toLocaleString('es-ES');
+    const fechaActual = getFechaActualFormateada();
     const notaId = ventaDataInicial?.id || `TEMP-${Date.now().toString().slice(-6)}`;
 
     const ventaTemp = {
@@ -284,7 +296,7 @@ export default function NuevaVentaScreen() {
       text: 'Finalizar', onPress: async () => {
         try {
           setIsSaved(true); // Bloquear listener de salida
-          const fechaActual = new Date().toLocaleString('es-ES');
+          const fechaActual = getFechaActualFormateada();
           
           // Si era temporal, usamos su ID, si no generamos uno nuevo oficial
           const esTemporal = ventaDataInicial?.id?.startsWith('TEMP');

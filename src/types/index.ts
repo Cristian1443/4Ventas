@@ -1,5 +1,6 @@
 /**
  * Tipos Globales de la Aplicación
+ * Actualizado con VISITAS
  */
 
 // ============================================================================
@@ -80,7 +81,19 @@ export interface Cobro {
   formaPago?: string;
 }
 
-// ... (El resto del archivo se mantiene idéntico: Documento, Articulo, Cliente, etc.)
+// NUEVA INTERFAZ
+export interface Visita {
+  id: string;
+  clienteId?: string;
+  clienteNombre: string;
+  direccion: string;
+  fecha: string; // Formato YYYY-MM-DD
+  hora: string;  // Formato HH:MM
+  tipo: 'visita' | 'entrega' | 'cobro';
+  completado: boolean;
+  observaciones?: string;
+}
+
 export interface Documento {
   id: string;
   nombre: string;

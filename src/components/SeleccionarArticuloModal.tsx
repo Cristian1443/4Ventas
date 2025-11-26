@@ -2,7 +2,7 @@
  * Modal de Selección de Artículos - React Native
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ interface Articulo {
   precio?: string;
   stockMinimo?: number;
   proveedor?: string;
+  codigoCorto?: string;
 }
 
 interface SeleccionarArticuloModalProps {
@@ -37,11 +38,25 @@ export default function SeleccionarArticuloModal({
   articulos
 }: SeleccionarArticuloModalProps) {
   const [searchText, setSearchText] = useState('');
+  const searchInputRef = useRef<TextInput>(null);
 
-  const articulosFiltrados = articulos.filter(art => 
-    art.nombre.toLowerCase().includes(searchText.toLowerCase()) ||
-    art.categoria.toLowerCase().includes(searchText.toLowerCase())
-  );
+  // Limpiar búsqueda cuando se cierra el modal
+  useEffect(() => {
+    if (!visible) {
+      setSearchText('');
+      searchInputRef.current?.blur();
+    }
+  }, [visible]);
+
+  const articulosFiltrados = articulos.filter(art => {
+    const searchLower = searchText.toLowerCase();
+    return (
+      art.nombre.toLowerCase().includes(searchLower) ||
+      art.categoria.toLowerCase().includes(searchLower) ||
+      (art.codigoCorto && art.codigoCorto.toLowerCase().includes(searchLower)) ||
+      art.id.toLowerCase().includes(searchLower)
+    );
+  });
 
   return (
     <Modal
@@ -61,17 +76,25 @@ export default function SeleccionarArticuloModal({
           </View>
 
           {/* Search bar */}
-          <View style={styles.searchContainer}>
+          <TouchableOpacity 
+            style={styles.searchContainer}
+            onPress={() => searchInputRef.current?.focus()}
+            activeOpacity={1}
+          >
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
+              ref={searchInputRef}
               style={styles.searchInput}
               placeholder="Buscar artículo..."
               placeholderTextColor="#94a3b8"
               value={searchText}
               onChangeText={setSearchText}
               autoCapitalize="none"
+              autoFocus={false}
+              showSoftInputOnFocus={true}
+              blurOnSubmit={false}
             />
-          </View>
+          </TouchableOpacity>
 
           {/* Lista de artículos */}
           <ScrollView style={styles.listContainer}>
@@ -96,6 +119,9 @@ export default function SeleccionarArticuloModal({
                 >
                   <View style={styles.articuloInfo}>
                     <Text style={styles.articuloNombre}>{articulo.nombre}</Text>
+                    <Text style={styles.articuloCodigo}>
+                      Código: {articulo.codigoCorto || 'Sin código'}
+                    </Text>
                     <Text style={styles.articuloCategoria}>{articulo.categoria}</Text>
                     <View style={styles.articuloMeta}>
                       <Text style={styles.articuloStock}>
@@ -198,6 +224,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#1a1a1a',
+    marginBottom: 4
+  },
+  articuloCodigo: {
+    fontSize: 12,
+    color: '#0C2ABF',
     marginBottom: 4
   },
   articuloCategoria: {

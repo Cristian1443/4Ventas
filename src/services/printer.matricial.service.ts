@@ -1,10 +1,13 @@
 /**
  * Servicio de Impresión Matricial - React Native
+ * Actualizado con configuración dinámica
  */
 
+import { Alert } from 'react-native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystemLegacy from 'expo-file-system/legacy';
+import { storageService } from './storage.service';
 
 export interface NotaImpresion {
   id: string;
@@ -275,11 +278,10 @@ export const exportarNotaTXT = async (nota: NotaImpresion): Promise<void> => {
   try {
     const texto = generarTextoNota(nota);
     const fileName = `nota_${nota.id}_${Date.now()}.txt`;
-    const fileUri = FileSystem.documentDirectory + fileName;
+    const fileUri = FileSystemLegacy.documentDirectory + fileName;
     
-    await FileSystem.writeAsStringAsync(fileUri, texto, {
-      encoding: FileSystem.EncodingType.UTF8
-    });
+    // Usar API legacy para compatibilidad
+    await FileSystemLegacy.writeAsStringAsync(fileUri, texto);
     
     const canShare = await Sharing.isAvailableAsync();
     if (canShare) {
@@ -306,3 +308,207 @@ export const copiarNotaTexto = async (nota: NotaImpresion): Promise<void> => {
     throw error;
   }
 };
+
+// ============================================================================
+// COMPROBANTE DE COBRO
+// ============================================================================
+
+export interface ComprobanteCobro {
+  cobroId: string;
+  cliente: {
+    nombre: string;
+    empresa?: string;
+    codigo?: string;
+    direccion?: string;
+    nif?: string;
+  };
+  notas: Array<{
+    id: string;
+    client: string;
+    date: string;
+    amount: number;
+  }>;
+  metodoPago: string;
+  subtotal: number;
+  fecha: Date | string;
+}
+
+// Generar texto del comprobante de cobro para impresora matricial
+const generarTextoComprobanteCobro = (comprobante: ComprobanteCobro): string => {
+  const width = 42;
+  const pad = (text: string, len: number, align: 'left' | 'right' | 'center' = 'left') => {
+    const str = String(text || '').substring(0, len);
+    const padding = len - str.length;
+    if (align === 'right') return ' '.repeat(padding) + str;
+    if (align === 'center') {
+      const left = Math.floor(padding / 2);
+      return ' '.repeat(left) + str + ' '.repeat(padding - left);
+    }
+    return str + ' '.repeat(padding);
+  };
+
+  const fecha = comprobante.fecha instanceof Date 
+    ? comprobante.fecha.toLocaleString('es-ES')
+    : comprobante.fecha;
+
+  let texto = '\n';
+  texto += pad('4VENTAS', width, 'center') + '\n';
+  texto += pad('COMPROBANTE DE COBRO', width, 'center') + '\n';
+  texto += '='.repeat(width) + '\n\n';
+  texto += pad(`Cobro: ${comprobante.cobroId}`, width) + '\n';
+  texto += pad(`Fecha: ${fecha}`, width) + '\n';
+  texto += '-'.repeat(width) + '\n\n';
+  texto += pad('CLIENTE:', width) + '\n';
+  texto += pad(comprobante.cliente.empresa || comprobante.cliente.nombre, width) + '\n';
+  if (comprobante.cliente.codigo) {
+    texto += pad(`[${comprobante.cliente.codigo}]`, width) + '\n';
+  }
+  if (comprobante.cliente.direccion) {
+    texto += pad(comprobante.cliente.direccion, width) + '\n';
+  }
+  if (comprobante.cliente.nif) {
+    texto += pad(`NIF: ${comprobante.cliente.nif}`, width) + '\n';
+  }
+  texto += '-'.repeat(width) + '\n\n';
+  texto += pad(`Método de Pago: ${comprobante.metodoPago}`, width) + '\n';
+  texto += '-'.repeat(width) + '\n\n';
+  texto += pad('NOTAS COBRADAS:', width) + '\n';
+  texto += '-'.repeat(width) + '\n';
+  texto += pad('NOTA', 12) + pad('FECHA', 12) + pad('IMPORTE', 18, 'right') + '\n';
+  texto += '-'.repeat(width) + '\n';
+  
+  comprobante.notas.forEach(nota => {
+    const notaId = String(nota.id).substring(0, 12);
+    const fechaNota = String(nota.date).substring(0, 12);
+    const importe = nota.amount.toFixed(2) + ' €';
+    texto += pad(notaId, 12) + pad(fechaNota, 12) + pad(importe, 18, 'right') + '\n';
+  });
+  
+  texto += '='.repeat(width) + '\n';
+  texto += pad('TOTAL COBRADO:', 28) + pad(`${comprobante.subtotal.toFixed(2)} €`, 14, 'right') + '\n';
+  texto += '='.repeat(width) + '\n\n';
+  texto += pad('Gracias por su pago', width, 'center') + '\n';
+  texto += pad('www.4ventas.com', width, 'center') + '\n\n\n\n';
+  
+  return texto;
+};
+
+// Imprimir comprobante de cobro en impresora matricial
+export const imprimirComprobanteCobro = async (comprobante: ComprobanteCobro): Promise<void> => {
+  try {
+    const texto = generarTextoComprobanteCobro(comprobante);
+    const config = printerService.getConfig();
+    
+    // Intentar imprimir directamente en la impresora matricial
+    // Nota: Esto requiere una librería de TCP socket como react-native-tcp-socket
+    // Por ahora, guardamos el texto y lo mostramos en consola
+    console.log('🖨️ Imprimiendo comprobante de cobro:');
+    console.log(texto);
+    console.log(`📍 Impresora: ${config.host}:${config.port}`);
+    
+    // TODO: Implementar conexión TCP real cuando esté disponible
+    // const TcpSocket = require('react-native-tcp-socket');
+    // const socket = TcpSocket.createConnection(
+    //   { host: config.host, port: parseInt(config.port) },
+    //   () => {
+    //     socket.write(texto);
+    //     socket.destroy();
+    //   }
+    // );
+    
+    // Por ahora, también exportamos como TXT para compartir
+    const fileName = `comprobante_${comprobante.cobroId}_${Date.now()}.txt`;
+    const fileUri = FileSystemLegacy.documentDirectory + fileName;
+    
+    // Usar API legacy para compatibilidad
+    await FileSystemLegacy.writeAsStringAsync(fileUri, texto);
+    
+    const canShare = await Sharing.isAvailableAsync();
+    if (canShare) {
+      await Sharing.shareAsync(fileUri, {
+        mimeType: 'text/plain',
+        dialogTitle: `Comprobante de Cobro ${comprobante.cobroId}`
+      });
+    }
+  } catch (error) {
+    console.error('Error imprimiendo comprobante:', error);
+    throw error;
+  }
+};
+
+// ============================================================================
+// CLASE DE CONFIGURACIÓN DE IMPRESORA
+// ============================================================================
+
+class PrinterService {
+  private host: string = '192.168.1.200';
+  private port: number = 9100;
+  private timeout: number = 5000;
+
+  constructor() {
+    this.loadSettings();
+  }
+
+  // Cargar configuración guardada
+  public async loadSettings() {
+    try {
+      const savedHost = await storageService.getItem<string>('printerHost');
+      const savedPort = await storageService.getItem<string>('printerPort');
+      
+      if (savedHost) this.host = savedHost;
+      if (savedPort) {
+        const portNum = parseInt(savedPort, 10);
+        if (!isNaN(portNum)) this.port = portNum;
+      }
+      console.log(`🖨️ Configuración impresora cargada: ${this.host}:${this.port}`);
+    } catch (error) {
+      console.warn('⚠️ Error cargando configuración de impresora, usando valores por defecto');
+    }
+  }
+
+  // Guardar nueva configuración
+  public async updateSettings(host: string, port: string) {
+    try {
+      this.host = host;
+      const portNum = parseInt(port, 10);
+      if (!isNaN(portNum)) {
+        this.port = portNum;
+      } else {
+        throw new Error('Puerto inválido');
+      }
+      
+      await storageService.setItem('printerHost', host);
+      await storageService.setItem('printerPort', port);
+      console.log(`🖨️ Configuración impresora actualizada: ${this.host}:${this.port}`);
+    } catch (error) {
+      console.error('❌ Error actualizando configuración de impresora:', error);
+      throw error;
+    }
+  }
+
+  public getConfig() {
+    return { host: this.host, port: this.port.toString() };
+  }
+
+  public async testPrint(): Promise<boolean> {
+    try {
+      // Simulación visual si no hay librería real de sockets instalada en entorno de dev
+      console.log(`🖨️ Test de impresión a ${this.host}:${this.port}`);
+      
+      // Aquí se podría implementar la conexión real con TcpSocket si está disponible
+      // Por ahora retornamos true para simular éxito
+      // const socket = TcpSocket.createConnection({ host: this.host, port: this.port }, () => {
+      //   socket.write('TEST PRINT\n');
+      //   socket.destroy();
+      //   return true;
+      // });
+      
+      return true; 
+    } catch (e) {
+      console.error('❌ Error en test de impresión:', e);
+      return false;
+    }
+  }
+}
+
+export const printerService = new PrinterService();

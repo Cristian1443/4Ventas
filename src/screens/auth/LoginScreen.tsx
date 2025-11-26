@@ -28,11 +28,11 @@ export default function LoginScreen() {
   const [isAdminHovered, setIsAdminHovered] = useState(false);
 
   const handleVendorLogin = () => {
-    navigation.navigate('LoginEmail');
+    navigation.replace('Main');
   };
 
   const handleAdminLogin = () => {
-    navigation.replace('Main');
+    navigation.navigate('LoginEmail');
   };
 
   // En tablets landscape, usar layout horizontal (como web)

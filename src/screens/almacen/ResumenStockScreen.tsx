@@ -22,7 +22,7 @@ export default function ResumenStockScreen() {
 
   const [filtroCategoria, setFiltroCategoria] = useState('Todos');
 
-  // Usar datos de articulos del contexto, mapear a formato de stock
+  // Usar datos reales del contexto
   const stockData = articulos.map(art => {
     const fallbackCode = art.nombre
       ? `${art.nombre.substring(0, 3).toUpperCase()}-${art.id.slice(-3)}`
@@ -34,8 +34,9 @@ export default function ResumenStockScreen() {
       categoria: art.categoria,
       stock: art.cantidad,
       stockMinimo: art.stockMinimo || 0,
-      ultimaEntrada: '18/09/2024', // Datos de ejemplo, se pueden obtener del contexto
-      ultimaSalida: '15/09/2024'
+      // Eliminado hardcodeo de fechas, se puede extender Articulo interface si el ERP provee este dato
+      ultimaEntrada: '-', 
+      ultimaSalida: '-'
     };
   });
 
@@ -115,7 +116,6 @@ export default function ResumenStockScreen() {
 
           {/* Tabla de stock */}
           <View style={styles.tableContainer}>
-            {/* Header */}
             <View style={styles.tableHeader}>
               <Text style={[styles.tableHeaderText, { width: 60 }]}>ID</Text>
               <Text style={[styles.tableHeaderText, { width: 100 }]}>Código</Text>
@@ -123,8 +123,7 @@ export default function ResumenStockScreen() {
               <Text style={[styles.tableHeaderText, { width: 150 }]}>Categoría</Text>
               <Text style={[styles.tableHeaderText, { width: 100, textAlign: 'center' }]}>Stock</Text>
               <Text style={[styles.tableHeaderText, { width: 100, textAlign: 'center' }]}>Mínimo</Text>
-              <Text style={[styles.tableHeaderText, { width: 120 }]}>Últ. Entrada</Text>
-              <Text style={[styles.tableHeaderText, { width: 120 }]}>Últ. Salida</Text>
+              <Text style={[styles.tableHeaderText, { width: 120 }]}>Últ. Mov</Text>
             </View>
 
             {/* Rows */}
@@ -154,7 +153,6 @@ export default function ResumenStockScreen() {
                     {articulo.stockMinimo}
                   </Text>
                   <Text style={[styles.tableCell, styles.tableCellGray, { width: 120 }]}>{articulo.ultimaEntrada}</Text>
-                  <Text style={[styles.tableCell, styles.tableCellGray, { width: 120 }]}>{articulo.ultimaSalida}</Text>
                 </View>
               );
             })}

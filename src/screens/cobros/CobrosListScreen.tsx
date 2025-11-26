@@ -50,13 +50,28 @@ export default function CobrosListScreen() {
     // A. Filtramos solo los cobros pendientes
     const cobrosPendientesRaw = cobros.filter(c => c.estado === 'pendiente');
 
-    // B. Mapeamos los clientes y buscamos sus deudas
+    // B. Filtrar cobros que no tienen clientes válidos (limpiar datos obsoletos/hardcodeados)
+    const cobrosValidos = cobrosPendientesRaw.filter(cobro => {
+      // Verificar si el cobro tiene un cliente válido en la lista actual
+      const tieneClienteValido = clientes.some(cliente => {
+        const idMatch = String(cobro.clienteId) === String(cliente.id);
+        const nameMatch = cobro.cliente && cliente.nombre && 
+          (cobro.cliente.toLowerCase().includes(cliente.nombre.toLowerCase()) ||
+           cliente.nombre.toLowerCase().includes(cobro.cliente.toLowerCase()));
+        return idMatch || nameMatch;
+      });
+      return tieneClienteValido;
+    });
+
+    // C. Mapeamos los clientes y buscamos sus deudas
     const listaAgrupada = clientes
       .map(cliente => {
         // Buscar notas asociadas a este cliente (Comparación flexible de IDs)
-        const susCobros = cobrosPendientesRaw.filter(cobro => {
+        const susCobros = cobrosValidos.filter(cobro => {
           const idMatch = String(cobro.clienteId) === String(cliente.id);
-          const nameMatch = cobro.cliente && cliente.nombre && cobro.cliente.toLowerCase().includes(cliente.nombre.toLowerCase());
+          const nameMatch = cobro.cliente && cliente.nombre && 
+            (cobro.cliente.toLowerCase().includes(cliente.nombre.toLowerCase()) ||
+             cliente.nombre.toLowerCase().includes(cobro.cliente.toLowerCase()));
           
           return idMatch || nameMatch;
         });
@@ -171,11 +186,11 @@ export default function CobrosListScreen() {
           </View>
 
           {/* Debug Info (Visible solo si no hay datos para entender qué pasa) */}
-          {clientesPendientes.length === 0 && cobros.length > 0 && (
+          {clientesPendientes.length === 0 && cobros.filter(c => c.estado === 'pendiente').length > 0 && (
              <View style={{padding: 10, backgroundColor: '#fff7ed', marginBottom: 20, borderRadius: 8}}>
                 <Text style={{color: '#c2410c', fontSize: 12}}>
-                   Info Depuración: Hay {cobros.length} cobros en el sistema, pero ninguno coincide con los clientes actuales o no están en estado 'pendiente'.
-                   Crea una NUEVA venta para probar.
+                   Hay {cobros.filter(c => c.estado === 'pendiente').length} cobro(s) pendiente(s) en el sistema, pero no coinciden con los clientes actuales.
+                   {'\n'}Esto puede deberse a datos obsoletos. Crea una nueva venta para generar cobros válidos.
                 </Text>
              </View>
           )}

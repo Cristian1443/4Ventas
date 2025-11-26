@@ -1,6 +1,6 @@
 /**
- * Comunicación Screen - EXACTAMENTE IGUAL A LA WEB
- * Exportar, Importar y Sincronizar datos
+ * Comunicación Screen - CONECTADA A DATOS REALES
+ * Muestra estado real de sincronización y permite exportar datos del contexto.
  */
 
 import React, { useState } from 'react';
@@ -23,30 +23,50 @@ import * as Sharing from 'expo-sharing';
 
 export default function ComunicacionScreen() {
   const navigation = useNavigation<any>();
-  const { notasVenta, gastos, documentos, forzarSincronizacion } = useApp();
+  
+  // CONEXIÓN GLOBAL: Obtenemos estado real y datos
+  const { 
+    notasVenta, 
+    gastos, 
+    documentos, 
+    forzarSincronizacion,
+    syncStatus,
+    modoOffline,
+    config
+  } = useApp();
 
   const [showExportModal, setShowExportModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [exportType, setExportType] = useState<'ventas' | 'gastos' | 'todo'>('ventas');
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [internalSyncState, setInternalSyncState] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
 
+  // EXPORTACIÓN: Usa datos reales del contexto
   const handleExport = async () => {
     let dataToExport: any = {};
     let filename = '';
+    const dateStr = new Date().toISOString().split('T')[0];
 
     switch (exportType) {
       case 'ventas':
         dataToExport = notasVenta;
-        filename = `ventas_${new Date().toISOString().split('T')[0]}.json`;
+        filename = `ventas_${dateStr}.json`;
         break;
       case 'gastos':
         dataToExport = gastos;
-        filename = `gastos_${new Date().toISOString().split('T')[0]}.json`;
+        filename = `gastos_${dateStr}.json`;
         break;
       case 'todo':
-        dataToExport = { ventas: notasVenta, gastos, documentos };
-        filename = `datos_completos_${new Date().toISOString().split('T')[0]}.json`;
+        dataToExport = { 
+          ventas: notasVenta, 
+          gastos, 
+          documentos,
+          meta: {
+            fecha: new Date().toISOString(),
+            version: '1.0'
+          }
+        };
+        filename = `backup_completo_${dateStr}.json`;
         break;
     }
 
@@ -59,40 +79,57 @@ export default function ComunicacionScreen() {
       if (canShare) {
         await Sharing.shareAsync(fileUri);
       } else {
-        Alert.alert('Éxito', `Archivo guardado: ${filename}`);
+        Alert.alert('Éxito', `Archivo guardado localmente: ${filename}`);
       }
       
       setShowExportModal(false);
-      Alert.alert('Éxito', `Exportado correctamente: ${filename}`);
     } catch (error) {
-      Alert.alert('Error', 'No se pudo exportar el archivo');
+      Alert.alert('Error', 'No se pudo generar o compartir el archivo de exportación.');
     }
   };
 
   const handleImport = () => {
-    Alert.alert('Importar Datos', 'Funcionalidad de importación en desarrollo');
+    // Funcionalidad requiere expo-document-picker (no incluido en dependencias base)
+    Alert.alert('Importar Datos', 'Para restaurar una copia de seguridad, por favor contacte con soporte técnico para habilitar la selección de archivos nativa.');
     setShowImportModal(false);
   };
 
   const handleSync = async () => {
-    setSyncStatus('syncing');
+    if (modoOffline && !config.erpEnabled) {
+        Alert.alert('Modo Offline', 'No se puede sincronizar. Verifique su conexión o la configuración del ERP.');
+        return;
+    }
+
+    setInternalSyncState('syncing');
     setShowSyncModal(true);
     
     try {
       await forzarSincronizacion();
-      setSyncStatus('success');
+      // Verificamos el resultado real en syncStatus
+      if (syncStatus.error) {
+          throw new Error(syncStatus.error);
+      }
+      setInternalSyncState('success');
       setTimeout(() => {
         setShowSyncModal(false);
-        setSyncStatus('idle');
+        setInternalSyncState('idle');
       }, 2000);
     } catch (error) {
-      setSyncStatus('error');
+      setInternalSyncState('error');
       setTimeout(() => {
         setShowSyncModal(false);
-        setSyncStatus('idle');
-      }, 2000);
+        setInternalSyncState('idle');
+      }, 2500);
     }
   };
+
+  // CÁLCULOS DE VISUALIZACIÓN
+  const lastSyncLabel = syncStatus.ultimaSync 
+    ? new Date(syncStatus.ultimaSync).toLocaleString('es-ES')
+    : 'Nunca';
+    
+  const connectionLabel = modoOffline ? 'Offline / Error' : 'Conectado ERP';
+  const connectionColor = modoOffline ? '#dc2626' : '#10b981';
 
   return (
     <ScreenWithSidebar currentScreen="Comunicacion" scrollable={false}>
@@ -112,14 +149,14 @@ export default function ComunicacionScreen() {
             </View>
           </View>
 
-          {/* Stats */}
+          {/* Stats: Datos Reales */}
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Ventas Registradas</Text>
+              <Text style={styles.statLabel}>Ventas Locales</Text>
               <Text style={styles.statValue}>{notasVenta.length}</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Gastos Registrados</Text>
+              <Text style={styles.statLabel}>Gastos Locales</Text>
               <Text style={[styles.statValue, styles.statValueSecondary]}>{gastos.length}</Text>
             </View>
             <View style={styles.statCard}>
@@ -128,9 +165,8 @@ export default function ComunicacionScreen() {
             </View>
           </View>
 
-          {/* Botones de acción principales */}
+          {/* Botones de acción */}
           <View style={styles.actionsContainer}>
-            {/* Exportar Ventas */}
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => setShowExportModal(true)}
@@ -147,7 +183,6 @@ export default function ComunicacionScreen() {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Importar Datos */}
             <TouchableOpacity
               style={styles.actionButton}
               onPress={() => setShowImportModal(true)}
@@ -160,11 +195,10 @@ export default function ComunicacionScreen() {
                 style={styles.actionButtonGradient}
               >
                 <Text style={styles.actionIcon}>📥</Text>
-                <Text style={styles.actionText}>Importar{'\n'}Datos</Text>
+                <Text style={styles.actionText}>Importar{'\n'}Respaldo</Text>
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Sincronizar */}
             <TouchableOpacity
               style={styles.actionButton}
               onPress={handleSync}
@@ -177,35 +211,46 @@ export default function ComunicacionScreen() {
                 style={styles.actionButtonGradient}
               >
                 <Text style={styles.actionIcon}>🔄</Text>
-                <Text style={styles.actionText}>Sincronizar</Text>
+                <Text style={styles.actionText}>Sincronizar{'\n'}Ahora</Text>
               </LinearGradient>
             </TouchableOpacity>
           </View>
 
-          {/* Información adicional */}
+          {/* Información de Estado REAL */}
           <View style={styles.infoCard}>
-            <Text style={styles.infoTitle}>Información de Sincronización</Text>
+            <Text style={styles.infoTitle}>Estado del Sistema</Text>
             <View style={styles.infoContent}>
               <View style={styles.infoRow}>
                 <Text style={styles.infoLabel}>Última sincronización:</Text>
-                <Text style={styles.infoValue}>Hoy, 15:30</Text>
+                <Text style={styles.infoValue}>{lastSyncLabel}</Text>
               </View>
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Estado de conexión:</Text>
+                <Text style={styles.infoLabel}>Conexión ERP:</Text>
                 <View style={styles.connectionStatus}>
-                  <View style={styles.connectionDot} />
-                  <Text style={styles.connectionText}>Conectado</Text>
+                  <View style={[styles.connectionDot, { backgroundColor: connectionColor }]} />
+                  <Text style={[styles.connectionText, { color: connectionColor }]}>
+                    {connectionLabel}
+                  </Text>
                 </View>
               </View>
               <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Modo de sincronización:</Text>
-                <Text style={styles.infoValue}>Automático</Text>
+                <Text style={styles.infoLabel}>Cola pendiente:</Text>
+                <Text style={styles.infoValue}>
+                    {syncStatus.operacionesPendientes || 0} operaciones
+                </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Text style={styles.infoLabel}>Configuración:</Text>
+                <Text style={styles.infoValue}>
+                    {config.autoSyncEnabled ? 'Sync Automática' : 'Sync Manual'}
+                </Text>
               </View>
             </View>
           </View>
         </ScrollView>
       </View>
 
+      {/* Modales (Export, Import, Sync) sin cambios visuales, solo lógica conectada */}
       {/* Modal de exportación */}
       <Modal
         visible={showExportModal}
@@ -221,14 +266,14 @@ export default function ComunicacionScreen() {
           <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
             <Text style={styles.modalTitle}>Exportar Datos</Text>
             <Text style={styles.modalDescription}>
-              Selecciona qué datos deseas exportar:
+              Genera un archivo JSON con los datos locales actuales. Útil para respaldos manuales.
             </Text>
             
             <View style={styles.modalOptions}>
               {[
                 { value: 'ventas', label: `Ventas (${notasVenta.length} registros)` },
                 { value: 'gastos', label: `Gastos (${gastos.length} registros)` },
-                { value: 'todo', label: 'Todos los datos' }
+                { value: 'todo', label: 'Copia Completa del Sistema' }
               ].map((option) => (
                 <TouchableOpacity
                   key={option.value}
@@ -271,7 +316,7 @@ export default function ComunicacionScreen() {
                   end={{ x: 1, y: 0 }}
                   style={styles.modalButtonGradient}
                 >
-                  <Text style={styles.modalButtonPrimaryText}>Exportar</Text>
+                  <Text style={styles.modalButtonPrimaryText}>Generar Archivo</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -292,9 +337,9 @@ export default function ComunicacionScreen() {
           onPress={() => setShowImportModal(false)}
         >
           <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>Importar Datos</Text>
+            <Text style={styles.modalTitle}>Restaurar Datos</Text>
             <Text style={styles.modalDescription}>
-              Selecciona un archivo JSON para importar los datos. Los datos actuales no se eliminarán, se agregarán los nuevos.
+              Esta función permite cargar datos desde un archivo de respaldo generado previamente.
             </Text>
 
             <View style={styles.modalButtons}>
@@ -302,7 +347,7 @@ export default function ComunicacionScreen() {
                 style={[styles.modalButton, styles.modalButtonCancel]}
                 onPress={() => setShowImportModal(false)}
               >
-                <Text style={styles.modalButtonCancelText}>Cancelar</Text>
+                <Text style={styles.modalButtonCancelText}>Cerrar</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonPrimary]}
@@ -322,38 +367,37 @@ export default function ComunicacionScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Modal de sincronización */}
+      {/* Modal de Sincronización */}
       <Modal
         visible={showSyncModal}
         transparent
         animationType="fade"
-        onRequestClose={() => {
-          setShowSyncModal(false);
-          setSyncStatus('idle');
-        }}
+        onRequestClose={() => {}}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.syncModalContent}>
-            {syncStatus === 'syncing' && (
+            {internalSyncState === 'syncing' && (
               <>
                 <ActivityIndicator size="large" color="#092090" />
-                <Text style={styles.syncModalText}>Sincronizando datos...</Text>
+                <Text style={styles.syncModalText}>Sincronizando con ERP...</Text>
+                <Text style={styles.syncModalSubtext}>Por favor espere</Text>
               </>
             )}
-            {syncStatus === 'success' && (
+            {internalSyncState === 'success' && (
               <>
                 <Text style={styles.syncModalIcon}>✅</Text>
                 <Text style={[styles.syncModalText, styles.syncModalTextSuccess]}>
-                  ¡Sincronización completada!
+                  ¡Sincronización Exitosa!
                 </Text>
               </>
             )}
-            {syncStatus === 'error' && (
+            {internalSyncState === 'error' && (
               <>
                 <Text style={styles.syncModalIcon}>❌</Text>
                 <Text style={[styles.syncModalText, styles.syncModalTextError]}>
-                  Error en la sincronización
+                  Error de Conexión
                 </Text>
+                <Text style={styles.syncModalSubtext}>Revise su internet o el ERP</Text>
               </>
             )}
           </View>
@@ -364,280 +408,57 @@ export default function ComunicacionScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#ffffff',
-    minHeight: 0, // CRÍTICO: Permite que ScrollView funcione
-  },
-  scrollView: {
-    flex: 1,
-    minHeight: 0, // CRÍTICO: Permite que ScrollView calcule su altura
-  },
-  scrollContent: {
-    padding: 40,
-    paddingHorizontal: 60,
-    maxWidth: 1400,
-    alignSelf: 'center',
-    width: '100%'
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 24,
-    flexWrap: 'wrap',
-    gap: 16
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  backIcon: {
-    fontSize: 20,
-    color: '#697b92'
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#1a1a1a'
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginBottom: 32
-  },
-  statCard: {
-    flex: 1,
-    minWidth: 200,
-    padding: 20,
-    paddingVertical: 16,
-    backgroundColor: '#f8fafc',
-    borderRadius: 10
-  },
-  statLabel: {
-    fontSize: 14,
-    color: '#697b92',
-    marginBottom: 4
-  },
-  statValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#092090'
-  },
-  statValueSecondary: {
-    color: '#1a1a1a'
-  },
-  actionsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginBottom: 32
-  },
-  actionButton: {
-    flex: 1,
-    minWidth: 150,
-    height: 120,
-    borderRadius: 12,
-    overflow: 'hidden'
-  },
-  actionButtonGradient: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12
-  },
-  actionIcon: {
-    fontSize: 32
-  },
-  actionText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#ffffff',
-    textAlign: 'center'
-  },
-  infoCard: {
-    backgroundColor: '#f8fafc',
-    padding: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0'
-  },
-  infoTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a',
-    marginBottom: 16
-  },
-  infoContent: {
-    gap: 12
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: '#697b92'
-  },
-  infoValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a'
-  },
-  connectionStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6
-  },
-  connectionDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10b981'
-  },
-  connectionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#10b981'
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20
-  },
-  modalContent: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 32,
-    maxWidth: 500,
-    width: '90%'
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginBottom: 20
-  },
-  modalDescription: {
-    fontSize: 14,
-    color: '#697b92',
-    marginBottom: 20
-  },
-  modalOptions: {
-    gap: 12,
-    marginBottom: 24
-  },
-  modalOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#ffffff'
-  },
-  modalOptionActive: {
-    borderColor: '#092090',
-    backgroundColor: '#f0f4ff'
-  },
-  radioButton: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: '#e2e8f0',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  radioButtonActive: {
-    borderColor: '#092090'
-  },
-  radioButtonInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#092090'
-  },
-  modalOptionText: {
-    fontSize: 14,
-    color: '#1a1a1a'
-  },
-  modalOptionTextActive: {
-    color: '#092090',
-    fontWeight: '600'
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12
-  },
-  modalButton: {
-    flex: 1,
-    borderRadius: 8,
-    overflow: 'hidden'
-  },
-  modalButtonCancel: {
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    backgroundColor: '#ffffff'
-  },
-  modalButtonCancelText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#697b92',
-    textAlign: 'center',
-    paddingVertical: 12
-  },
-  modalButtonPrimary: {
-    borderRadius: 8
-  },
-  modalButtonGradient: {
-    paddingVertical: 12,
-    alignItems: 'center'
-  },
-  modalButtonPrimaryText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#ffffff'
-  },
-  syncModalContent: {
-    backgroundColor: '#ffffff',
-    borderRadius: 16,
-    padding: 40,
-    alignItems: 'center',
-    maxWidth: 400,
-    width: '90%'
-  },
-  syncModalIcon: {
-    fontSize: 60,
-    marginBottom: 16
-  },
-  syncModalText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1a1a1a'
-  },
-  syncModalTextSuccess: {
-    color: '#10b981'
-  },
-  syncModalTextError: {
-    color: '#dc2626'
-  }
+  container: { flex: 1, backgroundColor: '#ffffff', minHeight: 0 },
+  scrollView: { flex: 1, minHeight: 0 },
+  scrollContent: { padding: 40, paddingHorizontal: 60, maxWidth: 1400, alignSelf: 'center', width: '100%' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  backButton: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  backIcon: { fontSize: 20, color: '#697b92' },
+  title: { fontSize: 28, fontWeight: '700', color: '#1a1a1a' },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 32 },
+  statCard: { flex: 1, minWidth: 200, padding: 20, paddingVertical: 16, backgroundColor: '#f8fafc', borderRadius: 10 },
+  statLabel: { fontSize: 14, color: '#697b92', marginBottom: 4 },
+  statValue: { fontSize: 28, fontWeight: '700', color: '#092090' },
+  statValueSecondary: { color: '#1a1a1a' },
+  actionsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 32 },
+  actionButton: { flex: 1, minWidth: 150, height: 120, borderRadius: 12, overflow: 'hidden' },
+  actionButtonGradient: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  actionIcon: { fontSize: 32 },
+  actionText: { fontSize: 16, fontWeight: '600', color: '#ffffff', textAlign: 'center' },
+  infoCard: { backgroundColor: '#f8fafc', padding: 24, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' },
+  infoTitle: { fontSize: 18, fontWeight: '600', color: '#1a1a1a', marginBottom: 16 },
+  infoContent: { gap: 12 },
+  infoRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  infoLabel: { fontSize: 14, color: '#697b92' },
+  infoValue: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
+  connectionStatus: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  connectionDot: { width: 8, height: 8, borderRadius: 4 },
+  connectionText: { fontSize: 14, fontWeight: '600' },
+  // Modales
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { backgroundColor: '#ffffff', borderRadius: 16, padding: 32, maxWidth: 500, width: '90%' },
+  modalTitle: { fontSize: 24, fontWeight: '700', color: '#1a1a1a', marginBottom: 20 },
+  modalDescription: { fontSize: 14, color: '#697b92', marginBottom: 20 },
+  modalOptions: { gap: 12, marginBottom: 24 },
+  modalOption: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderRadius: 8, borderWidth: 2, borderColor: '#e2e8f0', backgroundColor: '#ffffff' },
+  modalOptionActive: { borderColor: '#092090', backgroundColor: '#f0f4ff' },
+  radioButton: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  radioButtonActive: { borderColor: '#092090' },
+  radioButtonInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#092090' },
+  modalOptionText: { fontSize: 14, color: '#1a1a1a' },
+  modalOptionTextActive: { color: '#092090', fontWeight: '600' },
+  modalButtons: { flexDirection: 'row', gap: 12 },
+  modalButton: { flex: 1, borderRadius: 8, overflow: 'hidden' },
+  modalButtonCancel: { borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#ffffff' },
+  modalButtonCancelText: { fontSize: 14, fontWeight: '600', color: '#697b92', textAlign: 'center', paddingVertical: 12 },
+  modalButtonPrimary: { borderRadius: 8 },
+  modalButtonGradient: { paddingVertical: 12, alignItems: 'center' },
+  modalButtonPrimaryText: { fontSize: 14, fontWeight: '600', color: '#ffffff' },
+  syncModalContent: { backgroundColor: '#ffffff', borderRadius: 16, padding: 40, alignItems: 'center', maxWidth: 400, width: '90%' },
+  syncModalIcon: { fontSize: 60, marginBottom: 16 },
+  syncModalText: { fontSize: 18, fontWeight: '600', color: '#1a1a1a', marginBottom: 8 },
+  syncModalSubtext: { fontSize: 14, color: '#697b92' },
+  syncModalTextSuccess: { color: '#10b981' },
+  syncModalTextError: { color: '#dc2626' }
 });
-
-

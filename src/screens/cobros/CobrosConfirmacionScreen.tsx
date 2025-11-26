@@ -15,6 +15,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
+import { imprimirComprobanteCobro, ComprobanteCobro } from '../../services/printer.matricial.service';
 
 export default function CobrosConfirmacionScreen() {
   const navigation = useNavigation<any>();
@@ -26,10 +27,35 @@ export default function CobrosConfirmacionScreen() {
   const notasPendientes = cobranzaActual?.notas || [];
   const subtotal = cobranzaActual?.subtotal || 0;
 
-  const handleImprimir = () => {
-    Alert.alert('Imprimir', 'Comprobante enviado para impresión');
-    setShowPrintMessage(true);
-    setTimeout(() => setShowPrintMessage(false), 3000);
+  const handleImprimir = async () => {
+    try {
+      if (!cobranzaActual) {
+        Alert.alert('Error', 'No hay datos de cobro para imprimir');
+        return;
+      }
+
+      const comprobante: ComprobanteCobro = {
+        cobroId: cobranzaActual.cobroId || `PAGO-${Date.now().toString().slice(-6)}`,
+        cliente: {
+          nombre: cobranzaActual.cliente?.nombre || cobranzaActual.cliente?.empresa || 'Cliente',
+          empresa: cobranzaActual.cliente?.empresa,
+          codigo: cobranzaActual.cliente?.id || cobranzaActual.cliente?.codigo,
+          direccion: cobranzaActual.cliente?.direccion,
+          nif: cobranzaActual.cliente?.nif
+        },
+        notas: cobranzaActual.notas || [],
+        metodoPago: cobranzaActual.metodoPago || cobranzaActual.formaPago || 'Efectivo',
+        subtotal: cobranzaActual.subtotal || 0,
+        fecha: cobranzaActual.fecha || new Date()
+      };
+
+      await imprimirComprobanteCobro(comprobante);
+      setShowPrintMessage(true);
+      setTimeout(() => setShowPrintMessage(false), 3000);
+    } catch (error: any) {
+      console.error('Error imprimiendo comprobante:', error);
+      Alert.alert('Error', `No se pudo imprimir: ${error?.message || 'Error desconocido'}`);
+    }
   };
 
   const handleVolverACobros = () => {

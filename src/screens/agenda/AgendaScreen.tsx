@@ -3,7 +3,7 @@
  * Calendario con visitas, entregas y cobros programados
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,19 +18,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
-
-interface ClienteDelDia {
-  id: string;
-  nombre: string;
-  hora: string;
-  tipo: 'visita' | 'entrega' | 'cobro';
-  direccion: string;
-  completado: boolean;
-}
+import { Visita } from '../../types';
 
 export default function AgendaScreen() {
   const navigation = useNavigation<any>();
-  const { notasVenta, cobros, clientes } = useApp();
+  const { visitas, addVisita, toggleVisita, clientes, notasVenta, cobros } = useApp();
 
   // Obtener fecha actual
   const fechaActual = new Date();
@@ -43,105 +35,44 @@ export default function AgendaScreen() {
   const [diaSeleccionado, setDiaSeleccionado] = useState(diaActual);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showMonthPicker, setShowMonthPicker] = useState(false);
-  const [newCliente, setNewCliente] = useState({
+  
+  // Estado para nueva visita
+  const [newVisita, setNewVisita] = useState({
     nombre: '',
     hora: '',
     tipo: 'visita' as 'visita' | 'entrega' | 'cobro',
     direccion: ''
   });
 
-  // Generar clientes del día basados en datos reales
-  const generarClientesDelDia = React.useCallback(() => {
-    const clientesGenerados: ClienteDelDia[] = [];
-    
-    // Agregar entregas pendientes desde notas de venta pendientes
-    notasVenta
-      .filter(nota => nota.estado === 'pendiente')
-      .slice(0, 2)
-      .forEach((nota, index) => {
-        const clienteMatch = clientes.find(c => 
-          nota.cliente.includes(c.nombre) || nota.cliente.includes(c.empresa || '')
-        );
-        clientesGenerados.push({
-          id: `entrega-${nota.id}-${index}`,
-          nombre: nota.cliente,
-          hora: `${9 + index * 2}:00`,
-          tipo: 'entrega',
-          direccion: clienteMatch?.direccion || 'Dirección no especificada',
-          completado: false
-        });
-      });
-    
-    // Agregar cobros pendientes
-    cobros
-    .filter(c => c.estado === 'pendiente')
-      .slice(0, 2)
-      .forEach((cobro, index) => {
-        const clienteMatch = clientes.find(c => 
-          cobro.cliente.includes(c.nombre) || cobro.cliente.includes(c.empresa || '')
-        );
-        clientesGenerados.push({
-          id: `cobro-${cobro.id}`,
-          nombre: cobro.cliente,
-          hora: `${12 + index * 2}:00`,
-          tipo: 'cobro',
-          direccion: clienteMatch?.direccion || 'Dirección no especificada',
-          completado: false
-        });
-      });
-    
-    // Agregar visitas programadas de clientes recientes
-    clientes
-      .filter(c => c.ultimaVisita && (c.ultimaVisita.includes('Hoy') || c.ultimaVisita.includes('Ayer')))
-      .slice(0, 2)
-      .forEach((cliente, index) => {
-        clientesGenerados.push({
-          id: `visita-${cliente.id}`,
-          nombre: cliente.empresa || cliente.nombre,
-          hora: `${16 + index}:00`,
-          tipo: 'visita',
-          direccion: cliente.direccion || 'Dirección no especificada',
-          completado: cliente.ultimaVisita?.includes('Hoy') || false
-        });
-      });
-    
-    return clientesGenerados.length > 0 ? clientesGenerados : [];
-  }, [notasVenta, cobros, clientes]);
+  // --- LÓGICA DE FILTRADO REAL ---
+  
+  // Construir fecha seleccionada YYYY-MM-DD
+  const getFechaSeleccionadaISO = () => {
+    const mesIndex = meses.indexOf(mesActual);
+    // Nota: simplificación de año, asume año actual. En prod se debería manejar el cambio de año.
+    return new Date(añoActual, mesIndex, diaSeleccionado).toISOString().split('T')[0];
+  };
 
-  const [clientesDelDia, setClientesDelDia] = useState<ClienteDelDia[]>([]);
+  const clientesDelDia = useMemo(() => {
+    const fechaFiltro = getFechaSeleccionadaISO();
+    
+    return visitas
+      .filter(v => v.fecha === fechaFiltro)
+      .sort((a, b) => a.hora.localeCompare(b.hora));
+  }, [visitas, diaSeleccionado, mesActual]);
 
-  // Actualizar clientes cuando cambien los datos
-  useEffect(() => {
-    const nuevosClientes = generarClientesDelDia();
-    setClientesDelDia(nuevosClientes);
-  }, [generarClientesDelDia]);
-
-  // Días con visitas - calcular basado en datos reales
-  const diasConVisitas = React.useMemo(() => {
+  const diasConVisitas = useMemo(() => {
+    const mesIndex = meses.indexOf(mesActual);
     const dias: number[] = [];
-    // Agregar el día actual si hay actividades
-    if (clientesDelDia.length > 0) {
-      dias.push(diaSeleccionado);
-    }
-    // Agregar días con visitas basados en clientes que tienen actividad
-    // Si hay clientes con ultimaVisita "Hoy", marcar el día actual
-    const clientesConActividadHoy = clientes.filter(c => 
-      c.ultimaVisita?.includes('Hoy')
-    );
-    if (clientesConActividadHoy.length > 0) {
-      if (!dias.includes(diaActual)) {
-        dias.push(diaActual);
-      }
-    }
-    // Simular algunos días adicionales con visitas (para demostración)
-    // En producción, esto vendría de una base de datos de agenda
-    for (let i = 1; i <= 30; i++) {
-      if ((i % 7 === 0 || i % 7 === 1) && !dias.includes(i)) {
-        dias.push(i);
-      }
-    }
+    
+    visitas.forEach(v => {
+        const [y, m, d] = v.fecha.split('-').map(Number);
+        if (y === añoActual && m === mesIndex + 1) {
+            if (!dias.includes(d)) dias.push(d);
+        }
+    });
     return dias;
-  }, [clientesDelDia, diaSeleccionado, clientes, diaActual]);
+  }, [visitas, mesActual]);
 
   const getTipoColor = (tipo: string) => {
     switch (tipo) {
@@ -161,53 +92,42 @@ export default function AgendaScreen() {
     }
   };
 
-  const handleToggleCompletado = (id: string) => {
-    setClientesDelDia(clientesDelDia.map(c => 
-      c.id === id ? { ...c, completado: !c.completado } : c
-    ));
+  // --- ACCIONES ---
+
+  const handleToggleCompletado = async (id: string) => {
+    await toggleVisita(id);
   };
 
-  const handleAddCliente = () => {
-    if (!newCliente.nombre || !newCliente.hora || !newCliente.direccion) {
+  const handleAddCliente = async () => {
+    if (!newVisita.nombre || !newVisita.hora || !newVisita.direccion) {
       Alert.alert('Error', 'Por favor completa todos los campos');
       return;
     }
 
-    const nuevoCliente: ClienteDelDia = {
-      id: `${clientesDelDia.length + 1}`,
-      ...newCliente,
-      completado: false
+    const nueva: Visita = {
+      id: `V${Date.now()}`, // ID temporal
+      clienteNombre: newVisita.nombre,
+      direccion: newVisita.direccion,
+      fecha: getFechaSeleccionadaISO(),
+      hora: newVisita.hora,
+      tipo: newVisita.tipo,
+      completado: false,
+      observaciones: 'Creada manualmente'
     };
 
-    setClientesDelDia([...clientesDelDia, nuevoCliente].sort((a, b) => a.hora.localeCompare(b.hora)));
+    await addVisita(nueva);
     setShowAddModal(false);
-    setNewCliente({ nombre: '', hora: '', tipo: 'visita', direccion: '' });
-  };
-
-  const handleDeleteCliente = (id: string) => {
-    Alert.alert(
-      'Eliminar Visita',
-      '¿Eliminar esta visita de la agenda?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: () => setClientesDelDia(clientesDelDia.filter(c => c.id !== id))
-        }
-      ]
-    );
+    setNewVisita({ nombre: '', hora: '', tipo: 'visita', direccion: '' });
   };
 
   const handleDiaClick = (dia: number) => {
     setDiaSeleccionado(dia);
-    // Cuando cambia el día, podríamos recargar los clientes de ese día
-    // Por ahora, mantenemos los mismos clientes del día actual
   };
 
-  // Calcular estadísticas desde datos reales
+  // Stats basados en datos reales del día seleccionado
   const clientesCompletados = clientesDelDia.filter(c => c.completado).length;
-  const ventasHoy = notasVenta.filter(v => v.estado !== 'anulada').length;
+  // Ventas realizadas HOY (independiente del día seleccionado en calendario, es KPI diario)
+  const ventasHoy = notasVenta.filter(v => v.fecha.includes(new Date().toLocaleDateString('es-ES'))).length;
   const cobrosPendientes = cobros.filter(c => c.estado === 'pendiente').length;
 
   return (
@@ -253,7 +173,7 @@ export default function AgendaScreen() {
               </Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Ventas Realizadas</Text>
+              <Text style={styles.statLabel}>Ventas Hoy</Text>
               <Text style={[styles.statValue, { color: '#092090' }]}>
                 {ventasHoy}
               </Text>
@@ -393,7 +313,7 @@ export default function AgendaScreen() {
             {/* Lista de clientes del día */}
             <View style={styles.clientesContainer}>
               <Text style={styles.clientesTitle}>
-                Clientes del día - {diaSeleccionado} de {mesActual}
+                Agenda - {diaSeleccionado} de {mesActual}
               </Text>
 
               {clientesDelDia.length === 0 ? (
@@ -403,57 +323,51 @@ export default function AgendaScreen() {
                     </Text>
                   </View>
               ) : (
-                clientesDelDia.map((cliente) => (
+                clientesDelDia.map((visita) => (
                   <View
-                    key={cliente.id}
+                    key={visita.id}
                     style={[
                       styles.clienteCard,
-                      cliente.completado && styles.clienteCardCompletado
+                      visita.completado && styles.clienteCardCompletado
                     ]}
                   >
-                    <View style={[styles.clienteBar, { backgroundColor: getTipoColor(cliente.tipo) }]} />
+                    <View style={[styles.clienteBar, { backgroundColor: getTipoColor(visita.tipo) }]} />
                     <View style={styles.clienteContent}>
                       <View style={styles.clienteInfo}>
                         <View style={styles.clienteHeader}>
                           <Text style={[
                             styles.clienteNombre,
-                            cliente.completado && styles.clienteNombreCompletado
+                            visita.completado && styles.clienteNombreCompletado
                           ]}>
-                            {cliente.nombre}
-                        </Text>
-                          <View style={[styles.tipoBadge, { backgroundColor: getTipoColor(cliente.tipo) + '20' }]}>
-                            <Text style={[styles.tipoBadgeText, { color: getTipoColor(cliente.tipo) }]}>
-                              {getTipoLabel(cliente.tipo)}
-                        </Text>
-                      </View>
+                            {visita.clienteNombre}
+                          </Text>
+                          <View style={[styles.tipoBadge, { backgroundColor: getTipoColor(visita.tipo) + '20' }]}>
+                            <Text style={[styles.tipoBadgeText, { color: getTipoColor(visita.tipo) }]}>
+                              {getTipoLabel(visita.tipo)}
+                            </Text>
+                          </View>
                         </View>
-                        <Text style={styles.clienteDireccion}>{cliente.direccion}</Text>
+                        <Text style={styles.clienteDireccion}>{visita.direccion}</Text>
                       </View>
                       <View style={styles.clienteActions}>
                         <View style={styles.horaBadge}>
-                          <Text style={styles.horaText}>{cliente.hora}</Text>
+                          <Text style={styles.horaText}>{visita.hora}</Text>
                         </View>
                         <TouchableOpacity
                           style={[
                             styles.checkButton,
-                            cliente.completado && styles.checkButtonCompletado
+                            visita.completado && styles.checkButtonCompletado
                           ]}
-                          onPress={() => handleToggleCompletado(cliente.id)}
+                          onPress={() => handleToggleCompletado(visita.id)}
                         >
-                          {cliente.completado && <Text style={styles.checkIcon}>✓</Text>}
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.deleteButton}
-                          onPress={() => handleDeleteCliente(cliente.id)}
-                        >
-                          <Text style={styles.deleteIcon}>×</Text>
+                          {visita.completado && <Text style={styles.checkIcon}>✓</Text>}
                         </TouchableOpacity>
                       </View>
                     </View>
                   </View>
                 ))
-                    )}
-                  </View>
+              )}
+            </View>
                 </View>
         </ScrollView>
 
@@ -477,8 +391,8 @@ export default function AgendaScreen() {
                   <Text style={styles.modalLabel}>Cliente</Text>
                   <TextInput
                     style={styles.modalInput}
-                    value={newCliente.nombre}
-                    onChangeText={(text) => setNewCliente({ ...newCliente, nombre: text })}
+                    value={newVisita.nombre}
+                    onChangeText={(text) => setNewVisita({ ...newVisita, nombre: text })}
                     placeholder="Nombre del cliente"
                   />
         </View>
@@ -487,8 +401,8 @@ export default function AgendaScreen() {
                   <Text style={styles.modalLabel}>Hora</Text>
                   <TextInput
                     style={styles.modalInput}
-                    value={newCliente.hora}
-                    onChangeText={(text) => setNewCliente({ ...newCliente, hora: text })}
+                    value={newVisita.hora}
+                    onChangeText={(text) => setNewVisita({ ...newVisita, hora: text })}
                     placeholder="HH:MM"
                   />
               </View>
@@ -501,13 +415,13 @@ export default function AgendaScreen() {
                         key={tipo}
                         style={[
                           styles.tipoOption,
-                          newCliente.tipo === tipo && styles.tipoOptionActive
+                          newVisita.tipo === tipo && styles.tipoOptionActive
                         ]}
-                        onPress={() => setNewCliente({ ...newCliente, tipo })}
+                        onPress={() => setNewVisita({ ...newVisita, tipo })}
                       >
                         <Text style={[
                           styles.tipoOptionText,
-                          newCliente.tipo === tipo && styles.tipoOptionTextActive
+                          newVisita.tipo === tipo && styles.tipoOptionTextActive
                         ]}>
                           {getTipoLabel(tipo)}
                         </Text>
@@ -520,8 +434,8 @@ export default function AgendaScreen() {
                   <Text style={styles.modalLabel}>Dirección</Text>
                   <TextInput
                     style={styles.modalInput}
-                    value={newCliente.direccion}
-                    onChangeText={(text) => setNewCliente({ ...newCliente, direccion: text })}
+                    value={newVisita.direccion}
+                    onChangeText={(text) => setNewVisita({ ...newVisita, direccion: text })}
                     placeholder="Dirección del cliente"
                     multiline
                   />
@@ -533,7 +447,7 @@ export default function AgendaScreen() {
                   style={styles.modalButtonCancel}
                   onPress={() => {
                     setShowAddModal(false);
-                    setNewCliente({ nombre: '', hora: '', tipo: 'visita', direccion: '' });
+                    setNewVisita({ nombre: '', hora: '', tipo: 'visita', direccion: '' });
                   }}
                 >
                   <Text style={styles.modalButtonCancelText}>Cancelar</Text>
@@ -913,21 +827,6 @@ const styles = StyleSheet.create({
   checkIcon: {
     fontSize: 16,
     color: '#ffffff'
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#fee2e2',
-    backgroundColor: '#fee2e2',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  deleteIcon: {
-    fontSize: 20,
-    color: '#dc2626',
-    fontWeight: '600'
   },
   // Modal
   modalOverlay: {

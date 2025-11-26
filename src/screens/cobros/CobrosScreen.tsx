@@ -1,7 +1,7 @@
 /**
- * Cobros Screen - SOLUCIÓN FINAL
- * - Corrige el envío de datos a la pantalla de confirmación (subtotal).
- * - Captura los datos antes de procesar para evitar errores de sincronización.
+ * Cobros Screen
+ * - Actualizada la llamada a updateCobro para pasar los datos reales del pago.
+ * - Incluye método de pago y fecha en los metadatos para sincronización con ERP.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
+import { imprimirComprobanteCobro, ComprobanteCobro } from '../../services/printer.matricial.service';
 
 export default function CobrosScreen() {
   const navigation = useNavigation<any>();
@@ -89,11 +90,9 @@ export default function CobrosScreen() {
     }
 
     try {
-      // A. CAPTURAR DATOS ANTES DE ACTUALIZAR
-      // Es vital hacer esto antes del bucle await para no perder referencias
       const itemsAPagar = pendingDebts.filter(d => selectedDebtIds.includes(d.id));
       
-      // Preparamos las notas para el recibo
+      // Datos para el recibo
       const notasParaRecibo = itemsAPagar.map(item => ({
         id: item.notaId !== 'S/N' ? item.notaId : item.id,
         client: item.client,
@@ -102,34 +101,63 @@ export default function CobrosScreen() {
       }));
 
       // B. ACTUALIZAR BASE DE DATOS
+      // Actualizar todos los cobros de una vez para evitar problemas de estado
+      const fechaPago = new Date();
       for (const item of itemsAPagar) {
-        // 1. Marcar deuda como pagada
-        await updateCobro(item.id, 'pagado');
+        // MODIFICACIÓN CLAVE: Pasamos el método de pago y fecha a updateCobro
+        await updateCobro(item.id, 'pagado', {
+            formaPago: selectedPaymentMethod,
+            fecha: fechaPago
+        });
+      }
 
-        // 2. Cerrar nota de venta asociada si existe
+      // Cerrar todas las notas de venta después de actualizar los cobros
+      for (const item of itemsAPagar) {
         if (item.originalNota) {
           await updateNotaVenta(item.originalNota.id, 'cerrada');
         }
       }
 
-      // C. DATOS EXACTOS PARA LA PANTALLA DE CONFIRMACIÓN
+      // Datos para pantalla de confirmación
       const datosRecibo = {
         cobroId: `PAGO-${Date.now().toString().slice(-6)}`,
         cliente: clienteSeleccionado,
         notas: notasParaRecibo, 
         metodoPago: selectedPaymentMethod,
-        subtotal: subtotal, // CORREGIDO: Se llama 'subtotal' en la otra pantalla
+        subtotal: subtotal, 
         fecha: new Date(),
         autoPrint: imprimirRecibo
       };
 
-      // D. NAVEGACIÓN
-      // Usamos navigate para asegurar que se apile correctamente
+      // Imprimir automáticamente si está habilitado
+      if (imprimirRecibo) {
+        try {
+          const comprobante: ComprobanteCobro = {
+            cobroId: datosRecibo.cobroId,
+            cliente: {
+              nombre: clienteSeleccionado.nombre || '',
+              empresa: clienteSeleccionado.empresa,
+              codigo: clienteSeleccionado.id || clienteSeleccionado.codigo,
+              direccion: clienteSeleccionado.direccion,
+              nif: clienteSeleccionado.nif
+            },
+            notas: notasParaRecibo,
+            metodoPago: selectedPaymentMethod,
+            subtotal: subtotal,
+            fecha: fechaPago
+          };
+          await imprimirComprobanteCobro(comprobante);
+        } catch (error: any) {
+          console.error('Error imprimiendo comprobante automáticamente:', error);
+          // No bloqueamos el flujo si falla la impresión
+        }
+      }
+
       navigation.navigate('CobrosConfirmacion', { cobranzaActual: datosRecibo });
 
     } catch (error: any) {
       console.error("Error al cobrar:", error);
-      Alert.alert('Error', 'No se pudo procesar el cobro. Intenta de nuevo.');
+      Alert.alert('Error', 'No se pudo procesar el cobro.');
     }
   };
 

@@ -20,25 +20,60 @@ import { useApp } from '../../context/AppContext';
 import { useResponsiveLayout } from '../../constants/layout';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 import { Cobro, NotaVenta } from '../../types';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 
 const imgRectangle26 = require('../../../assets/blue-image-panel.png');
 
 // --- HELPERS ---
 
-// FIX: Parseo robusto de fechas manuales DD/MM/YYYY
+// FIX: Parseo robusto de fechas que maneja múltiples formatos
 const parseDateString = (dateStr: string): number => {
     if (!dateStr) return 0;
-    // Espera formato "DD/MM/YYYY, HH:MM" o "DD/MM/YYYY"
-    const part = dateStr.split(',')[0].trim();
-    const [day, month, year] = part.split('/').map(Number);
-    if (!day || !month || !year) return 0;
-    // Crear fecha a medianoche local
-    return new Date(year, month - 1, day).getTime();
+    
+    try {
+        // Intentar parsear como Date ISO string primero
+        if (dateStr.includes('T') || dateStr.includes('Z')) {
+            const parsed = new Date(dateStr);
+            if (!isNaN(parsed.getTime())) {
+                return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime();
+            }
+        }
+        
+        // Formato "DD/MM/YYYY, HH:MM:SS" o "DD/MM/YYYY, HH:MM" o "DD/MM/YYYY"
+        const part = dateStr.split(',')[0].trim();
+        const parts = part.split('/');
+        
+        if (parts.length === 3) {
+            const day = parseInt(parts[0], 10);
+            const month = parseInt(parts[1], 10);
+            const year = parseInt(parts[2], 10);
+            
+            if (day && month && year && year > 1900 && year < 2100) {
+                // Crear fecha a medianoche local
+                return new Date(year, month - 1, day).getTime();
+            }
+        }
+        
+        // Intentar parsear como fecha estándar de JavaScript
+        const fallbackDate = new Date(dateStr);
+        if (!isNaN(fallbackDate.getTime())) {
+            return new Date(fallbackDate.getFullYear(), fallbackDate.getMonth(), fallbackDate.getDate()).getTime();
+        }
+    } catch (error) {
+        console.warn('Error parseando fecha:', dateStr, error);
+    }
+    
+    return 0;
 };
 
 const isDateInPeriod = (itemDateString: string, period: string, start: Date, end: Date): boolean => {
     const itemTime = parseDateString(itemDateString);
-    if (itemTime === 0) return false;
+    if (itemTime === 0) {
+        // Si no se puede parsear, intentar incluir el item por defecto para no perder datos
+        console.warn('No se pudo parsear fecha:', itemDateString);
+        return true; // Incluir por defecto para no perder datos
+    }
 
     const now = new Date();
     const todayTime = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -51,12 +86,22 @@ const isDateInPeriod = (itemDateString: string, period: string, start: Date, end
         yesterday.setDate(yesterday.getDate() - 1);
         return itemTime === yesterday.getTime();
     }
+    if (period === 'Semana') {
+        const weekAgo = new Date(todayTime);
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        return itemTime >= weekAgo.getTime() && itemTime <= todayTime;
+    }
+    if (period === 'Mes') {
+        const monthAgo = new Date(todayTime);
+        monthAgo.setMonth(monthAgo.getMonth() - 1);
+        return itemTime >= monthAgo.getTime() && itemTime <= todayTime;
+    }
     if (period === 'Rango') {
         const startTime = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
         const endTime = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
         return itemTime >= startTime && itemTime <= endTime;
     }
-    // Para Semana/Mes, simplificado a true o lógica extra si se desea
+    
     return true;
 };
 
@@ -190,44 +235,67 @@ export default function ResumenDiaScreen() {
     totalVentas, totalGastos, numeroVentas, ventasPendientes, clientesVisitadosHoy,
     filteredNotasVenta, filteredGastos, liquidacionData, cobrosDelDia, notasAbiertas, historialCambios
   } = useMemo(() => {
-    const periodToFilter = (selectedPeriod === 'Hoy' || selectedPeriod === 'Ayer') ? selectedPeriod : 'Rango';
+    // Usar el período seleccionado directamente, o 'Rango' si es necesario
+    const periodToFilter = (selectedPeriod === 'Hoy' || selectedPeriod === 'Ayer' || selectedPeriod === 'Semana' || selectedPeriod === 'Mes') 
+      ? selectedPeriod 
+      : 'Rango';
 
     // Filtros
     const filteredVentas = notasVenta.filter(n => {
         const matchesSearch = n.cliente.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesPeriod = isDateInPeriod(n.fecha, periodToFilter, startDate, endDate);
+        const matchesPeriod = isDateInPeriod(n.fecha || '', periodToFilter, startDate, endDate);
         return n.estado !== 'anulada' && matchesSearch && matchesPeriod;
     });
 
     const filteredGastosCalc = gastos.filter(g => {
         const matchesSearch = g.nombre.toLowerCase().includes(searchTerm.toLowerCase());
-        const matchesPeriod = isDateInPeriod(g.fecha, periodToFilter, startDate, endDate);
+        const matchesPeriod = isDateInPeriod(g.fecha || '', periodToFilter, startDate, endDate);
         return matchesSearch && matchesPeriod;
     });
     
     const filteredCobros = cobros.filter(c => {
-        const matchesPeriod = isDateInPeriod(c.fecha, periodToFilter, startDate, endDate);
+        const matchesPeriod = isDateInPeriod(c.fecha || '', periodToFilter, startDate, endDate);
         return c.estado === 'pagado' && matchesPeriod;
     });
+
+    // Helper para parsear precios correctamente
+    const parsePrecio = (valor: string): number => {
+        if (!valor) return 0;
+        let sanitized = valor.replace(/[€\s]/g, '').trim();
+        const tieneComa = sanitized.includes(',');
+        const tienePunto = sanitized.includes('.');
+        
+        if (tieneComa && tienePunto) {
+            // Formato: "7.563,00" -> punto es miles, coma es decimal
+            sanitized = sanitized.replace(/\./g, '').replace(',', '.');
+        } else if (tieneComa) {
+            // Formato: "75,63" -> coma es decimal
+            sanitized = sanitized.replace(',', '.');
+        }
+        // Si solo tiene punto, ya está bien
+        
+        const parsed = parseFloat(sanitized);
+        return isNaN(parsed) ? 0 : parsed;
+    };
 
     // Totales
     let ventasEfectivo = 0;
     let cobrosEfectivo = 0;
     
     filteredVentas.forEach(n => {
-        const monto = parseFloat(n.precio?.replace(/[^\d,.-]/g, '').replace(',', '.') || '0');
+        const monto = parsePrecio(n.precio || '0');
         if (n.formaPago === 'Efectivo') ventasEfectivo += monto;
     });
 
     filteredCobros.forEach(c => {
-        const monto = parseFloat(c.monto.replace(/[^\d,.-]/g, '').replace(',', '.') || '0');
+        const monto = parsePrecio(c.monto || '0');
         if (c.formaPago === 'Efectivo') cobrosEfectivo += monto;
     });
 
-    const totalGastosMonto = filteredGastosCalc.reduce((sum, g) => sum + parseFloat(g.precio.replace(/[^\d,.-]/g, '').replace(',', '.') || '0'), 0);
+    const totalGastosMonto = filteredGastosCalc.reduce((sum, g) => sum + parsePrecio(g.precio || '0'), 0);
     const liquidacionEfectivo = ventasEfectivo + cobrosEfectivo - totalGastosMonto;
 
-    const totalVentasMonto = filteredVentas.reduce((sum, n) => sum + parseFloat(n.precio?.replace(/[^\d,.-]/g, '').replace(',', '.') || '0'), 0);
+    const totalVentasMonto = filteredVentas.reduce((sum, n) => sum + parsePrecio(n.precio || '0'), 0);
 
     return {
         totalVentas: totalVentasMonto,
@@ -244,6 +312,196 @@ export default function ResumenDiaScreen() {
     };
   }, [notasVenta, gastos, cobros, searchTerm, selectedPeriod, startDate, endDate]);
 
+  // Función para generar HTML del informe del día
+  const generarHTMLInforme = () => {
+    const fechaInforme = new Date().toLocaleDateString('es-ES', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+
+    const notasHTML = filteredNotasVenta.map(n => `
+      <tr>
+        <td style="padding: 4px 0;">${n.id}</td>
+        <td style="padding: 4px 0;">${n.cliente}</td>
+        <td style="text-align: right; padding: 4px 0;">${n.precio}</td>
+        <td style="text-align: center; padding: 4px 0;">${n.estado || 'cerrada'}</td>
+      </tr>
+    `).join('');
+
+    const gastosHTML = filteredGastos.map(g => `
+      <tr>
+        <td style="padding: 4px 0;">${g.nombre}</td>
+        <td style="padding: 4px 0;">${g.categoria}</td>
+        <td style="text-align: right; padding: 4px 0;">${g.precio}</td>
+      </tr>
+    `).join('');
+
+    const cobrosHTML = cobrosDelDia.map(c => `
+      <tr>
+        <td style="padding: 4px 0;">${c.cliente}</td>
+        <td style="text-align: right; padding: 4px 0;">${c.monto}</td>
+        <td style="text-align: center; padding: 4px 0;">${c.formaPago || 'Efectivo'}</td>
+      </tr>
+    `).join('');
+
+    return `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            @page { size: A4; margin: 15mm; }
+            body { font-family: 'Arial', sans-serif; font-size: 11px; line-height: 1.4; margin: 0; padding: 0; color: #000; }
+            .header { text-align: center; margin-bottom: 20px; border-bottom: 3px solid #0C2ABF; padding-bottom: 10px; }
+            .header h1 { margin: 0; font-size: 20px; font-weight: bold; color: #0C2ABF; }
+            .header h2 { margin: 5px 0 0 0; font-size: 14px; color: #697b92; }
+            .section { margin: 20px 0; }
+            .section-title { font-size: 16px; font-weight: bold; color: #0C2ABF; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; }
+            .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin: 15px 0; }
+            .stat-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px; }
+            .stat-label { font-size: 11px; color: #697b92; margin-bottom: 5px; }
+            .stat-value { font-size: 18px; font-weight: bold; color: #0C2ABF; }
+            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+            table th { background: #0C2ABF; color: #fff; padding: 8px; text-align: left; font-size: 10px; font-weight: bold; }
+            table td { padding: 6px 8px; border-bottom: 1px solid #e2e8f0; font-size: 10px; }
+            table tr:nth-child(even) { background: #f8fafc; }
+            .total-box { background: #e0e7ff; border: 2px solid #0C2ABF; border-radius: 8px; padding: 15px; margin: 15px 0; }
+            .total-label { font-size: 14px; font-weight: bold; color: #092090; }
+            .total-value { font-size: 24px; font-weight: bold; color: #092090; margin-top: 5px; }
+            .footer { text-align: center; margin-top: 30px; padding-top: 15px; border-top: 1px solid #e2e8f0; font-size: 9px; color: #697b92; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>INFORME DEL DÍA</h1>
+            <h2>${fechaInforme}</h2>
+            <p style="margin: 5px 0; color: #697b92;">Período: ${selectedPeriod}</p>
+          </div>
+
+          <div class="section">
+            <div class="section-title">📊 Resumen General</div>
+            <div class="stats-grid">
+              <div class="stat-card">
+                <div class="stat-label">Total Ventas</div>
+                <div class="stat-value">${totalVentas.toFixed(2).replace('.', ',')} €</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Total Gastos</div>
+                <div class="stat-value">${totalGastos.toFixed(2).replace('.', ',')} €</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Número de Ventas</div>
+                <div class="stat-value">${numeroVentas}</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-label">Clientes Visitados</div>
+                <div class="stat-value">${clientesVisitadosHoy}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">💰 Liquidación de Efectivo</div>
+            <div style="margin: 10px 0;">
+              <p><strong>Ventas en Efectivo:</strong> ${liquidacionData.ventasEfectivo.toFixed(2).replace('.', ',')} €</p>
+              <p><strong>Cobros en Efectivo:</strong> ${liquidacionData.cobrosEfectivo.toFixed(2).replace('.', ',')} €</p>
+              <p><strong>Gastos del Período:</strong> ${liquidacionData.totalGastos.toFixed(2).replace('.', ',')} €</p>
+            </div>
+            <div class="total-box">
+              <div class="total-label">Total a Liquidar (Neto)</div>
+              <div class="total-value">${liquidacionData.liquidacionEfectivo.toFixed(2).replace('.', ',')} €</div>
+            </div>
+          </div>
+
+          ${filteredNotasVenta.length > 0 ? `
+          <div class="section">
+            <div class="section-title">📋 Notas de Venta (${filteredNotasVenta.length})</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Cliente</th>
+                  <th style="text-align: right;">Importe</th>
+                  <th style="text-align: center;">Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${notasHTML}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          ${cobrosDelDia.length > 0 ? `
+          <div class="section">
+            <div class="section-title">💵 Cobros (${cobrosDelDia.length})</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Cliente</th>
+                  <th style="text-align: right;">Monto</th>
+                  <th style="text-align: center;">Forma de Pago</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${cobrosHTML}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          ${filteredGastos.length > 0 ? `
+          <div class="section">
+            <div class="section-title">📉 Gastos (${filteredGastos.length})</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Categoría</th>
+                  <th style="text-align: right;">Importe</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${gastosHTML}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+
+          <div class="footer">
+            Generado el ${new Date().toLocaleString('es-ES')}<br>
+            4VENTAS - Sistema de Gestión
+          </div>
+        </body>
+      </html>
+    `;
+  };
+
+  // Función para imprimir el informe
+  const handleImprimirInforme = async () => {
+    try {
+      const html = generarHTMLInforme();
+      const { uri } = await Print.printToFileAsync({ html });
+      
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `Informe del Día - ${selectedPeriod}`
+        });
+        Alert.alert('Éxito', 'Informe generado y listo para compartir/imprimir');
+      } else {
+        await Print.printAsync({ uri });
+        Alert.alert('Éxito', 'Informe enviado para impresión');
+      }
+    } catch (error: any) {
+      console.error('Error imprimiendo informe:', error);
+      Alert.alert('Error', `No se pudo generar el informe: ${error?.message || 'Error desconocido'}`);
+    }
+  };
+
   return (
     <ScreenWithSidebar currentScreen="ResumenDia" scrollable={true}>
       <View style={{ paddingHorizontal: layout.padding }}>
@@ -256,6 +514,10 @@ export default function ResumenDiaScreen() {
           <Text style={styles.title}>Resumen del Día</Text>
         </View>
         <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.printButton} onPress={handleImprimirInforme}>
+            <Text style={styles.printButtonIcon}>🖨️</Text>
+            <Text style={styles.printButtonText}>Imprimir Informe</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.actionButton} onPress={() => navigation.navigate('NuevaVenta')}>
             <Text style={styles.actionButtonText}>+ Nueva Venta</Text>
           </TouchableOpacity>
@@ -377,7 +639,10 @@ const styles = StyleSheet.create({
   backButton: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
   backIcon: { fontSize: 20, color: '#697b92' },
   title: { fontSize: 24, fontWeight: '700', color: '#1a1a1a' },
-  headerActions: { flexDirection: 'row', gap: 8 },
+  headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  printButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#0C2ABF', borderRadius: 30 },
+  printButtonIcon: { fontSize: 16 },
+  printButtonText: { fontSize: 13, fontWeight: '600', color: '#ffffff' },
   actionButton: { paddingVertical: 8, paddingHorizontal: 16, borderWidth: 1.5, borderColor: '#092090', borderRadius: 30 },
   actionButtonText: { fontSize: 13, fontWeight: '600', color: '#092090' },
   filtersRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginVertical: 24, alignItems: 'center' },

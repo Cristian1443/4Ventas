@@ -1,9 +1,12 @@
 /**
  * Servicio de Sincronización Offline-First para React Native
+ * Actualizado para soportar AGENDA
  * - Funciona offline con datos locales si el ERP no está disponible
  * - Sincronización automática cada hora
  * - Cola de sincronización para operaciones offline
  * - No bloquea la app si falla la conexión
+ * - Sincronización bidireccional de cobros (bajada de deudas) y pagos (subida)
+ * - Mezcla inteligente de clientes para preservar los creados offline
  */
 
 import { storageService } from './storage.service';
@@ -11,7 +14,7 @@ import * as erpService from './erp.service';
 
 export interface SyncOperation {
   id: string;
-  type: 'venta' | 'pago' | 'cliente' | 'gasto' | 'gasto_delete' | 'documento';
+  type: 'venta' | 'pago' | 'cliente' | 'gasto' | 'gasto_delete' | 'documento' | 'documento_delete' | 'visita' | 'visita_update';
   data: any;
   timestamp: number;
   retries: number;
@@ -97,41 +100,28 @@ class SyncService {
     };
 
     try {
-      // Procesar cola pendiente primero
+      // 1. Procesar cola
       await this.processQueue();
 
-      // Sincronizar clientes
-      try {
-        await this.syncClientes();
-        status.clientes = 'success';
-      } catch (error) {
-        console.warn('⚠️ Error sincronizando clientes, usando datos locales');
-        status.clientes = 'error';
-      }
+      // 2. Descargar datos
+      await Promise.all([
+        this.syncClientes().catch(() => { status.clientes = 'error'; }),
+        this.syncArticulos().catch(() => { status.articulos = 'error'; }),
+        this.syncGastos(),
+        this.syncDocumentos(),
+        this.syncCobros(),
+        this.syncNotasAlmacen(),
+        this.syncAgenda() // NUEVO
+      ]);
 
-      // Sincronizar artículos
-      try {
-        await this.syncArticulos();
-        status.articulos = 'success';
-      } catch (error) {
-        console.warn('⚠️ Error sincronizando artículos, usando datos locales');
-        status.articulos = 'error';
-      }
-
-      // Sincronizar gastos
-      try {
-        await this.syncGastos();
-      } catch (error) {
-        console.warn('⚠️ Error sincronizando gastos, usando datos locales');
-      }
-
+      status.clientes = status.clientes === 'error' ? 'error' : 'success';
+      status.articulos = status.articulos === 'error' ? 'error' : 'success';
       status.ultimaSync = new Date().toISOString();
       status.operacionesPendientes = this.getPendingCount();
-
-      console.log('✅ Sincronización completa finalizada');
+      
       return status;
     } catch (error: any) {
-      console.error('❌ Error en sincronización completa:', error);
+      console.error('Error Sync:', error);
       status.error = error.message;
       return status;
     }
@@ -141,22 +131,36 @@ class SyncService {
   // SINCRONIZACIÓN DE CLIENTES
   // ============================================================================
 
+  // ============================================================================
+  // SINCRONIZACIÓN DE CLIENTES (Bajada Inteligente)
+  // ============================================================================
+
   async syncClientes(): Promise<any[]> {
     try {
-      console.log('👥 Sincronizando clientes...');
+      console.log('👥 Sincronizando clientes del ERP...');
       const clientesERP = await erpService.getClientes();
-      const clientesLocales = clientesERP.map(erpService.mapearClienteERPaLocal);
+      const clientesServer = clientesERP.map(erpService.mapearClienteERPaLocal);
       
-      // Guardar en almacenamiento local
-      await storageService.setItem('clientes', clientesLocales);
+      // Obtener locales actuales
+      const clientesLocales = (await storageService.getItem<any[]>('clientes')) || [];
+
+      // 1. PRESERVAR NUEVOS CLIENTES LOCALES
+      // Asumimos que los creados offline tienen un ID temporal que empieza por "CLI-" o timestamp
+      // o simplemente aquellos que no están en el servidor aún (pero la ID temporal es más segura)
+      const clientesNuevosOffline = clientesLocales.filter(c => c.id && c.id.toString().startsWith('CLI-'));
+
+      // 2. MEZCLAR
+      // Los del servidor tienen prioridad para actualizaciones, pero añadimos los nuevos locales
+      // Filtramos los del server para no duplicar si por casualidad el ID colisionara (improbable con CLI-)
+      const listaFinal = [...clientesServer, ...clientesNuevosOffline];
       
-      console.log(`✅ ${clientesLocales.length} clientes sincronizados`);
-      return clientesLocales;
+      await storageService.setItem('clientes', listaFinal);
+      
+      console.log(`✅ Clientes sincronizados: ${clientesServer.length} (Server) + ${clientesNuevosOffline.length} (Locales)`);
+      return listaFinal;
     } catch (error) {
-      console.warn('⚠️ Error sincronizando clientes, usando datos locales');
-      // Cargar datos locales si hay
-      const clientesLocales = await storageService.getItem<any[]>('clientes');
-      return clientesLocales || [];
+      console.warn('⚠️ Error sync clientes, manteniendo locales');
+      return (await storageService.getItem<any[]>('clientes')) || [];
     }
   }
 
@@ -245,6 +249,173 @@ class SyncService {
   }
 
   // ============================================================================
+  // SINCRONIZACIÓN DE DOCUMENTOS (Bajada Inteligente)
+  // ============================================================================
+
+  async syncDocumentos(): Promise<any[]> {
+    try {
+      console.log('📄 Descargando documentos del ERP...');
+      const docsERP = await erpService.getDocumentos();
+      const docsServer = docsERP.map(erpService.mapearDocumentoERPaLocal);
+      
+      const docsLocales = (await storageService.getItem<any[]>('documentos')) || [];
+
+      // 1. Preservar nuevos locales (IDs temporales 'DOC...')
+      const docsNuevosOffline = docsLocales.filter(d => d.id && d.id.toString().startsWith('DOC'));
+
+      // 2. Filtrar borrados pendientes
+      const pendingDeletes = this.queue
+        .filter(op => op.type === 'documento_delete')
+        .map(op => op.data.id);
+
+      // 3. Mezclar
+      const docsServerFiltrados = docsServer.filter(d => !pendingDeletes.includes(d.id));
+      const listaFinal = [...docsServerFiltrados, ...docsNuevosOffline];
+      
+      await storageService.setItem('documentos', listaFinal);
+      console.log(`✅ Documentos sincronizados: ${docsServerFiltrados.length} del servidor + ${docsNuevosOffline.length} locales nuevos`);
+      return listaFinal;
+    } catch (error) {
+      console.warn('⚠️ Error sync documentos, manteniendo locales');
+      return (await storageService.getItem<any[]>('documentos')) || [];
+    }
+  }
+
+  async getDocumentosLocal(): Promise<any[]> {
+    return (await storageService.getItem<any[]>('documentos')) || [];
+  }
+
+  // ============================================================================
+  // SINCRONIZACIÓN DE COBROS (Bajada de Deudas)
+  // ============================================================================
+
+  async syncCobros(): Promise<any[]> {
+    try {
+      console.log('💰 Descargando cobros pendientes del ERP...');
+      const cobrosERP = await erpService.getCobrosPendientes();
+      const cobrosServer = cobrosERP.map(erpService.mapearCobroERPaLocal);
+      
+      // Obtener locales
+      const cobrosLocales = (await storageService.getItem<any[]>('cobros')) || [];
+
+      // ESTRATEGIA DE MEZCLA:
+      // 1. Mantenemos los cobros que hemos marcado como "pagados" localmente pero que aún no se han sincronizado
+      //    (para que no reaparezcan como pendientes si la cola de subida falla o no ha corrido aún).
+      // 2. Mantenemos los cobros nuevos creados localmente (ventas offline).
+      
+      // IDs de cobros que están en la cola de subida como 'pago'
+      const pagosEnColaIds = this.queue
+        .filter(op => op.type === 'pago')
+        .map(op => op.data.id || op.data.cobroId || op.data.notaVentaId); // Ajustar según estructura de data
+
+      // Filtramos los del servidor: Si un cobro del servidor está en nuestra cola de pagos pendientes, NO lo mostramos como pendiente (ya lo pagamos localmente)
+      const cobrosServerFiltrados = cobrosServer.filter(c => !pagosEnColaIds.includes(c.id));
+
+      // Filtramos los locales: Mantenemos los que son locales nuevos (ID temporal 'C...') O los que ya están pagados (histórico local del día)
+      const cobrosLocalesMantener = cobrosLocales.filter(c => 
+        (c.id && c.id.toString().startsWith('C')) || c.estado === 'pagado'
+      );
+
+      // Combinar: Servidor (Pendientes reales) + Locales (Nuevos o Histórico Pagado)
+      // Usamos un Map para evitar duplicados por ID
+      const cobrosMap = new Map();
+      [...cobrosLocalesMantener, ...cobrosServerFiltrados].forEach(c => cobrosMap.set(c.id, c));
+      
+      const listaFinal = Array.from(cobrosMap.values());
+      
+      await storageService.setItem('cobros', listaFinal);
+      console.log(`✅ Cobros sincronizados: ${listaFinal.length}`);
+      return listaFinal;
+    } catch (error) {
+      console.warn('⚠️ Error sync cobros, manteniendo locales');
+      return (await storageService.getItem<any[]>('cobros')) || [];
+    }
+  }
+
+  async getCobrosLocal(): Promise<any[]> {
+    return (await storageService.getItem<any[]>('cobros')) || [];
+  }
+
+  // ============================================================================
+  // SINCRONIZACIÓN DE NOTAS ALMACÉN
+  // ============================================================================
+
+  async syncNotasAlmacen(): Promise<any[]> {
+    try {
+      console.log('📦 Descargando notas de almacén del ERP...');
+      const notasERP = await erpService.getNotasAlmacen();
+      const notasLocales = notasERP.map(erpService.mapearNotaAlmacenERPaLocal);
+      
+      // Almacén suele ser histórico, sobrescribimos con lo que diga el ERP
+      // (Si hubiera creación offline de notas, habría que mezclar como en Gastos)
+      await storageService.setItem('notasAlmacen', notasLocales);
+      
+      console.log(`✅ Notas almacén sincronizadas: ${notasLocales.length}`);
+      return notasLocales;
+    } catch (error) {
+      console.warn('⚠️ Error sync notas almacén, manteniendo locales');
+      return (await storageService.getItem<any[]>('notasAlmacen')) || [];
+    }
+  }
+
+  async getNotasAlmacenLocal(): Promise<any[]> {
+    return (await storageService.getItem<any[]>('notasAlmacen')) || [];
+  }
+
+  // ============================================================================
+  // SINCRONIZACIÓN DE AGENDA
+  // ============================================================================
+
+  async syncAgenda(): Promise<any[]> {
+    try {
+      console.log('📅 Descargando agenda del ERP...');
+      // Descargar agenda (ej: últimos 30 días y futuros 30 días, o mes actual)
+      const agendaERP = await erpService.getAgenda();
+      const agendaServer = agendaERP.map(erpService.mapearVisitaERPaLocal);
+      
+      const agendaLocal = (await storageService.getItem<any[]>('visitas')) || [];
+
+      // 1. Preservar visitas nuevas locales (ID temporal 'V...')
+      const visitasNuevasOffline = agendaLocal.filter(v => v.id && v.id.toString().startsWith('V'));
+      
+      // 2. Actualizar estado local de "completado" si hay pendientes de subir
+      // Si he marcado una visita como completada offline pero el servidor aún dice false,
+      // debo mantener mi estado local true hasta que se procese la cola.
+      const pendientesUpdate = this.queue
+        .filter(op => op.type === 'visita_update')
+        .map(op => op.data.id);
+      
+      // Mezclar: Server (excepto las que voy a actualizar yo) + Mis Updates Locales + Mis Nuevas
+      // Nota: Simplificación, sobrescribimos con server y luego reaplicamos cambios locales pendientes
+      const listaFinal = agendaServer.map(v => {
+          if (pendientesUpdate.includes(v.id)) {
+              // Buscar el estado pendiente en la cola si quisiéramos ser precisos, 
+              // o confiar en que el update local en storage ya tiene la verdad.
+              // Aquí optamos por mantener la versión local si existe y tiene conflicto.
+              const localVersion = agendaLocal.find(l => l.id === v.id);
+              return localVersion || v;
+          }
+          return v;
+      });
+
+      // Añadir las nuevas creadas offline
+      const listaCombinada = [...listaFinal, ...visitasNuevasOffline];
+
+      await storageService.setItem('visitas', listaCombinada);
+      console.log(`✅ Agenda sincronizada: ${listaCombinada.length}`);
+      return listaCombinada;
+
+    } catch (error) {
+      console.warn('⚠️ Error sync agenda, manteniendo locales');
+      return (await storageService.getItem<any[]>('visitas')) || [];
+    }
+  }
+
+  async getAgendaLocal(): Promise<any[]> {
+    return (await storageService.getItem<any[]>('visitas')) || [];
+  }
+
+  // ============================================================================
   // COLA DE OPERACIONES
   // ============================================================================
 
@@ -323,6 +494,15 @@ class SyncService {
           break;
         case 'documento':
           result = await this.syncDocumento(operation.data);
+          break;
+        case 'documento_delete':
+          result = await this.syncDocumentoDelete(operation.data);
+          break;
+        case 'visita':
+          result = await this.syncNuevaVisita(operation.data);
+          break;
+        case 'visita_update':
+          result = await this.syncVisitaUpdate(operation.data);
           break;
         default:
           throw new Error(`Tipo de operación desconocido: ${operation.type}`);
@@ -409,23 +589,28 @@ class SyncService {
 
   private async syncPago(pagoData: any): Promise<any> {
     try {
-      const pago: erpService.NuevoPago = {
-        ID_DocCli: this.parseDocumentoId(pagoData.notaVentaId),
+      // Convertir monto a número limpio
+      const importe = parseFloat(pagoData.monto.replace(/[€\s]/g, '').replace(',', '.'));
+      
+      const pagoERP = {
+        ID_DocCli: pagoData.notaVentaId ? this.parseDocumentoId(pagoData.notaVentaId) : 0, // Si es pago de nota
+        ID_Cliente: pagoData.clienteId ? parseInt(pagoData.clienteId, 10) : 0, // Si es pago a cuenta
         ID_MetodoPago: this.getMetodoPagoId(pagoData.formaPago),
-        Fecha: pagoData.fecha || new Date().toISOString().split('T')[0],
-        Importe: this.parseMonto(pagoData.monto)
+        Fecha: new Date().toISOString(), // Fecha del pago
+        Importe: isNaN(importe) ? 0 : importe,
+        Referencia: pagoData.id // Enviamos ID local como referencia
       };
 
-      const response = await erpService.registrarPago(pago);
+      const response = await erpService.registrarPago(pagoERP);
 
-      if (response.InfoError && response.InfoError.Codigo === 0) {
+      if (response && (!response.InfoError || response.InfoError.Codigo === 0)) {
         return { success: true, data: response };
       } else {
         return {
           success: false,
           error: {
-            codigo: response.InfoError?.Codigo || -1,
-            descripcion: response.InfoError?.Descripcion || 'Error desconocido'
+            codigo: response?.InfoError?.Codigo || -1,
+            descripcion: response?.InfoError?.Descripcion || 'Error desconocido'
           }
         };
       }
@@ -440,9 +625,74 @@ class SyncService {
     }
   }
 
+  // ============================================================================
+  // SUBIDA DE CLIENTE
+  // ============================================================================
+
   private async syncCliente(clienteData: any): Promise<any> {
-    // TODO: Implementar cuando sea necesario
-    return { success: true };
+    try {
+      const clienteERP: Partial<erpService.ClienteERP> = {
+        Nombre: clienteData.nombre,
+        RazonSocial: clienteData.empresa || clienteData.nombre,
+        NIF: clienteData.nif || '',
+        Direccion: clienteData.direccion || '',
+        Telefono: clienteData.telefono || '',
+        Email: clienteData.email || '',
+        CPostal: clienteData.codigoPostal || '',
+        Provincia: clienteData.provincia || '',
+        // Mapear otros campos necesarios
+      };
+
+      const response = await erpService.crearCliente(clienteERP);
+
+      if (response && (!response.InfoError || response.InfoError.Codigo === 0)) {
+        // Opcional: Actualizar el ID local con el ID real devuelto por el ERP
+        // Esto requeriría actualizar storage y referencias en otras tablas, 
+        // por simplicidad en este paso solo confirmamos éxito.
+        return { success: true, data: response };
+      }
+      return { success: false };
+    } catch (error) {
+      return { success: false };
+    }
+  }
+
+  // ============================================================================
+  // OPERACIONES AGENDA
+  // ============================================================================
+
+  private async syncNuevaVisita(visitaData: any): Promise<any> {
+    try {
+      const visitaERP: Partial<erpService.VisitaERP> = {
+        NombreCliente: visitaData.clienteNombre,
+        Direccion: visitaData.direccion,
+        Fecha: `${visitaData.fecha}T${visitaData.hora}:00`,
+        Tipo: capitalizeFirstLetter(visitaData.tipo),
+        Completado: visitaData.completado,
+        Observaciones: visitaData.observaciones
+      };
+
+      const response = await erpService.crearVisita(visitaERP);
+      if (response && (!response.InfoError || response.InfoError.Codigo === 0)) {
+        return { success: true };
+      }
+      return { success: false };
+    } catch (error) { return { success: false }; }
+  }
+
+  private async syncVisitaUpdate(data: { id: string, completado: boolean }): Promise<any> {
+    try {
+      if (data.id.startsWith('V')) return { success: true }; // Es local, no existe en ERP aún
+
+      const idNumerico = parseInt(data.id);
+      if (isNaN(idNumerico)) return { success: true };
+
+      const response = await erpService.actualizarVisita(idNumerico, data.completado);
+      if (response && (!response.InfoError || response.InfoError.Codigo === 0)) {
+        return { success: true };
+      }
+      return { success: false };
+    } catch (error) { return { success: false }; }
   }
 
   private async syncGasto(gastoData: any): Promise<any> {
@@ -502,9 +752,40 @@ class SyncService {
     }
   }
 
-  private async syncDocumento(documentoData: any): Promise<any> {
-    // TODO: Implementar cuando sea necesario
-    return { success: true };
+  private async syncDocumento(docData: any): Promise<any> {
+    try {
+      const docERP: Partial<erpService.DocumentoERP> = {
+        Nombre: docData.nombre,
+        Categoria: docData.categoria,
+        Fecha: new Date().toISOString(),
+        Tamano: docData.tamano,
+        Tipo: docData.tipo
+      };
+
+      const response = await erpService.subirDocumento(docERP);
+
+      if (response && (!response.InfoError || response.InfoError.Codigo === 0)) {
+        return { success: true };
+      }
+      return { success: false };
+    } catch (error) {
+      return { success: false };
+    }
+  }
+
+  private async syncDocumentoDelete(data: { id: string }): Promise<any> {
+    try {
+      // Si es un ID temporal (local), no hace falta borrar en servidor, solo éxito
+      if (data.id.startsWith('DOC')) return { success: true };
+
+      const idNumerico = parseInt(data.id);
+      if (isNaN(idNumerico)) return { success: true }; // ID inválido, asumimos ya borrado
+
+      const success = await erpService.eliminarDocumento(idNumerico);
+      return { success };
+    } catch (error) {
+      return { success: false };
+    }
   }
 
   // ============================================================================
@@ -574,8 +855,10 @@ class SyncService {
   private getMetodoPagoId(formaPago: string): number {
     const mapeo: Record<string, number> = {
       'Efectivo': 1,
+      'Tarjeta': 2,
       'Tarjeta de Débito': 2,
       'Tarjeta de Crédito': 3,
+      'Transferencia': 5,
       'Transferencia Bancaria': 5,
       'Bizum': 8
     };
@@ -665,6 +948,10 @@ class SyncService {
       this.errors = [];
     }
   }
+}
+
+function capitalizeFirstLetter(string: string) {
+    return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
 export const syncService = new SyncService();

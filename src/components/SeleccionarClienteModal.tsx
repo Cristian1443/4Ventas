@@ -3,7 +3,7 @@
  * IGUAL a la versión web
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,15 @@ export default function SeleccionarClienteModal({
   clientes
 }: SeleccionarClienteModalProps) {
   const [busqueda, setBusqueda] = useState('');
+  const searchInputRef = useRef<TextInput>(null);
+
+  // Limpiar búsqueda cuando se cierra el modal
+  useEffect(() => {
+    if (!visible) {
+      setBusqueda('');
+      searchInputRef.current?.blur();
+    }
+  }, [visible]);
 
   const clientesFiltrados = clientes.filter(c => 
     c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
@@ -71,18 +80,25 @@ export default function SeleccionarClienteModal({
           </View>
 
           {/* Buscador */}
-          <View style={styles.searchContainer}>
+          <TouchableOpacity 
+            style={styles.searchContainer}
+            onPress={() => searchInputRef.current?.focus()}
+            activeOpacity={1}
+          >
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
+              ref={searchInputRef}
               style={styles.searchInput}
               placeholder="Buscar por código, nombre o empresa..."
               placeholderTextColor="#94a3b8"
               value={busqueda}
               onChangeText={setBusqueda}
               autoCapitalize="none"
-              autoFocus
+              autoFocus={false}
+              showSoftInputOnFocus={true}
+              blurOnSubmit={false}
             />
-          </View>
+          </TouchableOpacity>
 
           {/* Lista de clientes */}
           <ScrollView style={styles.listContainer}>

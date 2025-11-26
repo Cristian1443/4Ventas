@@ -19,7 +19,7 @@ export default function ScreenWithSidebar({
   const insets = useSafeAreaInsets();
 
   const showSidebar = layout.isTablet;
-  const sidebarWidth = 80;
+  const sidebarWidth = 90;
 
   // COMPORTAMIENTO 1: MÓVIL (Sin Sidebar)
   if (!showSidebar) {

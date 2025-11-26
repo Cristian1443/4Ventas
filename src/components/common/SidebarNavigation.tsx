@@ -75,7 +75,7 @@ export default function SidebarNavigation({ currentScreen }: SidebarNavigationPr
           style={styles.settingsButton}
         >
           {/* Icono settings */}
-          <Svg width="30" height="30" viewBox="0 0 30 30" fill="none">
+          <Svg width="34" height="34" viewBox="0 0 30 30" fill="none">
             <Path 
               d="M15 18.75C17.0711 18.75 18.75 17.0711 18.75 15C18.75 12.9289 17.0711 11.25 15 11.25C12.9289 11.25 11.25 12.9289 11.25 15C11.25 17.0711 12.9289 18.75 15 18.75Z" 
               stroke="#092090" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.875" 
@@ -101,9 +101,9 @@ function MenuItem({ icon, label, active = false, onPress }: any) {
 }
 
 function MenuIcon({ icon, active }: { icon: string; active: boolean }) {
-  const size = 26;
+  const size = 30;
   const color = active ? "white" : "#092090";
-  const strokeWidth = "1.2"; // Slightly bolder for better visibility
+  const strokeWidth = "1.3"; // Slightly bolder for better visibility
 
   const paths: Record<string, any> = {
     home: <Path d="M1.17885 8.58252L7.4997 1.17896L13.8205 8.58252V13.3221C13.8205 13.6349 13.6961 13.9349 13.4741 14.1569C13.2522 14.3789 12.9521 14.5033 12.6393 14.5033H9.09407C8.78124 14.5033 8.4812 14.3789 8.25926 14.1569C8.03731 13.9349 7.91282 13.6349 7.91282 13.3221V10.9494C7.91282 10.6365 7.78833 10.3365 7.56639 10.1146C7.34444 9.89263 7.0444 9.76814 6.73157 9.76814H4.94969C4.63686 9.76814 4.33682 9.89263 4.11488 10.1146C3.89294 10.3365 3.76845 10.6365 3.76845 10.9494V13.3221C3.76845 13.6349 3.64396 13.9349 3.42201 14.1569C3.20007 14.3789 2.90003 14.5033 2.5872 14.5033H1.17885C0.866016 14.5033 0.565976 14.3789 0.344031 14.1569C0.122085 13.9349 -0.00244141 13.6349 -0.00244141 13.3221V8.58252Z" stroke={color} strokeWidth={strokeWidth} />,
@@ -144,11 +144,11 @@ const styles = StyleSheet.create({
     gap: 10
   },
   bottomSection: { alignItems: 'center', width: '100%', paddingBottom: 20 },
-  logoContainer: { width: 54, height: 54, marginBottom: 10, justifyContent: 'center', alignItems: 'center' },
+  logoContainer: { width: 60, height: 60, marginBottom: 10, justifyContent: 'center', alignItems: 'center' },
   logoImage: { width: '100%', height: '100%' },
   menuItem: {
-    width: 64,
-    height: 64,
+    width: 70,
+    height: 70,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 16
@@ -157,12 +157,12 @@ const styles = StyleSheet.create({
   menuLabel: {
     fontFamily: 'Inter',
     fontWeight: '500',
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 15,
     marginTop: 4,
     color: '#697b92',
     display: 'flex'
   },
   menuLabelActive: { color: '#ffffff', fontWeight: '600' },
-  settingsButton: { width: 64, height: 64, alignItems: 'center', justifyContent: 'center', borderRadius: 16 }
+  settingsButton: { width: 70, height: 70, alignItems: 'center', justifyContent: 'center', borderRadius: 16 }
 });

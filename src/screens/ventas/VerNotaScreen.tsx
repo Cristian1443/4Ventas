@@ -27,7 +27,7 @@ const getEtiquetaTipoNota = (valor: string) => {
 export default function VerNotaScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { updateNotaVenta } = useApp();
+  const { updateNotaVenta, clientes } = useApp();
   
   const ventaData = route.params?.ventaData;
 
@@ -44,18 +44,40 @@ export default function VerNotaScreen() {
     );
   }
 
-  // Datos del cliente
-  const cliente = ventaData.cliente && typeof ventaData.cliente === 'object' 
-    ? ventaData.cliente 
+  // Buscar el cliente completo desde el contexto usando clienteId
+  const clienteCompleto = clientes.find(c => 
+    String(c.id) === String(ventaData.clienteId) || 
+    c.nombre === ventaData.cliente
+  );
+
+  // Datos del cliente - usar el cliente completo si existe, sino usar los datos de ventaData
+  const cliente = clienteCompleto ? {
+    codigo: clienteCompleto.codigo || clienteCompleto.id || '',
+    nombre: clienteCompleto.nombre || ventaData.cliente || 'Cliente',
+    razonSocial: clienteCompleto.empresa || '',
+    nif: clienteCompleto.nif || '',
+    direccion: clienteCompleto.direccion || '',
+    telefono: clienteCompleto.telefono || '',
+    email: clienteCompleto.email || ''
+  } : (ventaData.cliente && typeof ventaData.cliente === 'object' 
+    ? {
+        codigo: ventaData.cliente.codigo || ventaData.clienteId || '',
+        nombre: ventaData.cliente.nombre || ventaData.cliente || 'Cliente',
+        razonSocial: ventaData.cliente.empresa || ventaData.cliente.razonSocial || '',
+        nif: ventaData.cliente.nif || '',
+        direccion: ventaData.cliente.direccion || '',
+        telefono: ventaData.cliente.telefono || '',
+        email: ventaData.cliente.email || ''
+      }
     : {
         codigo: ventaData.clienteId || '',
         nombre: ventaData.cliente || 'Cliente',
-        razonSocial: ventaData.cliente?.empresa || '',
-        nif: ventaData.cliente?.nif || '',
-        direccion: ventaData.cliente?.direccion || '',
-        telefono: ventaData.cliente?.telefono || '',
-        email: ventaData.cliente?.email || ''
-      };
+        razonSocial: '',
+        nif: '',
+        direccion: '',
+        telefono: '',
+        email: ''
+      });
 
   // Artículos
   const articulos = ventaData.articulos || ventaData.items || [];

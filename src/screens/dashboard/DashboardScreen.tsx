@@ -38,10 +38,29 @@ export default function DashboardScreen() {
 
   // --- CÁLCULOS DE NEGOCIO (Datos Reales) ---
 
-  // Helper para limpiar precios (ej: "1.200,50 €" -> 1200.50)
+  // Helper para limpiar precios (maneja múltiples formatos)
+  // Ejemplos: "75,63 €" -> 75.63, "7.563,00 €" -> 7563.00, "75.63 €" -> 75.63
   const parsePrecio = (valor: string) => {
     if (!valor) return 0;
-    const sanitized = valor.replace(/[€\s]/g, '').replace(/\./g, '').replace(',', '.');
+    
+    // Eliminar símbolos de moneda y espacios
+    let sanitized = valor.replace(/[€\s]/g, '').trim();
+    
+    // Detectar formato: si hay coma Y punto, el punto es separador de miles
+    const tieneComa = sanitized.includes(',');
+    const tienePunto = sanitized.includes('.');
+    
+    if (tieneComa && tienePunto) {
+      // Formato: "7.563,00" -> punto es miles, coma es decimal
+      sanitized = sanitized.replace(/\./g, '').replace(',', '.');
+    } else if (tieneComa) {
+      // Formato: "75,63" -> coma es decimal
+      sanitized = sanitized.replace(',', '.');
+    } else if (tienePunto) {
+      // Formato: "75.63" -> punto es decimal (ya está bien)
+      // No hacer nada
+    }
+    
     const parsed = parseFloat(sanitized);
     return isNaN(parsed) ? 0 : parsed;
   };
@@ -53,6 +72,30 @@ export default function DashboardScreen() {
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const year = now.getFullYear();
     return `${day}/${month}/${year}`;
+  };
+
+  // Helper para parsear fechas (similar a ResumenDiaScreen)
+  const parseDateString = (dateStr: string): number => {
+    if (!dateStr) return 0;
+    try {
+      const part = dateStr.split(',')[0].trim();
+      const parts = part.split('/');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10);
+        const year = parseInt(parts[2], 10);
+        if (day && month && year && year > 1900 && year < 2100) {
+          return new Date(year, month - 1, day).getTime();
+        }
+      }
+      const fallbackDate = new Date(dateStr);
+      if (!isNaN(fallbackDate.getTime())) {
+        return new Date(fallbackDate.getFullYear(), fallbackDate.getMonth(), fallbackDate.getDate()).getTime();
+      }
+    } catch (error) {
+      console.warn('Error parseando fecha:', dateStr, error);
+    }
+    return 0;
   };
 
   const hoyString = getTodayString();
@@ -74,9 +117,8 @@ export default function DashboardScreen() {
     const fechaGasto = g.fecha.split(',')[0].trim();
     return fechaGasto.startsWith(hoyString);
   });
-  // Si la fecha del gasto es solo hora (HH:mm), necesitaríamos la fecha completa en el modelo. 
-  // Para este caso, sumamos todos o ajustamos según modelo.
-  const totalGastos = gastos.reduce((sum, gasto) => sum + parsePrecio(gasto.precio), 0);
+  // Usar solo gastos de hoy para el total
+  const totalGastos = gastosHoy.reduce((sum, gasto) => sum + parsePrecio(gasto.precio), 0);
 
   // 3. Cobros Pendientes
   const cobrosPendientes = cobros.filter(c => c.estado === 'pendiente');
@@ -231,16 +273,16 @@ export default function DashboardScreen() {
             <Text style={styles.statChange}>{numeroVentasHoy} operaciones</Text>
           </TouchableOpacity>
 
-          {/* Gastos Totales */}
+          {/* Gastos Hoy */}
           <TouchableOpacity
             style={[styles.statCard, { width: cardWidth }]}
             onPress={() => navigation.navigate('Gastos')}
             activeOpacity={0.7}
           >
-            <Text style={styles.statLabel}>Gastos Acumulados</Text>
+            <Text style={styles.statLabel}>Gastos (Hoy)</Text>
             <Text style={styles.statValue}>{formatMoney(totalGastos)}</Text>
             <Text style={[styles.statChange, styles.statChangeWarning]}>
-              {gastos.length} registros
+              {gastosHoy.length} registros hoy
             </Text>
           </TouchableOpacity>
 
@@ -326,12 +368,21 @@ export default function DashboardScreen() {
             </TouchableOpacity>
           </View>
 
-          {notasVenta.length === 0 ? (
+          {ventasHoy.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No hay ventas registradas aún.</Text>
+              <Text style={styles.emptyStateText}>No hay ventas registradas hoy.</Text>
             </View>
           ) : (
-            notasVenta.slice(0, 5).map((nota) => (
+            // Mostrar solo las ventas de hoy, ordenadas por fecha (más recientes primero)
+            [...ventasHoy]
+              .sort((a, b) => {
+                // Parsear fechas para ordenar correctamente
+                const fechaA = parseDateString(a.fecha || '');
+                const fechaB = parseDateString(b.fecha || '');
+                return fechaB - fechaA; // Más recientes primero
+              })
+              .slice(0, 5)
+              .map((nota) => (
               <TouchableOpacity
                 key={nota.id}
                 style={[

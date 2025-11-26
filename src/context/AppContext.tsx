@@ -12,6 +12,7 @@ import {
   Articulo,
   Cliente,
   NotaAlmacen,
+  Visita,
   AppConfig,
   UserSession,
   SyncStatus
@@ -34,6 +35,7 @@ interface AppContextType {
   articulos: Articulo[];
   clientes: Cliente[];
   notasAlmacen: NotaAlmacen[];
+  visitas: Visita[];
   
   syncStatus: SyncStatus;
   modoOffline: boolean;
@@ -48,13 +50,16 @@ interface AppContextType {
   updateNotaVenta: (id: string, estado: 'pendiente' | 'cerrada' | 'anulada' | 'abierta') => Promise<void>;
   
   addCobro: (cobro: Cobro) => Promise<void>;
-  updateCobro: (id: string, estado: 'pendiente' | 'pagado') => Promise<void>;
+  updateCobro: (id: string, estado: 'pendiente' | 'pagado', metadata?: { formaPago: string, fecha: Date }) => Promise<void>;
   
   addDocumento: (doc: Documento) => Promise<void>;
   deleteDocumento: (id: string) => Promise<void>;
   
   updateArticulo: (id: string, cantidad: number) => Promise<void>;
   addNotaAlmacen: (nota: NotaAlmacen) => Promise<void>;
+  
+  addVisita: (visita: Visita) => Promise<void>;
+  toggleVisita: (id: string) => Promise<void>;
   
   // Sincronización y Configuración
   sincronizar: () => Promise<void>;
@@ -88,6 +93,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [articulos, setArticulos] = useState<Articulo[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [notasAlmacen, setNotasAlmacen] = useState<NotaAlmacen[]>([]);
+  const [visitas, setVisitas] = useState<Visita[]>([]);
   
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     clientes: 'idle', articulos: 'idle', ultimaSync: null, error: null, operacionesPendientes: 0
@@ -136,14 +142,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const loadLocalData = async () => {
     try {
-      const [sGastos, sNotas, sCobros, sDocs, sArts, sCli, sAlm] = await Promise.all([
+      const [sGastos, sNotas, sCobros, sDocs, sArts, sCli, sAlm, sVisitas] = await Promise.all([
         storageService.getItem<Gasto[]>('gastos'),
         storageService.getItem<NotaVenta[]>('notasVenta'),
         storageService.getItem<Cobro[]>('cobros'),
         storageService.getItem<Documento[]>('documentos'),
         storageService.getItem<Articulo[]>('articulos'),
         storageService.getItem<Cliente[]>('clientes'),
-        storageService.getItem<NotaAlmacen[]>('notasAlmacen')
+        storageService.getItem<NotaAlmacen[]>('notasAlmacen'),
+        storageService.getItem<Visita[]>('visitas')
       ]);
       
       setGastos(sGastos || []);
@@ -167,21 +174,30 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }
       
       setNotasAlmacen(sAlm || []);
+      setVisitas(sVisitas || []);
     } catch (error) {
       console.error('Error cargando datos locales:', error);
     }
   };
 
   const refreshLocalDataFromSync = async () => {
-    const [cliSync, artSync, gasSync] = await Promise.all([
+    const [cliSync, artSync, gasSync, docSync, cobSync, almSync, visitasSync] = await Promise.all([
       syncService.getClientesLocal(),
       syncService.getArticulosLocal(),
-      syncService.getGastosLocal()
+      syncService.getGastosLocal(),
+      syncService.getDocumentosLocal(),
+      syncService.getCobrosLocal(),
+      syncService.getNotasAlmacenLocal(),
+      syncService.getAgendaLocal()
     ]);
 
     if (cliSync) setClientes(cliSync);
     if (artSync) setArticulos(artSync);
     if (gasSync) setGastos(gasSync);
+    if (docSync) setDocumentos(docSync);
+    if (cobSync) setCobros(cobSync);
+    if (almSync) setNotasAlmacen(almSync);
+    if (visitasSync) setVisitas(visitasSync);
   };
 
   // SINCRONIZACIÓN
@@ -198,7 +214,26 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       }
 
       const status = await syncService.syncAll();
-      await refreshLocalDataFromSync();
+      
+      // Refrescar todo desde local
+      const [cliSync, artSync, gasSync, docSync, cobSync, almSync, visitasSync] = await Promise.all([
+          syncService.getClientesLocal(),
+          syncService.getArticulosLocal(),
+          syncService.getGastosLocal(),
+          syncService.getDocumentosLocal(),
+          syncService.getCobrosLocal(),
+          syncService.getNotasAlmacenLocal(),
+          syncService.getAgendaLocal()
+      ]);
+      
+      if (cliSync) setClientes(cliSync);
+      if (artSync) setArticulos(artSync);
+      if (gasSync) setGastos(gasSync);
+      if (docSync) setDocumentos(docSync);
+      if (cobSync) setCobros(cobSync);
+      if (almSync) setNotasAlmacen(almSync);
+      if (visitasSync) setVisitas(visitasSync);
+      
       setSyncStatus(status);
       setModoOffline(status.clientes === 'error' && status.articulos === 'error');
     } catch (error: any) {
@@ -219,11 +254,17 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
   
   const addCliente = async (cliente: Cliente) => {
+    // 1. Guardar localmente con ID temporal
     setClientes(prev => {
         const updated = [cliente, ...prev];
         storageService.setItem('clientes', updated);
         return updated;
     });
+
+    // 2. Encolar para subir al ERP
+    if(config.erpEnabled) {
+        syncService.addToQueue('cliente', cliente);
+    }
   };
 
   const addGasto = async (gasto: Gasto) => {
@@ -323,12 +364,67 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if(config.erpEnabled) syncService.addToQueue('pago', cobro);
   };
 
-  const updateCobro = async (id: string, estado: 'pendiente' | 'pagado') => {
+  // Helper para formatear fecha de forma consistente
+  const formatFechaConsistente = (fecha: Date): string => {
+    const day = String(fecha.getDate()).padStart(2, '0');
+    const month = String(fecha.getMonth() + 1).padStart(2, '0');
+    const year = fecha.getFullYear();
+    const hours = String(fecha.getHours()).padStart(2, '0');
+    const minutes = String(fecha.getMinutes()).padStart(2, '0');
+    const seconds = String(fecha.getSeconds()).padStart(2, '0');
+    return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
+  };
+
+  // FUNCIÓN MEJORADA: Ahora acepta metadatos opcionales para registrar el pago
+  // Usa forma funcional de setState para evitar problemas con múltiples actualizaciones
+  const updateCobro = async (id: string, estado: 'pendiente' | 'pagado', metadata?: { formaPago: string, fecha: Date }) => {
+    
+    // 1. Buscar el cobro original antes de actualizar
+    const cobroOriginal = cobros.find(c => c.id === id);
+    
+    // 2. Actualizar estado local usando forma funcional para evitar problemas de estado obsoleto
     setCobros(prev => {
-      const updated = prev.map(c => c.id === id ? { ...c, estado } : c);
-      storageService.setItem('cobros', updated);
-      return updated;
+      const cobrosActualizados = prev.map(c => {
+        if (c.id === id) {
+          return { 
+            ...c, 
+            estado, 
+            // Si nos pasan metadatos (al pagar), actualizamos el cobro local
+            formaPago: metadata?.formaPago || c.formaPago,
+            fecha: metadata?.fecha ? formatFechaConsistente(metadata.fecha) : c.fecha
+          };
+        }
+        return c;
+      });
+      
+      // Guardar en storage de forma asíncrona
+      storageService.setItem('cobros', cobrosActualizados).catch(err => {
+        console.error('Error guardando cobros en storage:', err);
+      });
+      
+      return cobrosActualizados;
     });
+
+    // 3. Si se está pagando, encolar operación de pago para el ERP
+    if (estado === 'pagado' && cobroOriginal) {
+      // Aseguramos que tenga la info actualizada
+      const datosPago: any = {
+          id: cobroOriginal.id,
+          clienteId: cobroOriginal.clienteId,
+          cliente: cobroOriginal.cliente,
+          monto: cobroOriginal.monto,
+          fecha: metadata?.fecha ? formatFechaConsistente(metadata.fecha) : cobroOriginal.fecha,
+          estado: 'pagado',
+          notaVentaId: cobroOriginal.notaVentaId,
+          formaPago: metadata?.formaPago || cobroOriginal.formaPago || 'Efectivo',
+          fechaRegistro: new Date().toISOString()
+      };
+      
+      if(config.erpEnabled) {
+          console.log('💸 Encolando pago para sync:', datosPago.id);
+          syncService.addToQueue('pago', datosPago);
+      }
+    }
   };
 
   const addDocumento = async (doc: Documento) => {
@@ -337,14 +433,20 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       storageService.setItem('documentos', updated);
       return updated;
     });
+    // Encolar subida
+    if(config.erpEnabled) syncService.addToQueue('documento', doc);
   };
 
   const deleteDocumento = async (id: string) => {
+    const docId = String(id).trim(); // Normalizar el ID
+    
     setDocumentos(prev => {
-      const updated = prev.filter(d => d.id !== id);
+      const updated = prev.filter(d => String(d.id).trim() !== docId);
       storageService.setItem('documentos', updated);
       return updated;
     });
+    // Encolar borrado
+    syncService.addToQueue('documento_delete', { id: docId });
   };
 
   const updateArticulo = async (id: string, cantidad: number) => {
@@ -364,6 +466,34 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     });
   };
 
+  const addVisita = async (visita: Visita) => {
+    setVisitas(prev => {
+      const updated = [...prev, visita];
+      storageService.setItem('visitas', updated);
+      return updated;
+    });
+    if(config.erpEnabled) syncService.addToQueue('visita', visita);
+  };
+
+  const toggleVisita = async (id: string) => {
+    let nuevoEstado = false;
+    setVisitas(prev => {
+      const updated = prev.map(v => {
+        if (v.id === id) {
+          nuevoEstado = !v.completado;
+          return { ...v, completado: !v.completado };
+        }
+        return v;
+      });
+      storageService.setItem('visitas', updated);
+      return updated;
+    });
+    
+    if(config.erpEnabled) {
+        syncService.addToQueue('visita_update', { id, completado: nuevoEstado });
+    }
+  };
+
   const updateConfig = async (newConfig: Partial<AppConfig>) => {
     const updatedConfig = { ...config, ...newConfig };
     setConfig(updatedConfig);
@@ -374,7 +504,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const value: AppContextType = {
     userSession, setUserSession,
-    gastos, notasVenta, cobros, documentos, articulos, clientes, notasAlmacen,
+    gastos, notasVenta, cobros, documentos, articulos, clientes, notasAlmacen, visitas,
     syncStatus, modoOffline,
     addArticulo, addCliente, 
     addGasto, deleteGasto,
@@ -382,11 +512,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     addCobro, updateCobro,
     addDocumento, deleteDocumento,
     updateArticulo, addNotaAlmacen,
+    addVisita, toggleVisita,
     sincronizar, forzarSincronizacion,
     config, updateConfig, updateAppConfig,
     updateSyncStatus: (status) => setSyncStatus(prev => ({ ...prev, ...status })),
     login: (username) => setUserSession({ isLoggedIn: true, username }),
-    logout: () => setUserSession({ isLoggedIn: false }),
+    logout: () => {
+      console.log('🚪 Cerrando sesión...');
+      setUserSession({ isLoggedIn: false });
+    },
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
