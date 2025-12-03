@@ -105,8 +105,14 @@ class SyncService {
 
       // 2. Descargar datos
       await Promise.all([
-        this.syncClientes().catch(() => { status.clientes = 'error'; }),
-        this.syncArticulos().catch(() => { status.articulos = 'error'; }),
+        this.syncClientes().catch((err) => { 
+          console.error('❌ [syncAll] Error en syncClientes:', err);
+          status.clientes = 'error'; 
+        }),
+        this.syncArticulos().catch((err) => { 
+          console.error('❌ [syncAll] Error en syncArticulos:', err);
+          status.articulos = 'error'; 
+        }),
         this.syncGastos(),
         this.syncDocumentos(),
         this.syncCobros(),
@@ -137,35 +143,86 @@ class SyncService {
 
   async syncClientes(): Promise<any[]> {
     try {
-      console.log('👥 Sincronizando clientes del ERP...');
+      console.log('👥 [syncClientes] Iniciando sincronización de clientes...');
       const clientesERP = await erpService.getClientes();
-      const clientesServer = clientesERP.map(erpService.mapearClienteERPaLocal);
+      
+      console.log(`📥 [syncClientes] Clientes recibidos del ERP (raw): ${clientesERP.length}`);
+      
+      if (clientesERP.length === 0) {
+        console.warn('⚠️ [syncClientes] ⚠️⚠️⚠️ NO SE RECIBIERON CLIENTES DEL ERP ⚠️⚠️⚠️');
+        console.warn('⚠️ [syncClientes] Esto puede indicar:');
+        console.warn('   1. El endpoint no devuelve datos');
+        console.warn('   2. La respuesta tiene un formato diferente');
+        console.warn('   3. Hay un error en la conexión');
+        // No retornamos aquí, continuamos para preservar clientes locales
+      }
+      
+      if (clientesERP.length > 0) {
+        console.log('📋 [syncClientes] Primer cliente raw:', JSON.stringify(clientesERP[0], null, 2).substring(0, 300));
+      }
+      
+      const clientesServer = clientesERP.map((cliente: any) => {
+        try {
+          const mapeado = erpService.mapearClienteERPaLocal(cliente);
+          console.log(`✅ [syncClientes] Cliente mapeado: ${mapeado.nombre} (ID: ${mapeado.id})`);
+          return mapeado;
+        } catch (error: any) {
+          console.error(`❌ [syncClientes] Error mapeando cliente:`, error.message, cliente);
+          return null;
+        }
+      }).filter((c: any) => c !== null);
+      
+      console.log(`📊 [syncClientes] Clientes mapeados exitosamente: ${clientesServer.length}`);
       
       // Obtener locales actuales
       const clientesLocales = (await storageService.getItem<any[]>('clientes')) || [];
+      console.log(`📂 [syncClientes] Clientes locales actuales: ${clientesLocales.length}`);
 
       // 1. PRESERVAR NUEVOS CLIENTES LOCALES
       // Asumimos que los creados offline tienen un ID temporal que empieza por "CLI-" o timestamp
       // o simplemente aquellos que no están en el servidor aún (pero la ID temporal es más segura)
       const clientesNuevosOffline = clientesLocales.filter(c => c.id && c.id.toString().startsWith('CLI-'));
+      console.log(`💾 [syncClientes] Clientes nuevos offline a preservar: ${clientesNuevosOffline.length}`);
 
       // 2. MEZCLAR
       // Los del servidor tienen prioridad para actualizaciones, pero añadimos los nuevos locales
       // Filtramos los del server para no duplicar si por casualidad el ID colisionara (improbable con CLI-)
       const listaFinal = [...clientesServer, ...clientesNuevosOffline];
       
+      console.log(`💾 [syncClientes] Guardando ${listaFinal.length} clientes en storage...`);
       await storageService.setItem('clientes', listaFinal);
       
-      console.log(`✅ Clientes sincronizados: ${clientesServer.length} (Server) + ${clientesNuevosOffline.length} (Locales)`);
+      // Verificar que se guardó correctamente
+      const verificacion = await storageService.getItem<any[]>('clientes');
+      console.log(`✅ [syncClientes] Verificación: ${verificacion?.length || 0} clientes guardados en storage`);
+      
+      if (verificacion && verificacion.length > 0) {
+        console.log(`✅ [syncClientes] Primer cliente guardado:`, verificacion[0]?.nombre || verificacion[0]?.id);
+        console.log(`✅ [syncClientes] Estructura del primer cliente:`, JSON.stringify(verificacion[0], null, 2).substring(0, 200));
+      } else {
+        console.error(`❌ [syncClientes] ERROR: No se pudieron verificar los clientes guardados`);
+      }
+      
+      console.log(`✅ [syncClientes] Clientes sincronizados: ${clientesServer.length} (Server) + ${clientesNuevosOffline.length} (Locales) = ${listaFinal.length} total`);
+      
+      // Retornar la lista final (no la verificación, por si hay algún problema de timing)
       return listaFinal;
-    } catch (error) {
-      console.warn('⚠️ Error sync clientes, manteniendo locales');
-      return (await storageService.getItem<any[]>('clientes')) || [];
+    } catch (error: any) {
+      console.error('❌ [syncClientes] Error sync clientes:', error.message);
+      console.error('❌ [syncClientes] Stack:', error.stack);
+      const clientesLocales = (await storageService.getItem<any[]>('clientes')) || [];
+      console.log(`📂 [syncClientes] Retornando ${clientesLocales.length} clientes locales debido al error`);
+      return clientesLocales;
     }
   }
 
   async getClientesLocal(): Promise<any[]> {
-    return (await storageService.getItem<any[]>('clientes')) || [];
+    const clientes = (await storageService.getItem<any[]>('clientes')) || [];
+    console.log(`📂 [getClientesLocal] Leyendo clientes de storage: ${clientes.length} encontrados`);
+    if (clientes.length > 0) {
+      console.log(`📂 [getClientesLocal] Primer cliente en storage:`, clientes[0]?.nombre || clientes[0]?.id);
+    }
+    return clientes;
   }
 
   // ============================================================================
@@ -174,25 +231,55 @@ class SyncService {
 
   async syncArticulos(): Promise<any[]> {
     try {
-      console.log('📦 Sincronizando artículos...');
+      console.log('📦 [syncArticulos] Sincronizando artículos...');
       const articulosERP = await erpService.getArticulos();
-      const articulosLocales = articulosERP.map(erpService.mapearArticuloERPaLocal);
+      
+      console.log(`📥 [syncArticulos] Artículos recibidos del ERP (raw): ${articulosERP.length}`);
+      
+      if (articulosERP.length === 0) {
+        console.warn('⚠️ [syncArticulos] ⚠️⚠️⚠️ NO SE RECIBIERON ARTÍCULOS DEL ERP ⚠️⚠️⚠️');
+      } else if (articulosERP.length > 0) {
+        console.log('📋 [syncArticulos] Primer artículo raw:', JSON.stringify(articulosERP[0], null, 2).substring(0, 300));
+      }
+      
+      const articulosMapeados = articulosERP.map(erpService.mapearArticuloERPaLocal);
+      
+      console.log(`📊 [syncArticulos] Artículos mapeados exitosamente: ${articulosMapeados.length}`);
       
       // Guardar en almacenamiento local
-      await storageService.setItem('articulos', articulosLocales);
+      console.log(`💾 [syncArticulos] Guardando ${articulosMapeados.length} artículos en storage...`);
+      await storageService.setItem('articulos', articulosMapeados);
       
-      console.log(`✅ ${articulosLocales.length} artículos sincronizados`);
-      return articulosLocales;
-    } catch (error) {
-      console.warn('⚠️ Error sincronizando artículos, usando datos locales');
+      // Verificar que se guardó correctamente
+      const verificacion = await storageService.getItem<any[]>('articulos');
+      console.log(`✅ [syncArticulos] Verificación: ${verificacion?.length || 0} artículos guardados en storage`);
+      
+      if (verificacion && verificacion.length > 0) {
+        console.log(`✅ [syncArticulos] Primer artículo guardado:`, verificacion[0]?.nombre || verificacion[0]?.id);
+        console.log(`✅ [syncArticulos] Estructura del primer artículo:`, JSON.stringify(verificacion[0], null, 2).substring(0, 200));
+      } else {
+        console.error(`❌ [syncArticulos] ERROR: No se pudieron verificar los artículos guardados`);
+      }
+      
+      console.log(`✅ [syncArticulos] ${articulosMapeados.length} artículos sincronizados`);
+      return articulosMapeados;
+    } catch (error: any) {
+      console.error('❌ [syncArticulos] Error sincronizando artículos:', error.message);
+      console.error('❌ [syncArticulos] Stack:', error.stack);
       // Cargar datos locales si hay
-      const articulosLocales = await storageService.getItem<any[]>('articulos');
-      return articulosLocales || [];
+      const articulosLocales = await storageService.getItem<any[]>('articulos') || [];
+      console.log(`📂 [syncArticulos] Retornando ${articulosLocales.length} artículos locales debido al error`);
+      return articulosLocales;
     }
   }
 
   async getArticulosLocal(): Promise<any[]> {
-    return (await storageService.getItem<any[]>('articulos')) || [];
+    const articulos = (await storageService.getItem<any[]>('articulos')) || [];
+    console.log(`📂 [getArticulosLocal] Leyendo artículos de storage: ${articulos.length} encontrados`);
+    if (articulos.length > 0) {
+      console.log(`📂 [getArticulosLocal] Primer artículo en storage:`, articulos[0]?.nombre || articulos[0]?.id);
+    }
+    return articulos;
   }
 
   async updateArticuloStock(id: string, cantidad: number): Promise<void> {
@@ -211,33 +298,21 @@ class SyncService {
 
   async syncGastos(): Promise<any[]> {
     try {
-      console.log('📉 Descargando gastos del ERP...');
-      const gastosERP = await erpService.getGastos();
-      const gastosServer = gastosERP.map(erpService.mapearGastoERPaLocal);
-      
-      // Obtener estado local actual
+      // No hay endpoint GetGastosWS en el ERP, mantenemos solo datos locales
       const gastosLocales = (await storageService.getItem<any[]>('gastos')) || [];
-
-      // 1. PRESERVAR GASTOS NUEVOS LOCALES (Los que tienen ID temporal 'G...')
-      // Estos no están en el servidor aún, así que no debemos borrarlos al sobrescribir
-      const gastosNuevosOffline = gastosLocales.filter(g => g.id && g.id.toString().startsWith('G'));
-
-      // 2. IDENTIFICAR BORRADOS PENDIENTES
-      // Miramos la cola para ver qué IDs se han mandado borrar
+      
+      // Filtrar borrados pendientes
       const pendingDeletes = this.queue
         .filter(op => op.type === 'gasto_delete')
         .map(op => op.data.id);
-
-      // 3. MEZCLAR: (Server - BorradosPendientes) + NuevosLocales
-      const gastosServerFiltrados = gastosServer.filter(g => !pendingDeletes.includes(g.id));
       
-      const listaFinal = [...gastosServerFiltrados, ...gastosNuevosOffline];
+      const gastosFiltrados = gastosLocales.filter(g => !pendingDeletes.includes(g.id));
       
-      // Guardar la lista mezclada
-      await storageService.setItem('gastos', listaFinal);
+      // Guardar lista filtrada
+      await storageService.setItem('gastos', gastosFiltrados);
       
-      console.log(`✅ Gastos sincronizados: ${gastosServerFiltrados.length} del servidor + ${gastosNuevosOffline.length} locales nuevos`);
-      return listaFinal;
+      console.log(`✅ Gastos locales mantenidos: ${gastosFiltrados.length} gastos`);
+      return gastosFiltrados;
     } catch (error) {
       console.warn('⚠️ Error sync gastos, manteniendo locales');
       return (await storageService.getItem<any[]>('gastos')) || [];
@@ -254,27 +329,19 @@ class SyncService {
 
   async syncDocumentos(): Promise<any[]> {
     try {
-      console.log('📄 Descargando documentos del ERP...');
-      const docsERP = await erpService.getDocumentos();
-      const docsServer = docsERP.map(erpService.mapearDocumentoERPaLocal);
-      
+      // No hay endpoint GetDocumentosWS en el ERP, mantenemos solo datos locales
       const docsLocales = (await storageService.getItem<any[]>('documentos')) || [];
 
-      // 1. Preservar nuevos locales (IDs temporales 'DOC...')
-      const docsNuevosOffline = docsLocales.filter(d => d.id && d.id.toString().startsWith('DOC'));
-
-      // 2. Filtrar borrados pendientes
+      // Filtrar borrados pendientes
       const pendingDeletes = this.queue
         .filter(op => op.type === 'documento_delete')
         .map(op => op.data.id);
 
-      // 3. Mezclar
-      const docsServerFiltrados = docsServer.filter(d => !pendingDeletes.includes(d.id));
-      const listaFinal = [...docsServerFiltrados, ...docsNuevosOffline];
+      const docsFiltrados = docsLocales.filter(d => !pendingDeletes.includes(d.id));
       
-      await storageService.setItem('documentos', listaFinal);
-      console.log(`✅ Documentos sincronizados: ${docsServerFiltrados.length} del servidor + ${docsNuevosOffline.length} locales nuevos`);
-      return listaFinal;
+      await storageService.setItem('documentos', docsFiltrados);
+      console.log(`✅ Documentos locales mantenidos: ${docsFiltrados.length} documentos`);
+      return docsFiltrados;
     } catch (error) {
       console.warn('⚠️ Error sync documentos, manteniendo locales');
       return (await storageService.getItem<any[]>('documentos')) || [];
@@ -342,15 +409,12 @@ class SyncService {
 
   async syncNotasAlmacen(): Promise<any[]> {
     try {
-      console.log('📦 Descargando notas de almacén del ERP...');
-      const notasERP = await erpService.getNotasAlmacen();
-      const notasLocales = notasERP.map(erpService.mapearNotaAlmacenERPaLocal);
+      // No hay endpoint GetNotasAlmacenWS en el ERP, mantenemos solo datos locales
+      const notasLocales = (await storageService.getItem<any[]>('notasAlmacen')) || [];
       
-      // Almacén suele ser histórico, sobrescribimos con lo que diga el ERP
-      // (Si hubiera creación offline de notas, habría que mezclar como en Gastos)
       await storageService.setItem('notasAlmacen', notasLocales);
       
-      console.log(`✅ Notas almacén sincronizadas: ${notasLocales.length}`);
+      console.log(`✅ Notas almacén locales mantenidas: ${notasLocales.length} notas`);
       return notasLocales;
     } catch (error) {
       console.warn('⚠️ Error sync notas almacén, manteniendo locales');
@@ -368,42 +432,28 @@ class SyncService {
 
   async syncAgenda(): Promise<any[]> {
     try {
-      console.log('📅 Descargando agenda del ERP...');
-      // Descargar agenda (ej: últimos 30 días y futuros 30 días, o mes actual)
-      const agendaERP = await erpService.getAgenda();
-      const agendaServer = agendaERP.map(erpService.mapearVisitaERPaLocal);
-      
+      // No hay endpoint GetAgendaWS en el ERP, mantenemos solo datos locales
       const agendaLocal = (await storageService.getItem<any[]>('visitas')) || [];
 
-      // 1. Preservar visitas nuevas locales (ID temporal 'V...')
-      const visitasNuevasOffline = agendaLocal.filter(v => v.id && v.id.toString().startsWith('V'));
-      
-      // 2. Actualizar estado local de "completado" si hay pendientes de subir
-      // Si he marcado una visita como completada offline pero el servidor aún dice false,
-      // debo mantener mi estado local true hasta que se procese la cola.
+      // Filtrar actualizaciones pendientes de la cola
       const pendientesUpdate = this.queue
         .filter(op => op.type === 'visita_update')
         .map(op => op.data.id);
       
-      // Mezclar: Server (excepto las que voy a actualizar yo) + Mis Updates Locales + Mis Nuevas
-      // Nota: Simplificación, sobrescribimos con server y luego reaplicamos cambios locales pendientes
-      const listaFinal = agendaServer.map(v => {
-          if (pendientesUpdate.includes(v.id)) {
-              // Buscar el estado pendiente en la cola si quisiéramos ser precisos, 
-              // o confiar en que el update local en storage ya tiene la verdad.
-              // Aquí optamos por mantener la versión local si existe y tiene conflicto.
-              const localVersion = agendaLocal.find(l => l.id === v.id);
-              return localVersion || v;
-          }
-          return v;
+      // Aplicar actualizaciones pendientes a las visitas locales
+      const agendaActualizada = agendaLocal.map(v => {
+        const updatePendiente = this.queue.find(
+          op => op.type === 'visita_update' && op.data.id === v.id
+        );
+        if (updatePendiente) {
+          return { ...v, completado: updatePendiente.data.completado };
+        }
+        return v;
       });
 
-      // Añadir las nuevas creadas offline
-      const listaCombinada = [...listaFinal, ...visitasNuevasOffline];
-
-      await storageService.setItem('visitas', listaCombinada);
-      console.log(`✅ Agenda sincronizada: ${listaCombinada.length}`);
-      return listaCombinada;
+      await storageService.setItem('visitas', agendaActualizada);
+      console.log(`✅ Agenda local mantenida: ${agendaActualizada.length} visitas`);
+      return agendaActualizada;
 
     } catch (error) {
       console.warn('⚠️ Error sync agenda, manteniendo locales');

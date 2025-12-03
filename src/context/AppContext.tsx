@@ -1,6 +1,5 @@
 /**
  * Contexto Global de la Aplicación
- * - Incluye datos iniciales para pruebas (MOCK) mientras se conecta el ERP.
  */
 
 import React, { createContext, useState, useContext, useEffect, useCallback, ReactNode } from 'react';
@@ -102,40 +101,12 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const [modoOffline, setModoOffline] = useState(false);
   
   const [config, setConfig] = useState<AppConfig>({
-    erpEnabled: false, // MODO PRUEBA: false para usar datos locales/mock
+    erpEnabled: true, // MODO PRUEBA: false para usar datos locales/mock
     autoSyncEnabled: true, 
     syncInterval: 3600000, 
     modoOffline: false
   });
 
-  // --- DATOS INICIALES PARA PRUEBAS (MOCK) ---
-  const initialClientes: Cliente[] = [
-    { id: 'c1', codigo: '430001', nombre: 'Floristería El Jardín', empresa: 'Floristería El Jardín S.L.', direccion: 'Calle Mayor 123, Madrid', telefono: '600123456', email: 'contacto@eljardin.com', nif: 'B12345678', codigoPostal: '28001', provincia: 'Madrid' },
-    { id: 'c2', codigo: '430005', nombre: 'Eventos y Bodas SL', empresa: 'Eventos y Bodas SL', direccion: 'Av. América 45, Madrid', telefono: '600999888', email: 'info@eventosbodas.com', nif: 'B98765432', codigoPostal: '28002', provincia: 'Madrid' }
-  ];
-
-  // ACTUALIZADO: Productos reales de la tienda con Código Corto global
-  const initialArticulos: Articulo[] = [
-    { 
-      id: '20001', 
-      nombre: 'Abaca Natural Rojo 50cm x 5m', 
-      cantidad: 45, 
-      categoria: 'Textil / Cintas', 
-      precio: '15,50 €', 
-      stockMinimo: 10, 
-      codigoCorto: 'ABA-001' 
-    },
-    { 
-      id: '20002', 
-      nombre: 'Agave Slices Naranja', 
-      cantidad: 30, 
-      categoria: 'Naturales / Secos', 
-      precio: '8,20 €', 
-      stockMinimo: 5, 
-      codigoCorto: 'AGA-002' 
-    }
-  ];
-  // -----------------------------------------------------------
 
   // INICIALIZACIÓN
   useEffect(() => { initializeApp(); }, []);
@@ -158,6 +129,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const loadLocalData = async (erpEnabled: boolean = false) => {
     try {
+      console.log('📂 [AppContext] Cargando datos locales desde storage...');
       const [sGastos, sNotas, sCobros, sDocs, sArts, sCli, sAlm, sVisitas] = await Promise.all([
         storageService.getItem<Gasto[]>('gastos'),
         storageService.getItem<NotaVenta[]>('notasVenta'),
@@ -169,42 +141,32 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         storageService.getItem<Visita[]>('visitas')
       ]);
       
+      console.log(`📊 [AppContext] Datos cargados desde storage:`);
+      console.log(`   Clientes: ${sCli?.length || 0}`);
+      console.log(`   Artículos: ${sArts?.length || 0}`);
+      if (sCli && sCli.length > 0) {
+        console.log(`   Primer cliente:`, sCli[0]);
+      }
+      
       setGastos(sGastos || []);
       setNotasVenta(sNotas || []);
       setCobros(sCobros || []);
       setDocumentos(sDocs || []);
-      
-      // SIEMPRE usar initialArticulos cuando el ERP está deshabilitado (modo prueba)
-      // Esto asegura que los productos de la tienda siempre estén disponibles
-      // y reemplaza cualquier artículo antiguo que pueda estar guardado
-      if (!erpEnabled) {
-        setArticulos(initialArticulos);
-        await storageService.setItem('articulos', initialArticulos);
-      } else {
-        // Si el ERP está habilitado, usar datos locales si existen, sino usar initialArticulos
-        if (sArts && sArts.length > 0) {
-          setArticulos(sArts);
-        } else {
-          setArticulos(initialArticulos);
-          await storageService.setItem('articulos', initialArticulos);
-        }
-      }
-
-      if (sCli && sCli.length > 0) {
-        setClientes(sCli);
-      } else {
-        setClientes(initialClientes);
-        storageService.setItem('clientes', initialClientes);
-      }
+      setArticulos(sArts || []);
+      setClientes(sCli || []);
       
       setNotasAlmacen(sAlm || []);
       setVisitas(sVisitas || []);
+      
+      console.log('✅ [AppContext] Estado actualizado con datos locales');
     } catch (error) {
-      console.error('Error cargando datos locales:', error);
+      console.error('❌ Error cargando datos locales:', error);
     }
   };
 
   const refreshLocalDataFromSync = async () => {
+    console.log('🔄 [AppContext] refreshLocalDataFromSync - Iniciando...');
+    
     const [cliSync, artSync, gasSync, docSync, cobSync, almSync, visitasSync] = await Promise.all([
       syncService.getClientesLocal(),
       syncService.getArticulosLocal(),
@@ -215,14 +177,62 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       syncService.getAgendaLocal()
     ]);
 
-    if (cliSync) setClientes(cliSync);
-    // Solo reemplazamos artículos si el ERP trae alguno; si viene vacío, mantenemos el catálogo local/tienda
-    if (artSync && artSync.length > 0) setArticulos(artSync);
-    if (gasSync) setGastos(gasSync);
-    if (docSync) setDocumentos(docSync);
-    if (cobSync) setCobros(cobSync);
-    if (almSync) setNotasAlmacen(almSync);
-    if (visitasSync) setVisitas(visitasSync);
+    console.log('🔄 [AppContext] refreshLocalDataFromSync - Datos leídos:');
+    console.log(`   Clientes: ${cliSync?.length || 0}`);
+    console.log(`   Artículos: ${artSync?.length || 0}`);
+    console.log(`   Gastos: ${gasSync?.length || 0}`);
+    console.log(`   Documentos: ${docSync?.length || 0}`);
+    console.log(`   Cobros: ${cobSync?.length || 0}`);
+    console.log(`   Notas Almacén: ${almSync?.length || 0}`);
+    console.log(`   Visitas: ${visitasSync?.length || 0}`);
+    
+    // Actualizar clientes - SIEMPRE actualizar si hay datos
+    if (cliSync !== undefined && cliSync !== null) {
+      if (cliSync.length > 0) {
+        console.log(`✅ [AppContext] Refrescando ${cliSync.length} clientes en el estado`);
+      } else {
+        console.log(`⚠️ [AppContext] Clientes array vacío, pero actualizando estado`);
+      }
+      setClientes(cliSync);
+    } else {
+      console.log(`❌ [AppContext] Clientes es undefined/null, no se actualiza`);
+    }
+    
+    // Actualizar artículos - SIEMPRE actualizar si hay datos del ERP
+    if (artSync !== undefined && artSync !== null) {
+      if (artSync.length > 0) {
+        console.log(`✅ [AppContext] Refrescando ${artSync.length} artículos en el estado`);
+        setArticulos(artSync);
+      } else {
+        console.log(`⚠️ [AppContext] Artículos vacío del ERP, manteniendo estado actual`);
+      }
+    } else {
+      console.log(`❌ [AppContext] Artículos es undefined/null, no se actualiza`);
+    }
+    
+    // Actualizar el resto
+    if (gasSync !== undefined && gasSync !== null) {
+      console.log(`✅ [AppContext] Actualizando ${gasSync.length} gastos`);
+      setGastos(gasSync);
+    }
+    if (docSync !== undefined && docSync !== null) {
+      console.log(`✅ [AppContext] Actualizando ${docSync.length} documentos`);
+      setDocumentos(docSync);
+    }
+    if (cobSync !== undefined && cobSync !== null) {
+      console.log(`✅ [AppContext] Actualizando ${cobSync.length} cobros`);
+      setCobros(cobSync);
+    }
+    if (almSync !== undefined && almSync !== null) {
+      console.log(`✅ [AppContext] Actualizando ${almSync.length} notas de almacén`);
+      setNotasAlmacen(almSync);
+    }
+    if (visitasSync !== undefined && visitasSync !== null) {
+      console.log(`✅ [AppContext] Actualizando ${visitasSync.length} visitas`);
+      setVisitas(visitasSync);
+    }
+    
+    console.log('✅ [AppContext] refreshLocalDataFromSync - Completado');
   };
 
   // SINCRONIZACIÓN
@@ -251,14 +261,60 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
           syncService.getAgendaLocal()
       ]);
       
-      if (cliSync) setClientes(cliSync);
-      // Igual que en refreshLocalDataFromSync: solo pisamos si hay artículos reales del ERP
-      if (artSync && artSync.length > 0) setArticulos(artSync);
-      if (gasSync) setGastos(gasSync);
-      if (docSync) setDocumentos(docSync);
-      if (cobSync) setCobros(cobSync);
-      if (almSync) setNotasAlmacen(almSync);
-      if (visitasSync) setVisitas(visitasSync);
+      console.log('🔄 [AppContext] Actualizando estado después de sincronización...');
+      console.log(`   Clientes: ${cliSync?.length || 0}`);
+      console.log(`   Artículos: ${artSync?.length || 0}`);
+      console.log(`   Gastos: ${gasSync?.length || 0}`);
+      console.log(`   Documentos: ${docSync?.length || 0}`);
+      console.log(`   Cobros: ${cobSync?.length || 0}`);
+      console.log(`   Notas Almacén: ${almSync?.length || 0}`);
+      console.log(`   Visitas: ${visitasSync?.length || 0}`);
+      
+      // Actualizar clientes - SIEMPRE actualizar, incluso si está vacío
+      if (cliSync !== undefined && cliSync !== null) {
+        if (cliSync.length > 0) {
+          console.log(`✅ [AppContext] Actualizando ${cliSync.length} clientes en el estado`);
+        } else {
+          console.log(`⚠️ [AppContext] Clientes vacío, pero actualizando estado de todas formas`);
+        }
+        setClientes(cliSync);
+      } else {
+        console.log(`❌ [AppContext] No se recibieron clientes del sync service (undefined/null)`);
+      }
+      
+      // Actualizar artículos - SIEMPRE actualizar si hay datos del ERP
+      if (artSync !== undefined && artSync !== null) {
+        if (artSync.length > 0) {
+          console.log(`✅ [AppContext] Actualizando ${artSync.length} artículos en el estado`);
+          setArticulos(artSync);
+        } else {
+          console.log(`⚠️ [AppContext] Artículos vacío del ERP, manteniendo estado actual`);
+        }
+      } else {
+        console.log(`❌ [AppContext] No se recibieron artículos del sync service (undefined/null)`);
+      }
+      
+      // Actualizar el resto de datos
+      if (gasSync !== undefined && gasSync !== null) {
+        console.log(`✅ [AppContext] Actualizando ${gasSync.length} gastos en el estado`);
+        setGastos(gasSync);
+      }
+      if (docSync !== undefined && docSync !== null) {
+        console.log(`✅ [AppContext] Actualizando ${docSync.length} documentos en el estado`);
+        setDocumentos(docSync);
+      }
+      if (cobSync !== undefined && cobSync !== null) {
+        console.log(`✅ [AppContext] Actualizando ${cobSync.length} cobros en el estado`);
+        setCobros(cobSync);
+      }
+      if (almSync !== undefined && almSync !== null) {
+        console.log(`✅ [AppContext] Actualizando ${almSync.length} notas de almacén en el estado`);
+        setNotasAlmacen(almSync);
+      }
+      if (visitasSync !== undefined && visitasSync !== null) {
+        console.log(`✅ [AppContext] Actualizando ${visitasSync.length} visitas en el estado`);
+        setVisitas(visitasSync);
+      }
       
       setSyncStatus(status);
       setModoOffline(status.clientes === 'error' && status.articulos === 'error');
