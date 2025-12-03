@@ -218,19 +218,19 @@ const styles = StyleSheet.create({
     height: 26
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '600',
-    lineHeight: 18,
+    lineHeight: 22,
     color: '#1a1a1a'
   },
   closeButton: {
-    width: 26,
-    height: 26,
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center'
   },
   closeIcon: {
-    fontSize: 20,
+    fontSize: 22,
     color: '#697B92'
   },
   scrollView: {
@@ -256,12 +256,12 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   clientInfoLabel: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#697b92',
     marginBottom: 4
   },
   clientInfoValue: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '600',
     color: '#1a1a1a'
   },
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end'
   },
   clientInfoPayment: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '600',
     color: '#0C2ABF'
   },
@@ -294,12 +294,12 @@ const styles = StyleSheet.create({
     gap: 10
   },
   notesHeaderIcon: {
-    fontSize: 20
+    fontSize: 24
   },
   notesHeaderTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '600',
-    lineHeight: 24,
+    lineHeight: 26,
     color: '#1a1a1a'
   },
   notesList: {
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   emptyNotesText: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#697b92'
   },
   noteCard: {
@@ -339,18 +339,18 @@ const styles = StyleSheet.create({
   noteIdBadge: {
     backgroundColor: '#91e600',
     borderRadius: 5,
-    paddingVertical: 3,
-    paddingHorizontal: 5
+    paddingVertical: 4,
+    paddingHorizontal: 6
   },
   noteIdText: {
-    fontSize: 10,
-    lineHeight: 10,
+    fontSize: 14,
+    lineHeight: 14,
     color: '#1a1a1a'
   },
   noteClient: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '600',
-    lineHeight: 14,
+    lineHeight: 16,
     color: '#697b92'
   },
   noteDateRow: {
@@ -358,23 +358,23 @@ const styles = StyleSheet.create({
     gap: 4
   },
   noteDateLabel: {
-    fontSize: 12,
-    lineHeight: 14,
+    fontSize: 16,
+    lineHeight: 18,
     fontWeight: '700',
     color: '#092090'
   },
   noteDateValue: {
-    fontSize: 12,
-    lineHeight: 14,
+    fontSize: 16,
+    lineHeight: 18,
     color: '#092090'
   },
   noteAmount: {
     position: 'absolute',
     right: 18,
     top: 49,
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
-    lineHeight: 14,
+    lineHeight: 16,
     color: '#0c1c8d'
   },
   notesFooter: {
@@ -395,15 +395,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between'
   },
   subtotalLabel: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '600',
-    lineHeight: 18,
+    lineHeight: 20,
     color: '#092090'
   },
   subtotalValue: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '600',
-    lineHeight: 18,
+    lineHeight: 20,
     color: '#092090'
   },
   actionsContainer: {
@@ -425,12 +425,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between'
   },
   printButtonIcon: {
-    fontSize: 16
+    fontSize: 20
   },
   printButtonText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
-    lineHeight: 14,
+    lineHeight: 16,
     color: '#ffffff'
   },
   backButton: {
@@ -446,13 +446,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between'
   },
   backButtonIcon: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#092090'
   },
   backButtonText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
-    lineHeight: 14,
+    lineHeight: 16,
     color: '#092090'
   },
   printMessage: {
@@ -465,7 +465,7 @@ const styles = StyleSheet.create({
     borderRadius: 10
   },
   printMessageText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     color: '#ffffff'
   }

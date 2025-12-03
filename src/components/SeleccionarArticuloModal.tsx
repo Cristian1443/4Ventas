@@ -161,23 +161,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    maxHeight: '80%',
-    paddingTop: 20
+    maxHeight: '90%',
+    paddingTop: 24
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 20
+    paddingHorizontal: 24,
+    marginBottom: 24
   },
   title: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
     color: '#1a1a1a'
   },
   closeButton: {
-    fontSize: 28,
+    fontSize: 32,
     color: '#697b92',
     fontWeight: '300'
   },
@@ -188,31 +188,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 10,
-    marginHorizontal: 20,
-    marginBottom: 16,
-    paddingHorizontal: 12
+    marginHorizontal: 24,
+    marginBottom: 20,
+    paddingHorizontal: 14,
+    height: 52
   },
   searchIcon: {
-    fontSize: 18,
-    marginRight: 8
+    fontSize: 20,
+    marginRight: 10
   },
   searchInput: {
     flex: 1,
-    height: 44,
-    fontSize: 16,
+    height: 52,
+    fontSize: 18,
     color: '#1a1a1a'
   },
   listContainer: {
-    paddingHorizontal: 20,
-    paddingBottom: 20
+    paddingHorizontal: 24,
+    paddingBottom: 24
   },
   articuloCard: {
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    padding: 18,
+    marginBottom: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center'
@@ -221,18 +222,19 @@ const styles = StyleSheet.create({
     flex: 1
   },
   articuloNombre: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: '#1a1a1a',
-    marginBottom: 4
+    marginBottom: 6
   },
   articuloCodigo: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#0C2ABF',
-    marginBottom: 4
+    marginBottom: 4,
+    fontWeight: '600'
   },
   articuloCategoria: {
-    fontSize: 13,
+    fontSize: 15,
     color: '#697b92',
     marginBottom: 8
   },
@@ -240,12 +242,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row'
   },
   articuloStock: {
-    fontSize: 13,
+    fontSize: 15,
     color: '#697b92',
     marginRight: 12
   },
   articuloPrecio: {
-    fontSize: 13,
+    fontSize: 15,
     fontWeight: '600',
     color: '#0C2ABF'
   },
@@ -254,11 +256,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#fca5a5',
     borderRadius: 12,
-    paddingVertical: 4,
-    paddingHorizontal: 8
+    paddingVertical: 6,
+    paddingHorizontal: 10
   },
   stockBadgeText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
     color: '#dc2626'
   },
@@ -267,7 +269,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#697b92',
     textAlign: 'center'
   }

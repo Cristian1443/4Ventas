@@ -188,7 +188,7 @@ export default function CobrosListScreen() {
           {/* Debug Info (Visible solo si no hay datos para entender qué pasa) */}
           {clientesPendientes.length === 0 && cobros.filter(c => c.estado === 'pendiente').length > 0 && (
              <View style={{padding: 10, backgroundColor: '#fff7ed', marginBottom: 20, borderRadius: 8}}>
-                <Text style={{color: '#c2410c', fontSize: 12}}>
+                <Text style={{color: '#c2410c', fontSize: 14}}>
                    Hay {cobros.filter(c => c.estado === 'pendiente').length} cobro(s) pendiente(s) en el sistema, pero no coinciden con los clientes actuales.
                    {'\n'}Esto puede deberse a datos obsoletos. Crea una nueva venta para generar cobros válidos.
                 </Text>
@@ -259,53 +259,53 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 24, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  headerIcon: { fontSize: 20 },
-  headerTitle: { fontSize: 24, fontWeight: '600', color: '#1a1a1a' },
+  headerIcon: { fontSize: 24 },
+  headerTitle: { fontSize: 28, fontWeight: '600', color: '#1a1a1a' },
   scrollView: { flex: 1 },
   scrollContent: { padding: 24, paddingBottom: 100 },
   
-  printButtonHeader: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
-  printIcon: { fontSize: 18 },
+  printButtonHeader: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
+  printIcon: { fontSize: 22 },
   newCobranzaButton: { borderRadius: 30, overflow: 'hidden' },
   newCobranzaGradient: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 20 },
-  newCobranzaIcon: { fontSize: 16, color: '#ffffff' },
-  newCobranzaText: { fontSize: 14, fontWeight: '600', color: '#ffffff' },
+  newCobranzaIcon: { fontSize: 20, color: '#ffffff' },
+  newCobranzaText: { fontSize: 18, fontWeight: '600', color: '#ffffff' },
   
-  subtitle: { fontSize: 16, color: '#697b92', marginBottom: 24 },
+  subtitle: { fontSize: 20, color: '#697b92', marginBottom: 24 },
   totalBar: { marginBottom: 32 },
-  totalText: { fontSize: 16, fontWeight: '600', marginBottom: 10 },
+  totalText: { fontSize: 20, fontWeight: '600', marginBottom: 10 },
   totalTextGradient: { color: '#092090' },
   totalTextSecondary: { color: '#697b92' },
   progressBar: { width: '100%', height: 10, backgroundColor: '#e2e8f0', borderRadius: 15, overflow: 'hidden' },
   progressFill: { height: '100%', borderRadius: 15 },
   
   searchBar: { flexDirection: 'row', backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, height: 50, alignItems: 'center', paddingHorizontal: 18, gap: 14, marginBottom: 24 },
-  searchIcon: { fontSize: 14 },
-  searchInput: { flex: 1, fontSize: 14, color: '#697b92' },
+  searchIcon: { fontSize: 18 },
+  searchInput: { flex: 1, fontSize: 18, color: '#697b92' },
   sortButtons: { flexDirection: 'row', gap: 12 },
-  sortIcon: { fontSize: 14, color: '#697B92', fontWeight: '600' },
+  sortIcon: { fontSize: 18, color: '#697B92', fontWeight: '600' },
   sortIconActive: { color: '#0C2ABF' },
   
   cobrosList: { gap: 12 },
-  cobroCard: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: '#000', shadowOffset: {width:0, height:1}, shadowOpacity:0.05, shadowRadius:2, elevation:1 },
+  cobroCard: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 18, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', shadowColor: '#000', shadowOffset: {width:0, height:1}, shadowOpacity:0.05, shadowRadius:2, elevation:1 },
   cobroHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  iconBadge: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#f0f4ff', alignItems: 'center', justifyContent: 'center' },
-  cobroIcon: { fontSize: 18 },
+  iconBadge: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#f0f4ff', alignItems: 'center', justifyContent: 'center' },
+  cobroIcon: { fontSize: 22 },
   cobroInfo: { flex: 1 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
-  clienteCodigo: { fontSize: 11, fontWeight: '700', color: '#092090', backgroundColor: '#e0e7ff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 },
-  cobroTitle: { fontSize: 15, fontWeight: '700', color: '#1a1a1a', flex: 1 },
-  clienteNombreReal: { fontSize: 13, color: '#697b92' },
+  clienteCodigo: { fontSize: 15, fontWeight: '700', color: '#092090', backgroundColor: '#e0e7ff', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4 },
+  cobroTitle: { fontSize: 19, fontWeight: '700', color: '#1a1a1a', flex: 1 },
+  clienteNombreReal: { fontSize: 17, color: '#697b92' },
   
   cobroRight: { alignItems: 'flex-end' },
-  cobroMonto: { fontSize: 18, fontWeight: '700', color: '#092090', marginBottom: 4 },
+  cobroMonto: { fontSize: 22, fontWeight: '700', color: '#092090', marginBottom: 4 },
   badgeContainer: { flexDirection: 'row', gap: 8 },
-  estadoBadgePendiente: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 20, backgroundColor: '#FEF3C7' },
-  estadoDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#F59F0A' },
-  estadoText: { fontSize: 11, fontWeight: '700', color: '#F59F0A' },
+  estadoBadgePendiente: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5, paddingHorizontal: 10, borderRadius: 20, backgroundColor: '#FEF3C7' },
+  estadoDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#F59F0A' },
+  estadoText: { fontSize: 15, fontWeight: '700', color: '#F59F0A' },
   
   emptyState: { padding: 60, alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9', borderRadius: 12, borderStyle: 'dashed' },
-  emptyIcon: { fontSize: 40, marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '600', color: '#1a1a1a', marginBottom: 8 },
-  emptyText: { fontSize: 14, color: '#697b92', textAlign: 'center' }
+  emptyIcon: { fontSize: 48, marginBottom: 16 },
+  emptyTitle: { fontSize: 22, fontWeight: '600', color: '#1a1a1a', marginBottom: 8 },
+  emptyText: { fontSize: 18, color: '#697b92', textAlign: 'center' }
 });

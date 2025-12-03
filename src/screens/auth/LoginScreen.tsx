@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsiveLayout } from '../../constants/layout';
 
 // Importar assets (ruta correcta desde src/screens/auth/)
@@ -24,6 +25,7 @@ const backgroundImage = require('../../../assets/image-login.png');
 export default function LoginScreen() {
   const navigation = useNavigation<any>();
   const layout = useResponsiveLayout();
+  const insets = useSafeAreaInsets();
   const [isVendorHovered, setIsVendorHovered] = useState(false);
   const [isAdminHovered, setIsAdminHovered] = useState(false);
 
@@ -41,7 +43,7 @@ export default function LoginScreen() {
   if (useHorizontalLayout) {
     // Layout horizontal para tablets (igual al web)
     return (
-      <View style={styles.containerHorizontal}>
+      <View style={[styles.containerHorizontal, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         {/* Left side with image */}
         <View style={styles.leftPanel}>
           <Image 
@@ -121,7 +123,7 @@ export default function LoginScreen() {
 
   // Layout vertical para móviles (simplificado)
   return (
-    <View style={styles.containerVertical}>
+    <View style={[styles.containerVertical, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <View style={styles.contentVertical}>
         {/* Title */}
         <Text style={styles.title}>Iniciar sesión</Text>
@@ -231,8 +233,8 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: 'Inter',
     fontWeight: '600',
-    fontSize: 24,
-    lineHeight: 24,
+    fontSize: 30,
+    lineHeight: 30,
     color: '#0C2ABF',
     textAlign: 'center',
     marginBottom: 40,
@@ -257,7 +259,7 @@ const styles = StyleSheet.create({
     }),
   },
   gradient: {
-    paddingVertical: 15,
+    paddingVertical: 16,
     paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
@@ -265,16 +267,16 @@ const styles = StyleSheet.create({
   buttonText: {
     fontFamily: 'Inter',
     fontWeight: '600',
-    fontSize: 14,
-    lineHeight: 14,
+    fontSize: 18,
+    lineHeight: 18,
     color: '#1a1a1a',
     textAlign: 'center',
   },
   buttonTextWhite: {
     fontFamily: 'Inter',
     fontWeight: '600',
-    fontSize: 14,
-    lineHeight: 14,
+    fontSize: 18,
+    lineHeight: 18,
     color: '#ffffff',
     textAlign: 'center',
   },
@@ -294,8 +296,8 @@ const styles = StyleSheet.create({
   dividerText: {
     fontFamily: 'Inter',
     fontWeight: '600',
-    fontSize: 14,
-    lineHeight: 14,
+    fontSize: 18,
+    lineHeight: 18,
     color: '#cbd5e1',
     textAlign: 'center',
     backgroundColor: '#ffffff',
@@ -303,7 +305,7 @@ const styles = StyleSheet.create({
   },
   helpText: {
     fontFamily: 'Inter',
-    fontSize: 12,
+    fontSize: 16,
     color: '#94a3b8',
     textAlign: 'center',
     marginTop: 20,

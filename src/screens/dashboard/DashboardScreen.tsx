@@ -524,19 +524,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#ef4444'
   },
   syncText: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#697b92',
     fontWeight: '600'
   },
   pendingBadge: {
     backgroundColor: '#f59e0b',
     borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     marginLeft: 8
   },
   pendingText: {
-    fontSize: 10,
+    fontSize: 14,
     color: '#ffffff',
     fontWeight: '700'
   },
@@ -552,13 +552,13 @@ const styles = StyleSheet.create({
     elevation: 5
   },
   welcomeText: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
     color: '#ffffff',
     marginBottom: 4
   },
   dateText: {
-    fontSize: 14,
+    fontSize: 18,
     color: 'rgba(255,255,255,0.9)',
     marginBottom: 24,
     textTransform: 'capitalize'
@@ -580,7 +580,7 @@ const styles = StyleSheet.create({
     elevation: 2
   },
   heroButtonText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '700',
     color: '#092090'
   },
@@ -608,30 +608,30 @@ const styles = StyleSheet.create({
     borderColor: '#bfdbfe',
   },
   alertEmoji: {
-    fontSize: 24,
+    fontSize: 26,
   },
   alertContent: {
     flex: 1,
   },
   alertTitle: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '700',
     color: '#92400e',
     marginBottom: 2,
   },
   alertSubtitle: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#92400e',
     opacity: 0.9,
   },
   alertButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingVertical: 9,
+    paddingHorizontal: 16,
     backgroundColor: '#f59e0b',
     borderRadius: 20,
   },
   alertButtonText: {
-    fontSize: 11,
+    fontSize: 15,
     fontWeight: '700',
     color: '#ffffff',
   },
@@ -656,20 +656,20 @@ const styles = StyleSheet.create({
     elevation: 1
   },
   statLabel: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#64748b',
     marginBottom: 8,
     fontWeight: '600',
     textTransform: 'uppercase'
   },
   statValue: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '700',
     color: '#1e293b',
     marginBottom: 4
   },
   statChange: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#10b981',
     fontWeight: '500'
   },
@@ -681,7 +681,7 @@ const styles = StyleSheet.create({
     marginBottom: 30
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
     color: '#1e293b',
     marginBottom: 16
@@ -726,13 +726,13 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   quickAccessLabelGradient: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '600',
     color: '#ffffff',
     textAlign: 'center'
   },
   quickAccessLabel: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '600',
     color: '#475569',
     textAlign: 'center'
@@ -748,7 +748,7 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   seeAllText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     color: '#0C2ABF'
   },
@@ -767,8 +767,8 @@ const styles = StyleSheet.create({
     borderColor: '#fecaca'
   },
   saleIcon: {
-    width: 44,
-    height: 44,
+    width: 48,
+    height: 48,
     borderRadius: 10,
     backgroundColor: '#e0e7ff',
     alignItems: 'center',
@@ -779,7 +779,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fee2e2'
   },
   saleIconText: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     color: '#092090'
   },
@@ -787,17 +787,17 @@ const styles = StyleSheet.create({
     flex: 1
   },
   saleClient: {
-    fontSize: 15,
+    fontSize: 19,
     fontWeight: '600',
     color: '#1e293b',
     marginBottom: 4
   },
   saleTime: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#64748b'
   },
   saleAmount: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '700',
     color: '#092090',
     marginBottom: 2
@@ -807,7 +807,7 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through'
   },
   saleStatus: {
-    fontSize: 11,
+    fontSize: 15,
     fontWeight: '600'
   },
   emptyState: {
@@ -822,6 +822,6 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     color: '#94a3b8',
-    fontSize: 14
+    fontSize: 18
   }
 });

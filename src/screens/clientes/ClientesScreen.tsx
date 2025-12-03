@@ -323,12 +323,12 @@ const styles = StyleSheet.create({
   },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   backBtn: { padding: 5 },
-  backIcon: { fontSize: 24, color: '#64748b' },
-  title: { fontSize: 24, fontWeight: '700', color: '#1e293b' },
+  backIcon: { fontSize: 28, color: '#64748b' },
+  title: { fontSize: 28, fontWeight: '700', color: '#1e293b' },
   
   addButton: { borderRadius: 30, overflow: 'hidden' },
   addGradient: { paddingVertical: 10, paddingHorizontal: 20 },
-  addText: { fontSize: 14, fontWeight: '600', color: '#ffffff' },
+  addText: { fontSize: 18, fontWeight: '600', color: '#ffffff' },
 
   // Controles (Search + Filter)
   controlsWrapper: {
@@ -350,17 +350,17 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0',
     marginBottom: 12
   },
-  searchIcon: { fontSize: 16, marginRight: 10, opacity: 0.5 },
-  searchInput: { flex: 1, fontSize: 15, color: '#1e293b' },
+  searchIcon: { fontSize: 18, marginRight: 10, opacity: 0.5 },
+  searchInput: { flex: 1, fontSize: 17, color: '#1e293b' },
   
   filtersRow: { flexDirection: 'row', marginBottom: 8 },
   scrollFilters: { flexGrow: 0 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', marginRight: 8 },
   filterChipActive: { backgroundColor: '#092090', borderColor: '#092090' },
-  filterText: { fontSize: 13, color: '#64748b', fontWeight: '500' },
+  filterText: { fontSize: 17, color: '#64748b', fontWeight: '500' },
   filterTextActive: { color: '#fff' },
   
-  resultsText: { fontSize: 12, color: '#94a3b8', marginTop: 4 },
+  resultsText: { fontSize: 16, color: '#94a3b8', marginTop: 4 },
 
   // Tarjeta Cliente
   card: {
@@ -379,12 +379,12 @@ const styles = StyleSheet.create({
   cardContent: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   
   avatarContainer: {
-    width: 50, height: 50, borderRadius: 25,
+    width: 56, height: 56, borderRadius: 28,
     backgroundColor: '#eff6ff',
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: '#bfdbfe'
   },
-  avatarText: { fontSize: 20, fontWeight: '700', color: '#1d4ed8' },
+  avatarText: { fontSize: 22, fontWeight: '700', color: '#1d4ed8' },
   
   infoColumn: { flex: 1 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' },
@@ -392,49 +392,49 @@ const styles = StyleSheet.create({
   // ESTILOS DEL CÓDIGO (Más visible)
   codeBadge: {
     backgroundColor: '#092090', // Azul oscuro fuerte
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 6,
   },
   codeText: {
     color: '#ffffff',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700'
   },
   
-  nameText: { fontSize: 16, fontWeight: '700', color: '#1e293b', flex: 1 },
-  empresaText: { fontSize: 13, color: '#64748b', marginBottom: 4 },
-  addressText: { fontSize: 12, color: '#94a3b8' },
+  nameText: { fontSize: 20, fontWeight: '700', color: '#1e293b', flex: 1 },
+  empresaText: { fontSize: 17, color: '#64748b', marginBottom: 4 },
+  addressText: { fontSize: 16, color: '#94a3b8' },
   
-  debtBadge: { marginTop: 6, alignSelf: 'flex-start', backgroundColor: '#fff7ed', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: '#fed7aa' },
-  debtText: { fontSize: 11, color: '#c2410c', fontWeight: '600' },
+  debtBadge: { marginTop: 6, alignSelf: 'flex-start', backgroundColor: '#fff7ed', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 4, borderWidth: 1, borderColor: '#fed7aa' },
+  debtText: { fontSize: 15, color: '#c2410c', fontWeight: '600' },
 
   callButton: {
-    width: 40, height: 40, borderRadius: 20,
+    width: 44, height: 44, borderRadius: 22,
     backgroundColor: '#f0fdf4',
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: '#bbf7d0'
   },
-  callIcon: { fontSize: 18 },
+  callIcon: { fontSize: 20 },
 
   // Empty State
   emptyState: { padding: 40, alignItems: 'center' },
-  emptyIcon: { fontSize: 40, marginBottom: 10, opacity: 0.5 },
-  emptyText: { color: '#94a3b8' },
+  emptyIcon: { fontSize: 44, marginBottom: 10, opacity: 0.5 },
+  emptyText: { color: '#94a3b8', fontSize: 18 },
 
   // Modal Styles
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { backgroundColor: '#fff', width: '100%', maxWidth: 400, borderRadius: 16, maxHeight: '80%', overflow: 'hidden' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderColor: '#f1f5f9' },
-  modalTitle: { fontSize: 20, fontWeight: '700', color: '#1e293b' },
-  modalCloseText: { fontSize: 24, color: '#94a3b8' },
+  modalTitle: { fontSize: 24, fontWeight: '700', color: '#1e293b' },
+  modalCloseText: { fontSize: 26, color: '#94a3b8' },
   modalBody: { padding: 20 },
   modalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  modalLabel: { fontSize: 14, color: '#64748b' },
-  modalValue: { fontSize: 14, color: '#1e293b', fontWeight: '500', flex: 1, textAlign: 'right' },
+  modalLabel: { fontSize: 18, color: '#64748b' },
+  modalValue: { fontSize: 18, color: '#1e293b', fontWeight: '500', flex: 1, textAlign: 'right' },
   modalDivider: { height: 1, backgroundColor: '#f1f5f9', marginVertical: 12 },
   modalActions: { marginTop: 20, gap: 10 },
   modalBtnPrimary: { backgroundColor: '#092090', padding: 14, borderRadius: 8, alignItems: 'center' },
   modalBtnSecondary: { backgroundColor: '#f1f5f9', padding: 14, borderRadius: 8, alignItems: 'center' },
-  modalBtnText: { color: '#fff', fontWeight: '600', fontSize: 15 }
+  modalBtnText: { color: '#fff', fontWeight: '600', fontSize: 19 }
 }); 

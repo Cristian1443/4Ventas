@@ -170,7 +170,7 @@ export default function CobrosScreen() {
           <View style={styles.leftColumn}>
             <View style={styles.headerLeft}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={{marginBottom: 10}}>
-                    <Text style={{color: '#697b92'}}>← Volver a lista</Text>
+                    <Text style={{fontSize: 16, color: '#697b92'}}>← Volver a lista</Text>
                 </TouchableOpacity>
                 <Text style={styles.sectionLabel}>Cliente</Text>
             </View>
@@ -281,7 +281,7 @@ export default function CobrosScreen() {
                                       {item.notaId !== 'S/N' ? item.notaId : item.id}
                                     </Text>
                                 </View>
-                                <Text style={{fontSize: 14, fontWeight: '600', color: '#1e293b'}}>
+                                <Text style={{fontSize: 16, fontWeight: '600', color: '#1e293b'}}>
                                     {item.originalNota ? 'Nota de Venta' : 'Deuda'}
                                 </Text>
                             </View>
@@ -321,33 +321,33 @@ const styles = StyleSheet.create({
   
   leftColumn: { width: 350, flexDirection: 'column', flexShrink: 0 },
   headerLeft: { marginBottom: 20 },
-  sectionLabel: { fontSize: 14, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 },
+  sectionLabel: { fontSize: 18, fontWeight: '700', color: '#1a1a1a', marginBottom: 8 },
   clientCard: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 16 },
-  clientName: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginBottom: 4 },
-  clientDetail: { fontSize: 13, color: '#697b92' },
+  clientName: { fontSize: 20, fontWeight: '700', color: '#1a1a1a', marginBottom: 4 },
+  clientDetail: { fontSize: 17, color: '#697b92' },
   
   paymentSelectorContainer: { position: 'relative', marginBottom: 20, zIndex: 20 },
   paymentSelector: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  paymentText: { fontSize: 14, color: '#1a1a1a' },
+  paymentText: { fontSize: 18, color: '#1a1a1a' },
   paymentTextPlaceholder: { color: '#94a3b8' },
-  dropdownIcon: { fontSize: 12, color: '#697b92' },
+  dropdownIcon: { fontSize: 16, color: '#697b92' },
   paymentDropdown: { position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: '#fff', borderRadius: 8, marginTop: 4, borderWidth: 1, borderColor: '#e2e8f0', shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 8, elevation: 5 },
   paymentOption: { padding: 14, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  paymentOptionText: { fontSize: 14, color: '#1a1a1a' },
+  paymentOptionText: { fontSize: 18, color: '#1a1a1a' },
   
   printOptionContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#f8fafc', padding: 14, borderRadius: 8, marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0' },
-  printOptionLabel: { fontSize: 14, color: '#1a1a1a', fontWeight: '500' },
+  printOptionLabel: { fontSize: 18, color: '#1a1a1a', fontWeight: '500' },
   
   confirmButton: { width: '100%', borderRadius: 30, overflow: 'hidden', marginTop: 'auto' },
   confirmButtonDisabled: { opacity: 0.5 },
   confirmButtonGradient: { paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
-  confirmButtonIcon: { fontSize: 16 },
-  confirmButtonText: { fontSize: 16, fontWeight: '700', color: '#ffffff' },
+  confirmButtonIcon: { fontSize: 20 },
+  confirmButtonText: { fontSize: 20, fontWeight: '700', color: '#ffffff' },
   
   rightColumn: { flex: 1, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column' },
   notesHeader: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#e2e8f0', flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#fff' },
-  notesHeaderIcon: { fontSize: 20 },
-  notesHeaderTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
+  notesHeaderIcon: { fontSize: 24 },
+  notesHeaderTitle: { fontSize: 22, fontWeight: '700', color: '#1a1a1a' },
   
   notesList: { flex: 1, backgroundColor: '#f8fafc' },
   notesListContent: { padding: 20 },
@@ -355,22 +355,22 @@ const styles = StyleSheet.create({
   noteCard: { backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e2e8f0', padding: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   noteCardSelected: { borderColor: '#0C2ABF', backgroundColor: '#f0f7ff' },
   noteHeader: { flexDirection: 'column', gap: 4 },
-  noteIdBadge: { backgroundColor: '#e2e8f0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, alignSelf: 'flex-start' },
-  noteIdText: { fontSize: 11, fontWeight: '700', color: '#475569' },
-  noteDateValue: { fontSize: 12, color: '#64748b' },
-  noteAmount: { fontSize: 16, fontWeight: '700', color: '#1a1a1a', marginRight: 40 },
+  noteIdBadge: { backgroundColor: '#e2e8f0', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, alignSelf: 'flex-start' },
+  noteIdText: { fontSize: 15, fontWeight: '700', color: '#475569' },
+  noteDateValue: { fontSize: 16, color: '#64748b' },
+  noteAmount: { fontSize: 20, fontWeight: '700', color: '#1a1a1a', marginRight: 40 },
   
-  checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#cbd5e1', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
+  checkbox: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: '#cbd5e1', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
   checkboxSelected: { borderColor: '#0C2ABF', backgroundColor: '#0C2ABF' },
-  checkmark: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  checkmark: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   
   emptyState: { padding: 40, alignItems: 'center', justifyContent: 'center', flex: 1 },
-  emptyStateIcon: { fontSize: 40, marginBottom: 10 },
-  emptyStateTitle: { fontSize: 18, fontWeight: '600', color: '#1a1a1a', marginBottom: 8 },
-  emptyStateText: { fontSize: 14, color: '#697b92' },
+  emptyStateIcon: { fontSize: 48, marginBottom: 10 },
+  emptyStateTitle: { fontSize: 22, fontWeight: '600', color: '#1a1a1a', marginBottom: 8 },
+  emptyStateText: { fontSize: 18, color: '#697b92' },
   
   notesFooter: { padding: 20, backgroundColor: '#fff', borderTopWidth: 1, borderTopColor: '#e2e8f0' },
   subtotalContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f0f7ff', padding: 16, borderRadius: 8, borderWidth: 1, borderColor: '#dbeafe' },
-  subtotalLabel: { fontSize: 16, fontWeight: '600', color: '#1e293b' },
-  subtotalValue: { fontSize: 20, fontWeight: '700', color: '#092090' }
+  subtotalLabel: { fontSize: 20, fontWeight: '600', color: '#1e293b' },
+  subtotalValue: { fontSize: 24, fontWeight: '700', color: '#092090' }
 });

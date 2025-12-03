@@ -284,9 +284,9 @@ const styles = StyleSheet.create({
   
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 30 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  backButton: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
-  backIcon: { fontSize: 20, color: '#697b92' },
-  title: { fontSize: 28, fontWeight: '700', color: '#1a1a1a' },
+  backButton: { width: 44, height: 44, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
+  backIcon: { fontSize: 24, color: '#697b92' },
+  title: { fontSize: 32, fontWeight: '700', color: '#1a1a1a' },
 
   gridContainer: { flexDirection: 'row', gap: 24, flexWrap: 'wrap' },
   column: { flex: 1, minWidth: 350, gap: 24 },
@@ -304,44 +304,44 @@ const styles = StyleSheet.create({
     elevation: 2
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-  cardIcon: { fontSize: 24 },
-  cardTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
+  cardIcon: { fontSize: 28 },
+  cardTitle: { fontSize: 22, fontWeight: '700', color: '#1a1a1a' },
 
   // User Card
   userInfo: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 24 },
   avatarCircle: { width: 60, height: 60, borderRadius: 30, backgroundColor: '#eff6ff', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#bfdbfe' },
-  avatarText: { fontSize: 20, fontWeight: '700', color: '#092090' },
-  userName: { fontSize: 18, fontWeight: '600', color: '#1e293b' },
-  userRole: { fontSize: 14, color: '#64748b' },
+  avatarText: { fontSize: 24, fontWeight: '700', color: '#092090' },
+  userName: { fontSize: 22, fontWeight: '600', color: '#1e293b' },
+  userRole: { fontSize: 18, color: '#64748b' },
   logoutButton: { paddingVertical: 12, alignItems: 'center', borderRadius: 8, backgroundColor: '#fef2f2', borderWidth: 1, borderColor: '#fecaca' },
-  logoutText: { color: '#ef4444', fontWeight: '600', fontSize: 14 },
+  logoutText: { color: '#ef4444', fontWeight: '600', fontSize: 18 },
 
   // Sync Card
   syncStatusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#f1f5f9' },
-  syncLabel: { fontSize: 14, color: '#64748b' },
-  syncValue: { fontSize: 14, fontWeight: '600', color: '#1e293b' },
+  syncLabel: { fontSize: 18, color: '#64748b' },
+  syncValue: { fontSize: 18, fontWeight: '600', color: '#1e293b' },
   statusBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20 },
   badgeOnline: { backgroundColor: '#dcfce7' },
   badgeOffline: { backgroundColor: '#fee2e2' },
-  statusText: { fontSize: 12, fontWeight: '700' },
+  statusText: { fontSize: 16, fontWeight: '700' },
   textOnline: { color: '#166534' },
   textOffline: { color: '#991b1b' },
   syncButton: { borderRadius: 12, overflow: 'hidden', marginTop: 8 },
   syncGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14 },
-  syncButtonIcon: { color: '#ffffff', fontSize: 18, fontWeight: 'bold' },
-  syncButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '600' },
+  syncButtonIcon: { color: '#ffffff', fontSize: 20, fontWeight: 'bold' },
+  syncButtonText: { color: '#ffffff', fontSize: 18, fontWeight: '600' },
 
   // Printer Card
-  inputLabel: { fontSize: 13, fontWeight: '600', color: '#475569', marginBottom: 8 },
-  input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 12, fontSize: 14, color: '#1e293b', marginBottom: 16 },
+  inputLabel: { fontSize: 17, fontWeight: '600', color: '#475569', marginBottom: 8 },
+  input: { backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, padding: 12, fontSize: 18, color: '#1e293b', marginBottom: 16 },
   printerActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
   secondaryButton: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 8, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#092090' },
-  secondaryButtonText: { color: '#092090', fontWeight: '600', fontSize: 14 },
+  secondaryButtonText: { color: '#092090', fontWeight: '600', fontSize: 18 },
   primaryButton: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 8, backgroundColor: '#092090' },
-  primaryButtonText: { color: '#ffffff', fontWeight: '600', fontSize: 14 },
+  primaryButtonText: { color: '#ffffff', fontWeight: '600', fontSize: 18 },
 
   // Info Card
   infoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  infoLabel: { fontSize: 14, color: '#64748b' },
-  infoValue: { fontSize: 14, fontWeight: '500', color: '#1e293b' }
+  infoLabel: { fontSize: 18, color: '#64748b' },
+  infoValue: { fontSize: 18, fontWeight: '500', color: '#1e293b' }
 });

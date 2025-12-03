@@ -142,20 +142,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const initializeApp = async () => {
     const savedConfig = await storageService.getItem<AppConfig>('appConfig');
+    const finalConfig = savedConfig || config;
     if (savedConfig) setConfig(savedConfig);
     
-    // 1. Cargar datos locales
-    await loadLocalData();
+    // 1. Cargar datos locales (usar finalConfig para saber si ERP está habilitado)
+    await loadLocalData(finalConfig.erpEnabled);
     
     // 2. Intentar sincronizar si está habilitado el ERP
-    if (config.erpEnabled) {
+    if (finalConfig.erpEnabled) {
         syncService.initialize().then(() => {
            refreshLocalDataFromSync();
         }).catch(err => console.log("Inicio offline o error de sync:", err));
     }
   };
 
-  const loadLocalData = async () => {
+  const loadLocalData = async (erpEnabled: boolean = false) => {
     try {
       const [sGastos, sNotas, sCobros, sDocs, sArts, sCli, sAlm, sVisitas] = await Promise.all([
         storageService.getItem<Gasto[]>('gastos'),
@@ -173,12 +174,20 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setCobros(sCobros || []);
       setDocumentos(sDocs || []);
       
-      // Si no hay datos locales (primera vez), usar MOCKS para pruebas
-      if (sArts && sArts.length > 0) {
-        setArticulos(sArts);
-      } else {
+      // SIEMPRE usar initialArticulos cuando el ERP está deshabilitado (modo prueba)
+      // Esto asegura que los productos de la tienda siempre estén disponibles
+      // y reemplaza cualquier artículo antiguo que pueda estar guardado
+      if (!erpEnabled) {
         setArticulos(initialArticulos);
-        storageService.setItem('articulos', initialArticulos);
+        await storageService.setItem('articulos', initialArticulos);
+      } else {
+        // Si el ERP está habilitado, usar datos locales si existen, sino usar initialArticulos
+        if (sArts && sArts.length > 0) {
+          setArticulos(sArts);
+        } else {
+          setArticulos(initialArticulos);
+          await storageService.setItem('articulos', initialArticulos);
+        }
       }
 
       if (sCli && sCli.length > 0) {

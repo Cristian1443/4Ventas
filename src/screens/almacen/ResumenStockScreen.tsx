@@ -182,20 +182,20 @@ const styles = StyleSheet.create({
     zIndex: 10
   },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '600',
     color: '#1a1a1a',
     textAlign: 'center',
     flex: 1
   },
   backButtonHeader: {
-    width: 26,
-    height: 26,
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center'
   },
   backIconHeader: {
-    fontSize: 20,
+    fontSize: 24,
     color: '#697B92'
   },
   scrollView: {
@@ -218,12 +218,12 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0'
   },
   statLabelGradient: {
-    fontSize: 14,
+    fontSize: 18,
     color: 'rgba(255,255,255,0.8)',
     marginBottom: 8
   },
   statValueGradient: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '700',
     color: '#ffffff'
   },
@@ -236,12 +236,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff'
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#697b92',
     marginBottom: 8
   },
   statValue: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '700',
     color: '#1a1a1a'
   },
@@ -254,12 +254,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#fffbeb'
   },
   statLabelWarning: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#92400e',
     marginBottom: 8
   },
   statValueWarning: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: '700',
     color: '#f59e0b'
   },
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
     borderColor: '#0C2ABF'
   },
   filterButtonText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     color: '#092090'
   },
@@ -293,6 +293,26 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: 'hidden'
   },
+  emptyState: {
+    padding: 60,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  emptyIcon: {
+    fontSize: 44,
+    marginBottom: 16,
+    opacity: 0.5
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    marginBottom: 8
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#697b92'
+  },
   tableHeader: {
     flexDirection: 'row',
     paddingVertical: 16,
@@ -302,7 +322,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e2e8f0'
   },
   tableHeaderText: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '600',
     color: '#64748b'
   },
@@ -320,7 +340,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#e2e8f0'
   },
   tableCell: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#1a1a1a'
   },
   tableCellGray: {

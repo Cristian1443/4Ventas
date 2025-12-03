@@ -24,7 +24,7 @@ export default function ScreenWithSidebar({
   // COMPORTAMIENTO 1: MÓVIL (Sin Sidebar)
   if (!showSidebar) {
     return (
-      <View style={styles.masterContainer}>
+      <View style={[styles.masterContainer, { paddingTop: insets.top }]}>
         {scrollable ? (
           <ScrollView 
             style={styles.flexOne} 
@@ -44,11 +44,11 @@ export default function ScreenWithSidebar({
 
   // COMPORTAMIENTO 2: TABLET/WEB (Split View)
   return (
-    <View style={styles.masterContainer}>
+    <View style={[styles.masterContainer, { paddingTop: insets.top }]}>
       <View style={styles.splitLayout}>
         
         {/* Columna 1: Menú Lateral - Borde a Borde */}
-        <View style={[styles.sidebarBox, { width: sidebarWidth }]}>
+        <View style={[styles.sidebarBox, { width: sidebarWidth, paddingTop: insets.top }]}>
           <SidebarNavigation currentScreen={currentScreen} />
         </View>
         
@@ -64,7 +64,7 @@ export default function ScreenWithSidebar({
               {children}
             </ScrollView>
           ) : (
-            <View style={styles.fixedContentContainer}>
+            <View style={[styles.fixedContentContainer, { paddingBottom: insets.bottom }]}>
               {children}
             </View>
           )}

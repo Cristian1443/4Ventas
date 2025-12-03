@@ -11,7 +11,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   Modal,
-  FlatList
+  FlatList,
+  Keyboard,
+  KeyboardEvent
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -39,7 +41,8 @@ const TIPOS_NOTA = [
   { label: 'Presupuesto', value: 'Presupuesto' }
 ];
 
-const METODOS_PAGO_BASE = ['Efectivo', 'Tarjeta', 'Bizum', 'Transferencia'];
+const METODOS_PAGO_CONTADO = ['Efectivo', 'Talón', 'TPV – Tarjeta bancaria'];
+const METODOS_PAGO_CREDITO = ['Crédito – Pendiente', 'Giro bancario', 'Transferencia'];
 
 const getFechaActualFormateada = () => {
   const now = new Date();
@@ -87,6 +90,7 @@ export default function NuevaVentaScreen() {
   const [selectorType, setSelectorType] = useState<'tipoDoc' | 'formaPago' | null>(null);
 
   const [isSaved, setIsSaved] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   // ... (useEffect de carga inicial se mantiene) ...
   useEffect(() => {
@@ -115,6 +119,25 @@ export default function NuevaVentaScreen() {
       }
     }
   }, [ventaDataInicial]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const handleShow = (event: KeyboardEvent) => {
+      setKeyboardHeight(event.endCoordinates?.height || 0);
+    };
+
+    const handleHide = () => setKeyboardHeight(0);
+
+    const showSub = Keyboard.addListener(showEvent, handleShow);
+    const hideSub = Keyboard.addListener(hideEvent, handleHide);
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   // ... (useEffect de protección de navegación se mantiene) ...
   useEffect(() => {
@@ -148,9 +171,9 @@ export default function NuevaVentaScreen() {
   // ... (useMemo metodosDisponibles y useEffect se mantienen) ...
   const metodosDisponibles = useMemo(() => {
     if (estadoPago === 'pendiente') {
-      return METODOS_PAGO_BASE.filter(m => m !== 'Efectivo');
+      return METODOS_PAGO_CREDITO;
     }
-    return METODOS_PAGO_BASE;
+    return METODOS_PAGO_CONTADO;
   }, [estadoPago]);
 
   useEffect(() => {
@@ -370,8 +393,8 @@ export default function NuevaVentaScreen() {
     <ScreenWithSidebar currentScreen="NuevaVenta" scrollable={false}>
       <KeyboardAvoidingView 
         style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+        behavior="padding"
+        keyboardVerticalOffset={Platform.select({ ios: 64, android: 20, default: 0 })}
       >
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Nueva Venta</Text>
@@ -384,7 +407,10 @@ export default function NuevaVentaScreen() {
             <View style={styles.scrollWrapper}>
               <ScrollView 
                 style={styles.scrollView}
-                contentContainerStyle={styles.scrollInner}
+                contentContainerStyle={[
+                  styles.scrollInner,
+                  { paddingBottom: Math.max(40, keyboardHeight + 40) }
+                ]}
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={true}
               >
@@ -394,13 +420,13 @@ export default function NuevaVentaScreen() {
                     <View style={[styles.field, { zIndex: 20 }]}>
                         <Text style={styles.label}>Cliente *</Text>
                         <TouchableOpacity style={styles.select} onPress={() => setModalCliente(true)}>
-                        <Text style={{ color: clienteSeleccionado ? '#1e293b' : '#94a3b8', fontSize: 15 }}>
+                        <Text style={{ color: clienteSeleccionado ? '#1e293b' : '#94a3b8', fontSize: 19 }}>
                             {clienteSeleccionado ? `${clienteSeleccionado.nombre}` : 'Seleccionar Cliente...'}
                         </Text>
-                        <Text style={{fontSize: 16}}>🔍</Text>
+                        <Text style={{fontSize: 20}}>🔍</Text>
                         </TouchableOpacity>
                         {clienteSeleccionado && (
-                            <Text style={{fontSize: 11, color: '#64748b', marginTop: 4, marginLeft: 2}}>
+                            <Text style={{fontSize: 15, color: '#64748b', marginTop: 4, marginLeft: 2}}>
                                 {clienteSeleccionado.empresa} • {clienteSeleccionado.direccion}
                             </Text>
                         )}
@@ -423,16 +449,16 @@ export default function NuevaVentaScreen() {
                         <View style={styles.col}>
                             <Text style={styles.label}>Forma Pago</Text>
                             <TouchableOpacity style={styles.selectCompact} onPress={() => openSelector('formaPago')}>
-                                <Text numberOfLines={1} style={{fontSize: 13, color: '#1e293b'}}>{formaPago || '-'}</Text>
-                                <Text style={{fontSize: 10}}>▼</Text>
+                                <Text numberOfLines={1} style={{fontSize: 17, color: '#1e293b'}}>{formaPago || '-'}</Text>
+                                <Text style={{fontSize: 14}}>▼</Text>
                             </TouchableOpacity>
                         </View>
 
                         <View style={styles.col}>
                             <Text style={styles.label}>Tipo Doc.</Text>
                             <TouchableOpacity style={styles.selectCompact} onPress={() => openSelector('tipoDoc')}>
-                                <Text numberOfLines={1} style={{fontSize: 13, color: '#1e293b'}}>{tipoNota.label}</Text>
-                                <Text style={{fontSize: 10}}>▼</Text>
+                                <Text numberOfLines={1} style={{fontSize: 17, color: '#1e293b'}}>{tipoNota.label}</Text>
+                                <Text style={{fontSize: 14}}>▼</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -455,11 +481,11 @@ export default function NuevaVentaScreen() {
                                     placeholderTextColor="#94a3b8"
                                 />
                                 <TouchableOpacity onPress={() => setModalArticulo(true)} style={styles.iconContainer}>
-                                    <Text style={{fontSize: 16}}>🔍</Text>
+                                    <Text style={{fontSize: 20}}>🔍</Text>
                                 </TouchableOpacity>
                             </View>
                             {articuloSeleccionado && (
-                                <Text style={{fontSize: 11, color: '#10b981', marginTop: 2, fontWeight: '600'}} numberOfLines={1}>
+                                <Text style={{fontSize: 15, color: '#10b981', marginTop: 2, fontWeight: '600'}} numberOfLines={1}>
                                     {articuloSeleccionado.nombre}
                                 </Text>
                             )}
@@ -534,7 +560,7 @@ export default function NuevaVentaScreen() {
             </View>
 
             <View style={styles.panelFooter}>
-              <TouchableOpacity style={styles.btnSec} onPress={() => setModalHistorial(true)}><Text style={{color:'#64748b', fontWeight:'600'}}>Historial</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.btnSec} onPress={() => setModalHistorial(true)}><Text style={{fontSize: 16, color:'#64748b', fontWeight:'600'}}>Historial</Text></TouchableOpacity>
               <TouchableOpacity style={styles.btnPri} onPress={finalizarVenta}>
                  <LinearGradient colors={['#91e600', '#65a30d']} style={styles.gradBtn}><Text style={styles.txtBtnBlack}>✅ FINALIZAR VENTA</Text></LinearGradient>
               </TouchableOpacity>
@@ -547,20 +573,20 @@ export default function NuevaVentaScreen() {
             <View style={{flex: 1, borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 8, marginBottom: 10}}>
               {carrito.length === 0 ? (
                  <View style={{flex:1, alignItems:'center', justifyContent:'center', opacity:0.5}}>
-                   <Text style={{fontSize:40}}>🛒</Text>
-                   <Text style={{marginTop: 10, color: '#64748b'}}>Carrito Vacío</Text>
+                   <Text style={{fontSize:52}}>🛒</Text>
+                   <Text style={{marginTop: 10, color: '#64748b', fontSize:18}}>Carrito Vacío</Text>
                  </View>
               ) : (
                 <ScrollView style={{ flex: 1 }} contentContainerStyle={{padding: 0}}>
                   {carrito.map(i => (
                     <View key={i.id} style={styles.rowItem}>
                       <View style={{ flex: 1 }}>
-                          <Text style={{fontWeight:'600', color: '#1e293b'}}>{i.nombre}</Text>
-                          <Text style={{fontSize:12, color: '#64748b'}}>x{i.cantidad}  {i.descuento > 0 ? `(-${i.descuento}%)` : ''}</Text>
-                          {i.nota ? <Text style={{fontSize:11, color:'#94a3b8', fontStyle:'italic'}}>{i.nota}</Text> : null}
+                          <Text style={{fontSize: 16, fontWeight:'600', color: '#1e293b'}}>{i.nombre}</Text>
+                          <Text style={{fontSize:16, color: '#64748b'}}>x{i.cantidad}  {i.descuento > 0 ? `(-${i.descuento}%)` : ''}</Text>
+                          {i.nota ? <Text style={{fontSize:15, color:'#94a3b8', fontStyle:'italic'}}>{i.nota}</Text> : null}
                       </View>
-                      <Text style={{ fontWeight:'bold', color: '#1e293b' }}>{(i.precioUnitario * i.cantidad).toFixed(2)} €</Text>
-                      <TouchableOpacity onPress={() => eliminarDelCarrito(i.id)} style={{marginLeft:12, padding: 4}}><Text style={{color:'#ef4444', fontSize: 18}}>×</Text></TouchableOpacity>
+                      <Text style={{ fontSize: 16, fontWeight:'bold', color: '#1e293b' }}>{(i.precioUnitario * i.cantidad).toFixed(2)} €</Text>
+                      <TouchableOpacity onPress={() => eliminarDelCarrito(i.id)} style={{marginLeft:12, padding: 4}}><Text style={{color:'#ef4444', fontSize: 22}}>×</Text></TouchableOpacity>
                     </View>
                   ))}
                 </ScrollView>
@@ -582,7 +608,7 @@ export default function NuevaVentaScreen() {
                 
                 {enableGlobalDiscount && (
                     <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8}}>
-                        <Text style={{fontSize: 12, color: '#64748b'}}>Porcentaje:</Text>
+                  <Text style={{fontSize: 16, color: '#64748b'}}>Porcentaje:</Text>
                         <TextInput 
                             style={styles.inputGlobalDesc}
                             value={globalDiscountValue}
@@ -591,33 +617,33 @@ export default function NuevaVentaScreen() {
                             placeholder="0"
                             maxLength={3}
                         />
-                        <Text style={{fontSize: 14, fontWeight: 'bold', color: '#1e293b'}}>%</Text>
+                  <Text style={{fontSize: 18, fontWeight: 'bold', color: '#1e293b'}}>%</Text>
                     </View>
                 )}
             </View>
 
             <View style={styles.totalBox}>
               <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 5}}>
-                 <Text style={{color:'#64748b'}}>Subtotal</Text><Text>{totales.subtotal.toFixed(2)} €</Text>
+                 <Text style={{fontSize: 16, color:'#64748b'}}>Subtotal</Text><Text style={{fontSize: 16}}>{totales.subtotal.toFixed(2)} €</Text>
               </View>
               {totales.descuentos > 0 && (
                   <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 5}}>
-                      <Text style={{color:'#10b981'}}>
+                      <Text style={{fontSize: 16, color:'#10b981'}}>
                         Descuentos {enableGlobalDiscount && globalDiscountValue ? `(Gbl ${globalDiscountValue}%)` : ''}
                       </Text>
-                      <Text style={{color:'#10b981'}}>-{totales.descuentos.toFixed(2)} €</Text>
+                      <Text style={{fontSize: 16, color:'#10b981'}}>-{totales.descuentos.toFixed(2)} €</Text>
                   </View>
               )}
               <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 5}}>
-                 <Text style={{color:'#64748b'}}>Base Imponible</Text><Text>{totales.base.toFixed(2)} €</Text>
+                 <Text style={{fontSize: 16, color:'#64748b'}}>Base Imponible</Text><Text style={{fontSize: 16}}>{totales.base.toFixed(2)} €</Text>
               </View>
               <View style={{flexDirection:'row', justifyContent:'space-between', marginBottom: 10}}>
-                 <Text style={{color:'#64748b'}}>IVA (21%)</Text><Text>{totales.iva.toFixed(2)} €</Text>
+                 <Text style={{fontSize: 16, color:'#64748b'}}>IVA (21%)</Text><Text style={{fontSize: 16}}>{totales.iva.toFixed(2)} €</Text>
               </View>
               <View style={{height:1, backgroundColor:'#cbd5e1', marginBottom: 10}}/>
               <View style={{flexDirection:'row', justifyContent:'space-between', alignItems:'center'}}>
-                 <Text style={{fontSize: 16, fontWeight:'800', color: '#0f172a'}}>TOTAL</Text>
-                 <Text style={{fontSize: 24, fontWeight:'800', color: '#0C2ABF'}}>{totales.total.toFixed(2)} €</Text>
+                 <Text style={{fontSize: 20, fontWeight:'800', color: '#0f172a'}}>TOTAL</Text>
+                 <Text style={{fontSize: 28, fontWeight:'800', color: '#0C2ABF'}}>{totales.total.toFixed(2)} €</Text>
               </View>
             </View>
           </View>
@@ -678,10 +704,10 @@ export default function NuevaVentaScreen() {
 
 const styles = StyleSheet.create({
   header: { height: 60, justifyContent: 'center', paddingHorizontal: 20, borderBottomWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#fff', flexShrink: 0 },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#1e293b' },
+  headerTitle: { fontSize: 22, fontWeight: '700', color: '#1e293b' },
   
   mainContent: { flex: 1, flexDirection: 'row', height: '100%', overflow: 'hidden' },
-  leftPanel: { width: 480, borderRightWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#f8fafc', flexDirection: 'column', flexShrink: 0, height: '100%', display: 'flex' },
+  leftPanel: { width: 600, borderRightWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#f8fafc', flexDirection: 'column', flexShrink: 0, height: '100%', display: 'flex' },
   scrollWrapper: { flex: 1, minHeight: 0 },
   scrollView: { flex: 1 },
   scrollInner: { padding: 20, paddingBottom: 40 },
@@ -713,7 +739,7 @@ const styles = StyleSheet.create({
   },
 
   field: { marginBottom: 14 },
-  label: { fontSize: 11, color: '#64748b', marginBottom: 4, fontWeight: '600', textTransform: 'uppercase' },
+  label: { fontSize: 15, color: '#64748b', marginBottom: 4, fontWeight: '600', textTransform: 'uppercase' },
   
   select: { height: 44, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, justifyContent: 'space-between', paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc' },
   selectCompact: { height: 38, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, justifyContent: 'space-between', paddingHorizontal: 8, flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc' },
@@ -731,7 +757,7 @@ const styles = StyleSheet.create({
     paddingRight: 0,
     overflow: 'hidden'
   },
-  inputNoBorder: { flex: 1, fontSize: 14, color: '#1e293b', height: '100%' },
+  inputNoBorder: { flex: 1, fontSize: 18, color: '#1e293b', height: '100%' },
   iconContainer: { width: 40, height: '100%', alignItems: 'center', justifyContent: 'center', borderLeftWidth: 1, borderLeftColor: '#e2e8f0', backgroundColor: '#fff' },
   
   inputGrid: {
@@ -741,7 +767,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 10,
     backgroundColor: '#f8fafc',
-    fontSize: 14,
+    fontSize: 18,
     textAlign: 'center',
     color: '#1e293b'
   },
@@ -755,24 +781,24 @@ const styles = StyleSheet.create({
   col: { flex: 1 },
   switchRowCompact: { flexDirection: 'row', backgroundColor: '#e2e8f0', borderRadius: 6, padding: 2, height: 38 },
   switchBtnCompact: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 5 },
-  switchTxtCompact: { fontSize: 12, color: '#64748b', fontWeight: '600' },
+  switchTxtCompact: { fontSize: 16, color: '#64748b', fontWeight: '600' },
   
   bgSuccess: { backgroundColor: '#10b981' },
   bgWarning: { backgroundColor: '#f59e0b' },
   txtWhite: { color: '#fff', fontWeight: '700' },
 
   divider: { height: 1, backgroundColor: '#e2e8f0', marginVertical: 16 },
-  secTitle: { fontSize: 16, fontWeight: '700', color: '#334155', marginBottom: 12 },
+  secTitle: { fontSize: 20, fontWeight: '700', color: '#334155', marginBottom: 12 },
 
   addBtnCompact: { borderRadius: 8, overflow: 'hidden', height: 40 },
   gradBtnCompact: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  txtBtnCompact: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  txtBtnCompact: { color: '#fff', fontWeight: '700', fontSize: 17 },
 
   panelFooter: { padding: 16, paddingBottom: 20, borderTopWidth: 1, borderColor: '#e2e8f0', flexDirection: 'row', gap: 12, backgroundColor: '#fff', flexShrink: 0, zIndex: 10 },
   btnSec: { flex: 1, borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 8, justifyContent: 'center', alignItems: 'center', height: 48, backgroundColor: '#f8fafc' },
   btnPri: { flex: 2, borderRadius: 8, overflow: 'hidden', height: 48 },
   gradBtn: { padding: 14, alignItems: 'center', height: '100%', justifyContent: 'center' },
-  txtBtnBlack: { color: '#1a1a1a', fontWeight: '800', fontSize: 14 },
+  txtBtnBlack: { color: '#1a1a1a', fontWeight: '800', fontSize: 18 },
 
   rowItem: { flexDirection: 'row', padding: 12, borderBottomWidth: 1, borderColor: '#f8fafc', alignItems: 'center', justifyContent: 'space-between' },
   totalBox: { marginTop: 'auto', padding: 20, backgroundColor: '#f8fafc', borderRadius: 12 },
@@ -782,9 +808,9 @@ const styles = StyleSheet.create({
   closeBtn: { marginTop: 20, padding: 12, backgroundColor: '#f1f5f9', alignItems: 'center', borderRadius: 8 },
 
   selectorModalCard: { width: 320, backgroundColor: '#fff', borderRadius: 12, padding: 0, elevation: 10, maxHeight: '60%' },
-  selectorTitle: { fontSize: 15, fontWeight: '700', color: '#1e293b', padding: 16, textAlign: 'center', borderBottomWidth: 1, borderColor: '#f1f5f9', backgroundColor: '#f8fafc', borderTopLeftRadius: 12, borderTopRightRadius: 12 },
+  selectorTitle: { fontSize: 22, fontWeight: '700', color: '#1e293b', padding: 16, textAlign: 'center', borderBottomWidth: 1, borderColor: '#f1f5f9', backgroundColor: '#f8fafc', borderTopLeftRadius: 12, borderTopRightRadius: 12 },
   selectorItem: { padding: 16, borderBottomWidth: 1, borderColor: '#f1f5f9' },
-  selectorItemText: { fontSize: 16, color: '#334155', textAlign: 'center' },
+  selectorItemText: { fontSize: 22, color: '#334155', textAlign: 'center' },
 
   globalDiscountBox: {
     backgroundColor: '#fff',
@@ -804,7 +830,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     width: 60,
     textAlign: 'center',
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#092090'
   }

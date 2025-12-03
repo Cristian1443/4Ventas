@@ -419,9 +419,9 @@ const styles = StyleSheet.create({
     gap: 12
   },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: '#e2e8f0',
     backgroundColor: 'white',
@@ -429,12 +429,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   backIcon: {
-    fontSize: 18,
+    fontSize: 22,
     color: '#697b92',
     marginBottom: 2
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
     color: '#1a1a1a'
   },
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 30,
-    height: 46,
+    height: 48,
     paddingHorizontal: 16,
     gap: 10,
     minWidth: 260
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
     gap: 8
   },
   headerActionText: {
-    fontSize: 13,
+    fontSize: 17,
     fontWeight: '600',
     color: '#ffffff'
   },
@@ -486,12 +486,12 @@ const styles = StyleSheet.create({
     borderColor: '#e2e8f0'
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#697b92',
     marginBottom: 4
   },
   statValue: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
     color: '#1a1a1a'
   },
@@ -500,12 +500,12 @@ const styles = StyleSheet.create({
     borderColor: '#fca5a5'
   },
   statLabelWarning: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#dc2626',
     marginBottom: 4
   },
   statValueWarning: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
     color: '#dc2626'
   },
@@ -525,11 +525,11 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   searchIcon: {
-    fontSize: 14
+    fontSize: 18
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 18,
     color: '#1a1a1a'
   },
   filters: {
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
     borderColor: '#0C2ABF'
   },
   filterText: {
-    fontSize: 13,
+    fontSize: 17,
     fontWeight: '600',
     color: '#697b92'
   },
@@ -573,7 +573,7 @@ const styles = StyleSheet.create({
     borderColor: '#0C2ABF'
   },
   sortButtonText: {
-    fontSize: 13,
+    fontSize: 17,
     fontWeight: '600',
     color: '#697b92'
   },
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     overflow: 'hidden',
-    height: 130 // Altura fija para consistencia
+    height: 160 // Altura fija ligeramente aumentada para mostrar toda la información
   },
   articuloCardBajo: {
     backgroundColor: '#fff1f2',
@@ -652,35 +652,35 @@ const styles = StyleSheet.create({
       borderColor: '#c7d2fe'
   },
   shortCodeText: {
-      fontSize: 11,
+      fontSize: 15,
       fontWeight: '800',
       color: '#092090'
   },
   idText: {
-      fontSize: 11,
+      fontSize: 15,
       color: '#94a3b8',
       fontWeight: '500'
   },
   alertBadge: {
       backgroundColor: '#dc2626',
-      paddingHorizontal: 8,
-      paddingVertical: 2,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
       borderRadius: 10
   },
   alertBadgeText: {
-      fontSize: 10,
+      fontSize: 14,
       fontWeight: '700',
       color: '#ffffff'
   },
   articuloNombre: {
-    fontSize: 15,
+    fontSize: 19,
     fontWeight: '700',
     color: '#1a1a1a',
     marginVertical: 4,
-    lineHeight: 20
+    lineHeight: 24
   },
   articuloCategoria: {
-      fontSize: 12,
+      fontSize: 16,
       color: '#64748b'
   },
   infoFooter: {
@@ -692,7 +692,7 @@ const styles = StyleSheet.create({
       paddingTop: 8
   },
   articuloPrecio: {
-      fontSize: 16,
+      fontSize: 20,
       fontWeight: '700',
       color: '#092090'
   },
@@ -702,11 +702,11 @@ const styles = StyleSheet.create({
       gap: 4
   },
   stockLabel: {
-      fontSize: 12,
+      fontSize: 16,
       color: '#64748b'
   },
   stockValueNumber: {
-      fontSize: 14,
+      fontSize: 18,
       fontWeight: '700',
       color: '#1a1a1a'
   },
@@ -716,11 +716,11 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   emptyText: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#697b92'
   },
   emptyIcon: {
-      fontSize: 48,
+      fontSize: 52,
       marginBottom: 20,
       opacity: 0.5
   },
@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
       height: '100%'
   },
   modalTitle: {
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '700',
     color: '#1a1a1a',
     marginBottom: 20,
@@ -765,21 +765,21 @@ const styles = StyleSheet.create({
     paddingBottom: 8
   },
   modalSectionLabel: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#697b92'
   },
   modalSectionValue: {
-    fontSize: 16,
+    fontSize: 20,
     color: '#1a1a1a',
     fontWeight: '500'
   },
   modalSectionValueLarge: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
     color: '#1a1a1a'
   },
   modalSectionValuePrice: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
     color: '#092090'
   },
@@ -793,7 +793,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   modalCloseButtonText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     color: '#ffffff'
   }

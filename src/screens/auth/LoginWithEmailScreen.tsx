@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useApp } from '../../context/AppContext';
 
 // Importar logo (ruta correcta desde src/screens/auth/)
@@ -23,6 +24,7 @@ const logoImage = require('../../../assets/logo-login.png');
 export default function LoginWithEmailScreen() {
   const navigation = useNavigation<any>();
   const { setUserSession } = useApp();
+  const insets = useSafeAreaInsets();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -57,7 +59,7 @@ export default function LoginWithEmailScreen() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView contentContainerStyle={[styles.container, { paddingTop: insets.top + 20, paddingBottom: insets.bottom + 20 }]}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleBack} style={styles.backButton}>
@@ -152,7 +154,7 @@ const styles = StyleSheet.create({
     padding: 8
   },
   backText: {
-    fontSize: 16,
+    fontSize: 20,
     color: '#0C2ABF',
     fontWeight: '600'
   },
@@ -167,13 +169,13 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontFamily: 'System',
-    fontSize: 12,
+    fontSize: 16,
     color: '#697b92',
     textAlign: 'center'
   },
   title: {
     fontFamily: 'System',
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '600',
     color: '#1a1a1a',
     textAlign: 'center',
@@ -189,19 +191,19 @@ const styles = StyleSheet.create({
   },
   label: {
     fontFamily: 'System',
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     color: '#1a1a1a',
     marginBottom: 8
   },
   input: {
-    height: 50,
+    height: 52,
     backgroundColor: '#f8fafc',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 10,
     paddingHorizontal: 16,
-    fontSize: 16,
+    fontSize: 18,
     color: '#1a1a1a'
   },
   loginButton: {
@@ -225,7 +227,7 @@ const styles = StyleSheet.create({
   },
   loginButtonText: {
     fontFamily: 'System',
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '600',
     color: '#ffffff'
   },
@@ -235,7 +237,7 @@ const styles = StyleSheet.create({
   },
   forgotPasswordText: {
     fontFamily: 'System',
-    fontSize: 14,
+    fontSize: 18,
     color: '#0C2ABF',
     fontWeight: '500'
   }

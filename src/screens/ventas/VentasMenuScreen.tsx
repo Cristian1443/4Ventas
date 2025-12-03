@@ -29,10 +29,10 @@ export default function VentasMenuScreen() {
     { label: 'Artículos', icon: '📦', screen: 'Articulos' }
   ];
 
-  // Configuraciones de tamaño según el dispositivo
-  const buttonSize = layout.isTablet ? 160 : 110; // Más grande en tablet
-  const fontSizeIcon = layout.isTablet ? 48 : 32;
-  const fontSizeLabel = layout.isTablet ? 16 : 12;
+  // Configuraciones de tamaño según el dispositivo (unificado con AlmacenScreen)
+  const buttonSize = layout.isTablet ? 180 : 130;
+  const fontSizeIcon = layout.isTablet ? 58 : 40;
+  const fontSizeLabel = layout.isTablet ? 20 : 16;
   const gapSize = layout.isTablet ? 30 : 15;
 
   return (
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     padding: 40,
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '700',
     color: '#1a1a1a',
     marginBottom: 30,

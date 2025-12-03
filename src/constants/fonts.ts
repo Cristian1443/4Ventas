@@ -1,5 +1,5 @@
 /**
- * Constantes de Tipografía
+ * Constantes de Tipografía - AUMENTADAS
  */
 
 export const fonts = {
@@ -8,14 +8,14 @@ export const fonts = {
   bold: 'System',
   
   sizes: {
-    tiny: 10,
-    small: 12,
-    medium: 14,
-    large: 16,
-    xlarge: 18,
-    xxlarge: 20,
-    title: 24,
-    largeTitle: 28,
+    tiny: 12,      // Antes 10
+    small: 14,     // Antes 12
+    medium: 16,    // Antes 14
+    large: 18,     // Antes 16
+    xlarge: 22,    // Antes 18
+    xxlarge: 26,   // Antes 20
+    title: 30,     // Antes 24
+    largeTitle: 34 // Antes 28
   },
   
   weights: {

@@ -503,8 +503,8 @@ const styles = StyleSheet.create({
     gap: 16
   },
   backButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#e2e8f0',
@@ -513,11 +513,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center'
   },
   backIcon: {
-    fontSize: 20,
+    fontSize: 24,
     color: '#697b92'
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
     color: '#1a1a1a'
   },
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24
   },
   addButtonText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
     color: '#ffffff'
   },
@@ -548,12 +548,12 @@ const styles = StyleSheet.create({
     borderRadius: 10
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#697b92',
     marginBottom: 4
   },
   statValue: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: '700',
     color: '#1a1a1a'
   },
@@ -581,12 +581,12 @@ const styles = StyleSheet.create({
     gap: 12
   },
   mesSelectorText: {
-    fontSize: 17,
+    fontSize: 21,
     fontWeight: '600',
     color: '#ffffff'
   },
   mesSelectorArrow: {
-    fontSize: 8,
+    fontSize: 10,
     color: '#ffffff'
   },
   monthPicker: {
@@ -613,7 +613,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f4ff'
   },
   monthPickerText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#1a1a1a'
   },
   monthPickerTextActive: {
@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8
   },
   diaSemanaText: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '700',
     color: '#092090',
     textAlign: 'center',
@@ -658,7 +658,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0C2ABF'
   },
   diaText: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '500',
     color: 'rgba(0,0,0,0.45)'
   },
@@ -682,7 +682,7 @@ const styles = StyleSheet.create({
     marginBottom: 8
   },
   diaInactivoText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#bbb'
   },
   leyenda: {
@@ -692,7 +692,7 @@ const styles = StyleSheet.create({
     borderRadius: 10
   },
   leyendaTitle: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '600',
     color: '#697b92',
     marginBottom: 8
@@ -704,17 +704,17 @@ const styles = StyleSheet.create({
     marginBottom: 6
   },
   leyendaDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8
+    width: 18,
+    height: 18,
+    borderRadius: 9
   },
   leyendaDotGradient: {
-    width: 16,
-    height: 16,
-    borderRadius: 8
+    width: 18,
+    height: 18,
+    borderRadius: 9
   },
   leyendaText: {
-    fontSize: 12,
+    fontSize: 16,
     color: '#697b92'
   },
   clientesContainer: {
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     minWidth: 300
   },
   clientesTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '600',
     color: '#1a1a1a',
     marginBottom: 20
@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
     borderRadius: 12
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#697b92'
   },
   clienteCard: {
@@ -774,7 +774,7 @@ const styles = StyleSheet.create({
     gap: 10
   },
   clienteNombre: {
-    fontSize: 15,
+    fontSize: 19,
     fontWeight: '600',
     color: '#1a1a1a'
   },
@@ -787,11 +787,11 @@ const styles = StyleSheet.create({
     borderRadius: 10
   },
   tipoBadgeText: {
-    fontSize: 11,
+    fontSize: 15,
     fontWeight: '600'
   },
   clienteDireccion: {
-    fontSize: 13,
+    fontSize: 17,
     color: '#697b92'
   },
   clienteActions: {
@@ -806,7 +806,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9'
   },
   horaText: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '600',
     color: '#1a1a1a'
   },
@@ -825,7 +825,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#10b981'
   },
   checkIcon: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#ffffff'
   },
   // Modal
@@ -844,7 +844,7 @@ const styles = StyleSheet.create({
     width: '90%'
   },
   modalTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
     color: '#1a1a1a',
     marginBottom: 24
@@ -856,7 +856,7 @@ const styles = StyleSheet.create({
     marginBottom: 16
   },
   modalLabel: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#697b92',
     marginBottom: 8
   },
@@ -866,7 +866,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 8,
-    fontSize: 14,
+    fontSize: 18,
     color: '#1a1a1a'
   },
   tipoSelector: {
@@ -888,7 +888,7 @@ const styles = StyleSheet.create({
     borderColor: '#0C2ABF'
   },
   tipoOptionText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     color: '#697b92'
   },
@@ -909,7 +909,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   modalButtonCancelText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     color: '#697b92'
   },
@@ -923,7 +923,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   modalButtonAddText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     color: '#ffffff'
   }

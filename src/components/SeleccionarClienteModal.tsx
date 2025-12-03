@@ -169,37 +169,37 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderRadius: 20,
     width: '90%',
-    maxWidth: 700,
-    maxHeight: '80%',
+    maxWidth: 800,
+    maxHeight: '90%',
     overflow: 'hidden'
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 24,
+    padding: 28,
     borderBottomWidth: 1,
     borderBottomColor: '#e2e8f0'
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: '600',
     color: '#0C2ABF',
     marginBottom: 4
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#697b92'
   },
   closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center'
   },
   closeIcon: {
-    fontSize: 28,
+    fontSize: 32,
     color: '#697b92',
     fontWeight: '300'
   },
@@ -210,31 +210,32 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 10,
-    marginHorizontal: 24,
-    marginVertical: 16,
-    paddingHorizontal: 16
+    marginHorizontal: 28,
+    marginVertical: 20,
+    paddingHorizontal: 18,
+    height: 52
   },
   searchIcon: {
-    fontSize: 18,
+    fontSize: 20,
     marginRight: 12
   },
   searchInput: {
     flex: 1,
-    height: 44,
-    fontSize: 14,
+    height: 52,
+    fontSize: 18,
     color: '#1a1a1a'
   },
   listContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 20
+    paddingHorizontal: 28,
+    paddingBottom: 24
   },
   clienteCard: {
     backgroundColor: '#ffffff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 10,
-    padding: 16,
-    marginBottom: 12,
+    padding: 18,
+    marginBottom: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center'
@@ -249,53 +250,53 @@ const styles = StyleSheet.create({
   },
   clienteIdBadge: {
     backgroundColor: '#91e600',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 4,
     marginRight: 8
   },
   clienteIdText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     color: '#1a1a1a'
   },
   clienteEmpresa: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '600',
     color: '#1a1a1a',
     flex: 1
   },
   clienteNombre: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#697b92',
     marginBottom: 4
   },
   clienteDireccion: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#697b92',
     marginBottom: 2
   },
   clienteTelefono: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#697b92',
     marginTop: 4
   },
   clienteUltimaVisita: {
-    fontSize: 11,
+    fontSize: 13,
     color: '#07BC13',
     fontWeight: '600',
     marginTop: 4
   },
   arrowContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#f3f7fd',
     alignItems: 'center',
     justifyContent: 'center'
   },
   arrowIcon: {
-    fontSize: 24,
+    fontSize: 28,
     color: '#0C2ABF',
     fontWeight: '300'
   },
@@ -304,17 +305,17 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   emptyIcon: {
-    fontSize: 48,
+    fontSize: 52,
     marginBottom: 16
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '600',
     color: '#1a1a1a',
     marginBottom: 8
   },
   emptyText: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#697b92',
     textAlign: 'center'
   }

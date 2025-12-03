@@ -101,7 +101,7 @@ function MenuItem({ icon, label, active = false, onPress }: any) {
 }
 
 function MenuIcon({ icon, active }: { icon: string; active: boolean }) {
-  const size = 30;
+  const size = 40;
   const color = active ? "white" : "#092090";
   const strokeWidth = "1.3"; // Slightly bolder for better visibility
 
@@ -153,16 +153,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 16
   },
-  menuItemActive: { backgroundColor: '#0C2ABF', borderRadius: 10 },
+  menuItemActive: { backgroundColor: '#0C2ABF', borderRadius: 15},
   menuLabel: {
     fontFamily: 'Inter',
-    fontWeight: '500',
-    fontSize: 12,
-    lineHeight: 15,
-    marginTop: 4,
+    fontWeight: '900',
+    fontSize: 15.2,
+    lineHeight: 15.5,
+    marginTop: 1,
     color: '#697b92',
     display: 'flex'
   },
-  menuLabelActive: { color: '#ffffff', fontWeight: '600' },
-  settingsButton: { width: 70, height: 70, alignItems: 'center', justifyContent: 'center', borderRadius: 16 }
+  menuLabelActive: { color: '#ffffff', fontWeight: '700' },
+  settingsButton: { width: 70, height: 70, alignItems: 'center', justifyContent: 'center', borderRadius: 15 }
 });

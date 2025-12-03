@@ -139,6 +139,10 @@ function ContentPanel({ title, children, onAdd }: any) {
     else if (title.includes('Gastos')) navigation.navigate('Gastos');
     else if (onAdd) onAdd();
   };
+  
+  // Ocultar botón en Liquidación y Notas de Venta (solo mostrar en Borradores y Gastos)
+  const showAddButton = !title.includes('Liquidación') && !title.includes('Notas de Venta');
+  
   return (
     <View style={styles.panel}>
       <View style={styles.panelHeader}>
@@ -146,9 +150,11 @@ function ContentPanel({ title, children, onAdd }: any) {
             <Text style={styles.panelIcon}>📊</Text>
             <Text style={styles.panelTitle}>{title}</Text>
         </View>
-        <TouchableOpacity style={styles.panelAddButton} onPress={handleAdd}>
-          <Text style={styles.panelAddText}>+ Añadir</Text>
-        </TouchableOpacity>
+        {showAddButton && (
+          <TouchableOpacity style={styles.panelAddButton} onPress={handleAdd}>
+            <Text style={styles.panelAddText}>+ Añadir</Text>
+          </TouchableOpacity>
+        )}
       </View>
       <View style={styles.panelContent}>{children}</View>
     </View>
@@ -165,7 +171,7 @@ function NotaVentaItem({ nota, onPrint }: { nota: NotaVenta, onPrint: (n: NotaVe
       <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
         <Text style={styles.notaPrecio}>{nota.precio}</Text>
         <TouchableOpacity onPress={() => onPrint(nota)} style={styles.miniPrintButton}>
-            <Text style={{fontSize: 16}}>🖨️</Text>
+            <Text style={{fontSize: 18}}>🖨️</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -182,11 +188,11 @@ function BorradorItem({ nota, onContinue }: { nota: NotaVenta, onContinue: (n: N
             <Text style={styles.notaId}>{nota.id}</Text>
         </View>
         <Text style={styles.notaCliente} numberOfLines={1}>{nota.cliente}</Text>
-        <Text style={{fontSize: 11, color: '#94a3b8'}}>{nota.fecha}</Text>
+        <Text style={{fontSize: 13, color: '#94a3b8'}}>{nota.fecha}</Text>
       </View>
       <View style={{alignItems: 'flex-end'}}>
         <Text style={[styles.notaPrecio, {color: '#f59e0b'}]}>{nota.precio}</Text>
-        <Text style={{fontSize: 12, color: '#092090', fontWeight: '600', marginTop: 4}}>Continuar →</Text>
+        <Text style={{fontSize: 14, color: '#092090', fontWeight: '600', marginTop: 4}}>Continuar →</Text>
       </View>
     </TouchableOpacity>
   );
@@ -218,7 +224,7 @@ function CobroItem({ cobro, onPrint }: { cobro: Cobro, onPrint: (c: Cobro) => vo
             <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
                 <Text style={styles.cobroItemMonto}>{cobro.monto}</Text>
                 <TouchableOpacity onPress={() => onPrint(cobro)} style={styles.miniPrintButton}>
-                    <Text style={{fontSize: 16}}>🖨️</Text>
+                    <Text style={{fontSize: 18}}>🖨️</Text>
                 </TouchableOpacity>
             </View>
         </View>
@@ -326,11 +332,26 @@ export default function ResumenDiaScreen() {
 
   const { 
     totalVentas, totalGastos, numeroVentas, ventasPendientes, clientesVisitadosHoy,
-    filteredNotasVenta, filteredGastos, liquidacionData, cobrosDelDia, notasAbiertas
+    filteredNotasVenta, filteredGastos, liquidacionData, cobrosDelDia, notasAbiertas,
+    ventasDelDia, gastosDelDia
   } = useMemo(() => {
     const periodToFilter = (selectedPeriod === 'Hoy' || selectedPeriod === 'Ayer' || selectedPeriod === 'Semana' || selectedPeriod === 'Mes') 
       ? selectedPeriod 
       : 'Rango';
+    
+    // Calcular ventas y gastos del día actual (independiente del período seleccionado)
+    const hoy = new Date();
+    const hoyTime = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime();
+    
+    const ventasHoy = notasVenta.filter(n => {
+      const fechaTime = parseDateString(n.fecha || '');
+      return fechaTime === hoyTime && n.estado !== 'anulada' && n.estado !== 'abierta';
+    });
+    
+    const gastosHoy = gastos.filter(g => {
+      const fechaTime = parseDateString(g.fecha || '');
+      return fechaTime === hoyTime;
+    });
 
     // Filtrar notas normales (cerradas/pendientes)
     const filteredVentas = notasVenta.filter(n => {
@@ -385,6 +406,10 @@ export default function ResumenDiaScreen() {
     const totalGastosMonto = filteredGastosCalc.reduce((sum, g) => sum + parsePrecio(g.precio || '0'), 0);
     const liquidacionEfectivo = ventasEfectivo + cobrosEfectivo - totalGastosMonto;
     const totalVentasMonto = filteredVentas.reduce((sum, n) => sum + parsePrecio(n.precio || '0'), 0);
+    
+    // Calcular totales del día actual
+    const ventasDelDiaMonto = ventasHoy.reduce((sum, n) => sum + parsePrecio(n.precio || '0'), 0);
+    const gastosDelDiaMonto = gastosHoy.reduce((sum, g) => sum + parsePrecio(g.precio || '0'), 0);
 
     return {
         totalVentas: totalVentasMonto,
@@ -397,7 +422,9 @@ export default function ResumenDiaScreen() {
         liquidacionData: { ventasEfectivo, cobrosEfectivo, totalGastos: totalGastosMonto, liquidacionEfectivo },
         cobrosDelDia: filteredCobros,
         notasAbiertas: filteredBorradores, // Usamos la lista filtrada
-        historialCambios: []
+        historialCambios: [],
+        ventasDelDia: ventasDelDiaMonto,
+        gastosDelDia: gastosDelDiaMonto
     };
   }, [notasVenta, gastos, cobros, searchTerm, selectedPeriod, startDate, endDate]);
 
@@ -485,10 +512,10 @@ export default function ResumenDiaScreen() {
       {activeTab === 'Totales del Día' && (
         <View style={styles.statsGrid}>
            <TouchableOpacity style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]} onPress={() => setActiveTab('Notas de Venta')}>
-              <StatsCard title="Ventas" value={`${totalVentas.toFixed(2).replace('.', ',')} €`} change="Total Facturado" changeColor="#91e600" bgGradient={true} />
+              <StatsCard title="Ventas del Día" value={`${ventasDelDia.toFixed(2).replace('.', ',')} €`} change="Total Facturado Hoy" changeColor="#91e600" bgGradient={true} />
             </TouchableOpacity>
             <TouchableOpacity style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]} onPress={() => setActiveTab('Gastos')}>
-              <StatsCard title="Gastos" value={`${totalGastos.toFixed(2).replace('.', ',')} €`} change="Total Gastos" changeColor="#f59f0a" titleBg="#0C2ABF" />
+              <StatsCard title="Gastos del Día" value={`${gastosDelDia.toFixed(2).replace('.', ',')} €`} change="Total Gastos Hoy" changeColor="#f59f0a" titleBg="#0C2ABF" />
             </TouchableOpacity>
             <TouchableOpacity style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]}>
               <StatsCard title="Nº Ventas" value={numeroVentas.toString()} change={ventasPendientes > 0 ? `${ventasPendientes} pendientes` : 'Cerrado'} changeColor="#91e600" />
@@ -581,53 +608,53 @@ const styles = StyleSheet.create({
   header: { paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: '#e2e8f0' },
   headerTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 16 },
   backButton: { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
-  backIcon: { fontSize: 20, color: '#697b92' },
-  title: { fontSize: 24, fontWeight: '700', color: '#1a1a1a' },
+  backIcon: { fontSize: 24, color: '#697b92' },
+  title: { fontSize: 28, fontWeight: '700', color: '#1a1a1a' },
   headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   printButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 16, backgroundColor: '#0C2ABF', borderRadius: 30 },
-  printButtonIcon: { fontSize: 16 },
-  printButtonText: { fontSize: 13, fontWeight: '600', color: '#ffffff' },
+  printButtonIcon: { fontSize: 20 },
+  printButtonText: { fontSize: 17, fontWeight: '600', color: '#ffffff' },
   actionButton: { paddingVertical: 8, paddingHorizontal: 16, borderWidth: 1.5, borderColor: '#092090', borderRadius: 30 },
-  actionButtonText: { fontSize: 13, fontWeight: '600', color: '#092090' },
+  actionButtonText: { fontSize: 17, fontWeight: '600', color: '#092090' },
   filtersRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginVertical: 24, alignItems: 'center' },
   filtersRowMobile: { flexDirection: 'column', gap: 10 },
   periodButtons: { flexDirection: 'row', gap: 8 },
   periodButton: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 30, borderWidth: 1, borderColor: '#e2e8f0', backgroundColor: '#ffffff', minWidth: 60, alignItems: 'center' },
   periodButtonActive: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 30, minWidth: 60, alignItems: 'center' },
-  periodText: { fontSize: 13, fontWeight: '600', color: '#697b92' },
-  periodTextActive: { fontSize: 13, fontWeight: '600', color: '#ffffff' },
+  periodText: { fontSize: 17, fontWeight: '600', color: '#697b92' },
+  periodTextActive: { fontSize: 17, fontWeight: '600', color: '#ffffff' },
   searchBox: { flex: 1, minWidth: 200, flexDirection: 'row', alignItems: 'center', backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 30, height: 40, paddingHorizontal: 16, gap: 12 },
-  searchIcon: { fontSize: 14 },
-  searchInput: { flex: 1, fontSize: 14, color: '#1a1a1a', padding: 0 },
+  searchIcon: { fontSize: 18 },
+  searchInput: { flex: 1, fontSize: 18, color: '#1a1a1a', padding: 0 },
   tabsWrapper: { marginBottom: 20, width: '100%' },
   tabButton: { flexShrink: 0, marginRight: 12 },
   tabButtonSpacing: { marginLeft: 0 },
   filterTab: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 30, borderWidth: 1, borderColor: '#092090', flexDirection: 'row', alignItems: 'center', gap: 6 },
   filterTabActive: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 30, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  filterTabText: { fontSize: 13, fontWeight: '600', color: '#092090' },
-  filterTabTextActive: { fontSize: 13, fontWeight: '600', color: '#ffffff' },
+  filterTabText: { fontSize: 17, fontWeight: '600', color: '#092090' },
+  filterTabTextActive: { fontSize: 17, fontWeight: '600', color: '#ffffff' },
   
   // BADGES PARA TABS
   tabBadgeRed: { backgroundColor: '#ef4444', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, minWidth: 20, alignItems: 'center' },
   tabBadgeWhite: { backgroundColor: '#ffffff', borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, minWidth: 20, alignItems: 'center' },
-  tabBadgeTextWhite: { color: '#ffffff', fontSize: 10, fontWeight: 'bold' },
-  tabBadgeTextBlue: { color: '#092090', fontSize: 10, fontWeight: 'bold' },
+  tabBadgeTextWhite: { color: '#ffffff', fontSize: 14, fontWeight: 'bold' },
+  tabBadgeTextBlue: { color: '#092090', fontSize: 14, fontWeight: 'bold' },
 
   statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', marginBottom: 24 },
   statWrapper: { marginBottom: 12 },
   statCard: { flex: 1, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 16, minHeight: 130, justifyContent: 'space-between' },
   statCardGradient: { borderWidth: 0, overflow: 'hidden' },
   statBadge: { alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 20, marginBottom: 8 },
-  statBadgeText: { fontSize: 11, fontWeight: '700', color: '#ffffff' },
-  statValue: { fontSize: 24, fontWeight: '700', color: '#1a1a1a', marginBottom: 4 },
-  statChange: { fontSize: 12, fontWeight: '500' },
+  statBadgeText: { fontSize: 15, fontWeight: '700', color: '#ffffff' },
+  statValue: { fontSize: 28, fontWeight: '700', color: '#1a1a1a', marginBottom: 4 },
+  statChange: { fontSize: 16, fontWeight: '500' },
   fullWidthPanel: { width: '100%', marginBottom: 20 },
   panel: { flex: 1, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 20 },
   panelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 },
-  panelIcon: { fontSize: 18, marginRight: 8 },
-  panelTitle: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
+  panelIcon: { fontSize: 22, marginRight: 8 },
+  panelTitle: { fontSize: 22, fontWeight: '700', color: '#1a1a1a' },
   panelAddButton: { paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#0C2ABF', borderRadius: 20 },
-  panelAddText: { fontSize: 11, fontWeight: '600', color: '#ffffff' },
+  panelAddText: { fontSize: 15, fontWeight: '600', color: '#ffffff' },
   panelContent: { gap: 12 },
   notaItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 14, marginBottom: 8 },
   
@@ -643,29 +670,29 @@ const styles = StyleSheet.create({
     padding: 14, 
     marginBottom: 8 
   },
-  borradorTag: { fontSize: 10, fontWeight: 'bold', color: '#b45309', backgroundColor: '#fef3c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginRight: 8 },
+  borradorTag: { fontSize: 14, fontWeight: 'bold', color: '#b45309', backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 4, marginRight: 8 },
 
-  notaId: { fontSize: 14, fontWeight: '700', color: '#1a1a1a' },
-  notaCliente: { fontSize: 13, color: '#64748b' },
-  notaPrecio: { fontSize: 15, fontWeight: '700', color: '#0C2ABF' },
+  notaId: { fontSize: 18, fontWeight: '700', color: '#1a1a1a' },
+  notaCliente: { fontSize: 17, color: '#64748b' },
+  notaPrecio: { fontSize: 19, fontWeight: '700', color: '#0C2ABF' },
   gastoItem: { flexDirection: 'row', gap: 12, backgroundColor: '#f8fafc', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 10, padding: 12, marginBottom: 8, alignItems: 'center' },
-  gastoImage: { width: 48, height: 48, borderRadius: 8, backgroundColor: '#e2e8f0' },
+  gastoImage: { width: 52, height: 52, borderRadius: 8, backgroundColor: '#e2e8f0' },
   gastoInfo: { flex: 1 },
-  gastoNombre: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
-  gastoCategoria: { fontSize: 12, color: '#64748b' },
-  gastoPrecio: { fontSize: 15, fontWeight: '700', color: '#f59e0b' },
-  emptyText: { textAlign: 'center', color: '#94a3b8', marginVertical: 20, fontStyle: 'italic' },
+  gastoNombre: { fontSize: 18, fontWeight: '600', color: '#1a1a1a' },
+  gastoCategoria: { fontSize: 16, color: '#64748b' },
+  gastoPrecio: { fontSize: 19, fontWeight: '700', color: '#f59e0b' },
+  emptyText: { textAlign: 'center', color: '#94a3b8', marginVertical: 20, fontStyle: 'italic', fontSize: 18 },
   liquidacionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', padding: 16, borderRadius: 8, marginBottom: 8 },
-  liquidacionIcon: { fontSize: 24, marginRight: 10 },
-  liquidacionLabel: { fontSize: 12, color: '#697b92' },
-  liquidacionValue: { fontSize: 18, fontWeight: '700' },
+  liquidacionIcon: { fontSize: 26, marginRight: 10 },
+  liquidacionLabel: { fontSize: 16, color: '#697b92' },
+  liquidacionValue: { fontSize: 22, fontWeight: '700' },
   liquidacionTotalCard: { backgroundColor: '#e0e7ff', padding: 20, borderRadius: 10, marginTop: 10, borderWidth: 1, borderColor: '#0C2ABF' },
-  liquidacionTotalLabel: { fontSize: 16, fontWeight: '600', color: '#092090' },
-  liquidacionTotalValue: { fontSize: 28, fontWeight: '800', color: '#092090', marginTop: 5 },
+  liquidacionTotalLabel: { fontSize: 20, fontWeight: '600', color: '#092090' },
+  liquidacionTotalValue: { fontSize: 32, fontWeight: '800', color: '#092090', marginTop: 5 },
   cobroItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', padding: 12, borderRadius: 8, marginBottom: 8 },
-  cobroItemIcon: { fontSize: 18, marginRight: 10 },
-  cobroItemCliente: { fontSize: 14, fontWeight: '600', color: '#1a1a1a' },
-  cobroItemNota: { fontSize: 12, color: '#697b92' },
-  cobroItemMonto: { fontSize: 15, fontWeight: '700', color: '#092090' },
+  cobroItemIcon: { fontSize: 22, marginRight: 10 },
+  cobroItemCliente: { fontSize: 18, fontWeight: '600', color: '#1a1a1a' },
+  cobroItemNota: { fontSize: 16, color: '#697b92' },
+  cobroItemMonto: { fontSize: 19, fontWeight: '700', color: '#092090' },
   miniPrintButton: { padding: 8, backgroundColor: '#e0e7ff', borderRadius: 20, marginLeft: 10 }
 });

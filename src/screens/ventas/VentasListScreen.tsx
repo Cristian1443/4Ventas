@@ -374,10 +374,10 @@ const styles = StyleSheet.create({
     gap: 10
   },
   headerIcon: {
-    fontSize: 16
+    fontSize: 22
   },
   headerTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '600',
     color: '#1a1a1a'
   },
@@ -393,17 +393,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24
   },
   createButtonIcon: {
-    fontSize: 16,
+    fontSize: 20,
     color: '#ffffff',
     fontWeight: '600'
   },
   createButtonText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     color: '#ffffff'
   },
   headerSubtitle: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '400',
     color: '#697b92'
   },
@@ -422,12 +422,12 @@ const styles = StyleSheet.create({
     borderRadius: 10
   },
   statLabel: {
-    fontSize: 14,
+    fontSize: 16,
     color: '#697b92',
     marginBottom: 4
   },
   statValue: {
-    fontSize: 28,
+    fontSize: 30,
     fontWeight: '700',
     color: '#1a1a1a'
   },
@@ -447,11 +447,11 @@ const styles = StyleSheet.create({
     gap: 14
   },
   searchIcon: {
-    fontSize: 14
+    fontSize: 18
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '400',
     color: '#1a1a1a',
     padding: 0
@@ -460,14 +460,14 @@ const styles = StyleSheet.create({
     padding: 4
   },
   clearIcon: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#697b92'
   },
   filterButton: {
     padding: 4
   },
   filterIcon: {
-    fontSize: 14
+    fontSize: 18
   },
   filterMenu: {
     backgroundColor: '#ffffff',
@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f4ff'
   },
   filterOptionText: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#1a1a1a',
     fontWeight: '400'
   },
@@ -506,12 +506,12 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start'
   },
   clearFilterText: {
-    fontSize: 13,
+    fontSize: 17,
     fontWeight: '600',
     color: '#697b92'
   },
   resultsCount: {
-    fontSize: 14,
+    fontSize: 18,
     color: '#697b92',
     marginBottom: 16
   },
@@ -523,8 +523,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e2e8f0',
     borderRadius: 10,
-    padding: 32,
-    paddingVertical: 24,
+    padding: 36,
+    paddingVertical: 26,
     minHeight: 116,
     position: 'relative'
   },
@@ -542,16 +542,16 @@ const styles = StyleSheet.create({
     borderRadius: 5
   },
   clienteIdText: {
-    fontSize: 10,
+    fontSize: 14,
     fontWeight: '400',
     color: '#1a1a1a',
-    lineHeight: 10
+    lineHeight: 14
   },
   clienteNombre: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '600',
     color: '#1a1a1a',
-    lineHeight: 14
+    lineHeight: 20
   },
   clienteMeta: {
     flexDirection: 'row',
@@ -565,15 +565,15 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   clienteMetaLabel: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0C2ABF'
   },
   clienteMetaValue: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '400',
     color: '#697b92',
-    lineHeight: 14
+    lineHeight: 18
   },
   clienteInfo: {
     gap: 8
@@ -589,16 +589,16 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   infoFieldLabel: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0C2ABF',
-    lineHeight: 14
+    lineHeight: 18
   },
   infoFieldValue: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '400',
     color: '#697b92',
-    lineHeight: 14
+    lineHeight: 18
   },
   nuevaNotaButton: {
     position: 'absolute',
@@ -615,12 +615,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10
   },
   nuevaNotaButtonIcon: {
-    fontSize: 16,
+    fontSize: 20,
     color: '#ffffff',
     fontWeight: '600'
   },
   nuevaNotaButtonText: {
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: '600',
     color: '#ffffff'
   },
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
     borderRadius: 12
   },
   emptyStateText: {
-    fontSize: 16,
+    fontSize: 18,
     color: '#697b92'
   },
   clearSearchButton: {
@@ -644,7 +644,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20
   },
   clearSearchButtonText: {
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     color: '#ffffff'
   }
