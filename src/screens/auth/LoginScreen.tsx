@@ -30,7 +30,7 @@ export default function LoginScreen() {
   const [isAdminHovered, setIsAdminHovered] = useState(false);
 
   const handleVendorLogin = () => {
-    navigation.replace('Main');
+    navigation.navigate('VendorSelection');
   };
 
   const handleAdminLogin = () => {
@@ -46,7 +46,7 @@ export default function LoginScreen() {
       <View style={[styles.containerHorizontal, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         {/* Left side with image */}
         <View style={styles.leftPanel}>
-          <Image 
+          <Image
             source={backgroundImage}
             style={styles.backgroundImage}
             resizeMode="cover"
@@ -109,7 +109,7 @@ export default function LoginScreen() {
 
             {/* Logo at bottom */}
             <View style={styles.bottomLogo}>
-              <Image 
+              <Image
                 source={logoImage}
                 style={styles.logoImage}
                 resizeMode="contain"
@@ -174,7 +174,7 @@ export default function LoginScreen() {
 
         {/* Logo at bottom */}
         <View style={styles.bottomLogo}>
-          <Image 
+          <Image
             source={logoImage}
             style={styles.logoImage}
             resizeMode="contain"

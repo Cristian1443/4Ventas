@@ -26,7 +26,14 @@
       "adaptiveIcon": {
         "backgroundColor": "#0C2ABF"
       },
-      "package": "com.fourventas.app"
+      "package": "com.fourventas.app",
+      "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE"
+      ],
+      "usesCleartextTraffic": true,
+      "networkSecurityConfig": "./android/app/src/main/res/xml/network_security_config.xml"
     },
     "extra": {
       "eas": {

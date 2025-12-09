@@ -12,6 +12,7 @@ import { useResponsiveLayout } from '../constants/layout';
 // Auth Screens
 import LoginScreen from '../screens/auth/LoginScreen';
 import LoginWithEmailScreen from '../screens/auth/LoginWithEmailScreen';
+import VendorSelectionScreen from '../screens/auth/VendorSelectionScreen';
 
 // Dashboard
 import DashboardScreen from '../screens/dashboard/DashboardScreen';
@@ -48,7 +49,7 @@ const Tab = createBottomTabNavigator();
 // Tab Navigator para la navegación principal
 function MainTabs() {
   const layout = useResponsiveLayout();
-  
+
   return (
     <Tab.Navigator
       screenOptions={{
@@ -56,7 +57,7 @@ function MainTabs() {
         tabBarActiveTintColor: '#0C2ABF',
         tabBarInactiveTintColor: '#697b92',
         // Ocultar tabs en tablets
-        tabBarStyle: layout.isTablet ? { 
+        tabBarStyle: layout.isTablet ? {
           display: 'none',
           height: 0,
         } : {
@@ -132,6 +133,7 @@ export default function AppNavigator() {
       {/* Auth */}
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="LoginEmail" component={LoginWithEmailScreen} />
+      <Stack.Screen name="VendorSelection" component={VendorSelectionScreen} />
 
       {/* Main App */}
       <Stack.Screen name="Main" component={MainTabs} />
@@ -163,7 +165,7 @@ export default function AppNavigator() {
 // Componente auxiliar para iconos de tabs
 function TabIcon({ emoji, color }: { emoji: string; color: string }) {
   const layout = useResponsiveLayout();
-  
+
   return (
     <Text style={{ fontSize: layout.isTablet ? 28 : 24, color }}>
       {emoji}

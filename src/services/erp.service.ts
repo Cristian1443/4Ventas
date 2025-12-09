@@ -154,12 +154,12 @@ export async function getClientes(id_cliente = 0, fecha?: string, hora?: string)
     const fechaHoy = new Date().toISOString().split('T')[0];
     const fechaAyer = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const fechaPostman = '2024-02-05'; // Fecha del ejemplo en Postman
-    
+
     console.log(`🔑 [getClientes] SESSION_ID actual: ${SESSION_ID}`);
     console.log(`📅 [getClientes] Fecha hoy: ${fechaHoy}, Fecha ayer: ${fechaAyer}, Fecha Postman: ${fechaPostman}`);
     console.log(`💡 [getClientes] NOTA: El Postman usa sesión 18, pero estamos usando sesión ${SESSION_ID}`);
     console.log(`💡 [getClientes] Si no funciona, verifica que la sesión ${SESSION_ID} tenga clientes en el ERP`);
-    
+
     const variaciones = [
       // 1. Exactamente como en Postman (pero con nuestra sesión)
       { params: `x=${SESSION_ID}&id_cliente=0&fecha=${fechaPostman}&hora=12:00`, desc: 'formato Postman (fecha ejemplo)' },
@@ -176,22 +176,22 @@ export async function getClientes(id_cliente = 0, fecha?: string, hora?: string)
       // 7. Solo sesión
       { params: `x=${SESSION_ID}`, desc: 'solo sesión' },
     ];
-    
+
     for (const variacion of variaciones) {
       const url = `${ERP_BASE_URL}/GetClientesWS?${variacion.params}`;
-      
+
       console.log(`🔄 [getClientes] Intentando obtener clientes (${variacion.desc})...`);
       console.log('🔗 [getClientes] URL:', url);
-      
+
       try {
-    const response = await axios.get(url);
-    
+        const response = await axios.get(url);
+
         console.log('📥 [getClientes] Respuesta recibida del servidor');
         console.log('📥 [getClientes] Status:', response.status);
-        
+
         // La respuesta puede venir como array directo o como objeto con array dentro
         let clientes: any[] = [];
-        
+
         if (Array.isArray(response.data)) {
           clientes = response.data;
         } else if (response.data && Array.isArray(response.data.Clientes)) {
@@ -208,7 +208,7 @@ export async function getClientes(id_cliente = 0, fecha?: string, hora?: string)
             }
           }
         }
-        
+
         // Si encontramos clientes, retornamos
         if (clientes.length > 0) {
           console.log(`✅ [getClientes] ${clientes.length} clientes encontrados con parámetros: ${variacion.desc}`);
@@ -232,7 +232,7 @@ export async function getClientes(id_cliente = 0, fecha?: string, hora?: string)
         continue;
       }
     }
-    
+
     // Si llegamos aquí, ninguna variación funcionó
     console.error('❌ [getClientes] Ninguna variación de parámetros devolvió clientes');
     console.error('⚠️ [getClientes] El ERP está devolviendo arrays vacíos para todas las combinaciones de parámetros');
@@ -241,7 +241,7 @@ export async function getClientes(id_cliente = 0, fecha?: string, hora?: string)
     console.error('   2. No hay clientes asociados a esta sesión en el ERP');
     console.error('   3. El endpoint requiere parámetros adicionales o diferentes');
     console.error('   4. El endpoint necesita autenticación adicional');
-    
+
     return [];
   } catch (error: any) {
     console.error('❌ [getClientes] Error conectando con ERP (Clientes):', error.message);
@@ -295,7 +295,7 @@ export async function crearCliente(cliente: Partial<ClienteERP>): Promise<any> {
       EnviarAnuncios: false,
       DireccionesEnvio: []
     };
-    
+
     console.log('📤 Enviando cliente al ERP...');
     const response = await axios.post(`${ERP_BASE_URL}/NuevoClienteWS`, body);
     return response.data;
@@ -312,12 +312,12 @@ export async function getArticulos(fecha?: string, hora?: string): Promise<any[]
     if (hora) url += `&hora=${hora}`;
     console.log('🔄 Sincronizando artículos del ERP...', url);
     const response = await axios.get(url);
-    
+
     console.log('📥 Respuesta de artículos:', response.data);
-    
+
     // La respuesta puede venir como array directo o como objeto con array dentro
     let articulos: any[] = [];
-    
+
     if (Array.isArray(response.data)) {
       articulos = response.data;
     } else if (response.data && Array.isArray(response.data.articulos)) {
@@ -332,11 +332,11 @@ export async function getArticulos(fecha?: string, hora?: string): Promise<any[]
         }
       }
     }
-    
+
     if (articulos.length > 0) {
       console.log(`✅ ${articulos.length} artículos recibidos del ERP`);
       console.log('📦 Primer artículo de ejemplo:', articulos[0]);
-      
+
       // Obtener stock para cada artículo
       try {
         const stockData = await getStockArticulos(0);
@@ -350,7 +350,7 @@ export async function getArticulos(fecha?: string, hora?: string): Promise<any[]
           });
           console.log(`📊 Stock obtenido para ${stockMap.size} artículos`);
         }
-        
+
         // Combinar artículos con stock
         return articulos.map(art => {
           const articuloId = art.Id || art.ID_Articulo;
@@ -366,7 +366,7 @@ export async function getArticulos(fecha?: string, hora?: string): Promise<any[]
         return articulos;
       }
     }
-    
+
     console.log('⚠️ No se encontraron artículos en la respuesta');
     return [];
   } catch (error: any) {
@@ -384,10 +384,10 @@ export async function getStockArticulos(id_articulo = 0): Promise<any[]> {
     const url = `${ERP_BASE_URL}/GetStockArticulosWS?x=${SESSION_ID}&id_articulo=${id_articulo}`;
     console.log('🔄 Obteniendo stock de artículos del ERP...');
     const response = await axios.get(url);
-    
+
     // La respuesta puede venir como array directo o como objeto con array dentro
     let stock: any[] = [];
-    
+
     if (Array.isArray(response.data)) {
       stock = response.data;
     } else if (response.data && typeof response.data === 'object') {
@@ -400,7 +400,7 @@ export async function getStockArticulos(id_articulo = 0): Promise<any[]> {
         }
       }
     }
-    
+
     return stock;
   } catch (error) {
     console.warn('⚠️ Error obteniendo stock de artículos del ERP.');
@@ -419,9 +419,9 @@ export async function getGastos(fecha?: string): Promise<GastoERP[]> {
 export async function crearGasto(gasto: Partial<GastoERP>): Promise<any> {
   try {
     // Formato según Postman: sesionwcf debe ser número
-    const body = { 
-      sesionwcf: parseInt(SESSION_ID, 10), 
-      Gasto: gasto 
+    const body = {
+      sesionwcf: parseInt(SESSION_ID, 10),
+      Gasto: gasto
     };
     console.log('📤 Enviando gasto al ERP...');
     const response = await axios.post(`${ERP_BASE_URL}/NuevoGastoWS`, body);
@@ -437,12 +437,12 @@ export async function eliminarGasto(id: number): Promise<boolean> {
     // Asumiendo endpoint estándar, ajustar si es diferente
     const url = `${ERP_BASE_URL}/BorrarGastoWS?x=${SESSION_ID}&id_gasto=${id}`;
     console.log('🗑️ Eliminando gasto en ERP:', id);
-    
+
     // Si es POST o GET depende de tu API, usaremos POST por seguridad o GET si es estilo RPC
     // const response = await axios.post(url); 
     // Para este ejemplo asumo estructura similar a Get
     const response = await axios.get(url);
-    
+
     return response.data && (!response.data.InfoError || response.data.InfoError.Codigo === 0);
   } catch (error) {
     console.error('❌ Error eliminando gasto en ERP:', error);
@@ -459,7 +459,7 @@ export async function getDocumentos(): Promise<DocumentoERP[]> {
   // Los documentos se mantienen solo localmente en la app
   // Se pueden crear/editar/eliminar localmente
   console.log('ℹ️ GetDocumentosWS no está disponible. Los documentos se mantienen solo localmente.');
-    return [];
+  return [];
 }
 
 export async function subirDocumento(doc: Partial<DocumentoERP>): Promise<any> {
@@ -470,7 +470,7 @@ export async function subirDocumento(doc: Partial<DocumentoERP>): Promise<any> {
       sesionwcf: parseInt(SESSION_ID, 10),
       Documento: doc
     };
-    
+
     console.log('📤 Subiendo documento al ERP...');
     const response = await axios.post(`${ERP_BASE_URL}/SubirDocumentoWS`, body);
     return response.data;
@@ -501,21 +501,21 @@ export async function getCobrosPendientes(): Promise<CobroERP[]> {
     // Usar GetHistorialPedidosWS para obtener pedidos y filtrar los que tienen saldo pendiente
     const fechaHoy = new Date().toISOString().split('T')[0];
     const fechaHaceUnAno = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    
+
     console.log('💰 Obteniendo cobros pendientes desde historial de pedidos...');
-    
+
     // Obtener historial de pedidos de todos los clientes (id_cliente=0 significa todos)
     const historial = await getHistorialPedidos(0, fechaHaceUnAno, fechaHoy, false);
-    
+
     // Filtrar pedidos con saldo pendiente y convertir a formato CobroERP
     const cobrosPendientes: CobroERP[] = [];
-    
+
     for (const pedido of historial) {
       // Verificar si el pedido tiene saldo pendiente
       const totalPedido = pedido.TotalImporte || pedido.Total || pedido.Importe || 0;
       const totalPagado = pedido.TotalPagado || pedido.Pagado || 0;
       const saldoPendiente = totalPedido - totalPagado;
-      
+
       if (saldoPendiente > 0.01) { // Tolerancia para errores de redondeo
         cobrosPendientes.push({
           Id: pedido.Id || pedido.ID_DocCli || 0,
@@ -528,7 +528,7 @@ export async function getCobrosPendientes(): Promise<CobroERP[]> {
         });
       }
     }
-    
+
     console.log(`✅ ${cobrosPendientes.length} cobros pendientes encontrados en historial de pedidos`);
     return cobrosPendientes;
   } catch (error: any) {
@@ -564,9 +564,9 @@ export async function getAgenda(fechaDesde?: string, fechaHasta?: string): Promi
 export async function crearVisita(visita: Partial<VisitaERP>): Promise<any> {
   try {
     // Formato según Postman: sesionwcf debe ser número
-    const body = { 
-      sesionwcf: parseInt(SESSION_ID, 10), 
-      Visita: visita 
+    const body = {
+      sesionwcf: parseInt(SESSION_ID, 10),
+      Visita: visita
     };
     const response = await axios.post(`${ERP_BASE_URL}/NuevaVisitaWS`, body);
     return response.data;
@@ -576,13 +576,13 @@ export async function crearVisita(visita: Partial<VisitaERP>): Promise<any> {
 export async function actualizarVisita(id: number, completado: boolean): Promise<any> {
   try {
     // Formato según Postman: sesionwcf debe ser número
-    const body = { 
-      sesionwcf: parseInt(SESSION_ID, 10), 
-      Id: id, 
-      Completado: completado 
+    const body = {
+      sesionwcf: parseInt(SESSION_ID, 10),
+      Id: id,
+      Completado: completado
     };
     const response = await axios.post(`${ERP_BASE_URL}/ActualizarVisitaWS`, body);
-        return response.data;
+    return response.data;
   } catch (error) { throw error; }
 }
 
@@ -612,7 +612,7 @@ export async function registrarPago(pago: any): Promise<any> {
       Fecha: pago.Fecha || new Date().toISOString().split('T')[0],
       Importe: pago.Importe || 0
     };
-    
+
     console.log('💰 Enviando pago al ERP...', body);
     const response = await axios.post(`${ERP_BASE_URL}/NuevoPagoWS`, body);
     return response.data;
@@ -680,7 +680,7 @@ export async function crearLocalidad(localidad: { Nombre: string; ID_Pais: numbe
       ...localidad
     };
     const response = await axios.post(`${ERP_BASE_URL}/NuevaLocalidadWS`, body);
-        return response.data;
+    return response.data;
   } catch (error: any) {
     console.error('❌ Error creando localidad:', error.message);
     throw error;
@@ -796,7 +796,7 @@ export async function borrarMascota(id: number, id_cliente: number): Promise<any
   try {
     const body = {
       sesionwcf: parseInt(SESSION_ID, 10),
-      Id: id, 
+      Id: id,
       ID_Cliente: id_cliente
     };
     const response = await axios.post(`${ERP_BASE_URL}/BorrarMascotaWS`, body);
@@ -965,7 +965,7 @@ export async function updateDocCliente(id: number, aux1?: string, aux2?: string,
     if (aux1 !== undefined) body.Aux1 = aux1;
     if (aux2 !== undefined) body.Aux2 = aux2;
     if (aux3 !== undefined) body.Aux3 = aux3;
-    
+
     const response = await axios.post(`${ERP_BASE_URL}/UpdateDocClienteWS`, body);
     return response.data;
   } catch (error: any) {
@@ -1038,7 +1038,7 @@ export function mapearClienteERPaLocal(clienteERP: any) {
   const nif = clienteERP.NIF || clienteERP.nif || '';
   const codigoPostal = clienteERP.CPostal || clienteERP.codigoPostal || clienteERP.CPostal || '';
   const provincia = clienteERP.Provincia || clienteERP.provincia || '';
-  
+
   return {
     id: id.toString(),
     codigo: id.toString(),
@@ -1055,28 +1055,64 @@ export function mapearClienteERPaLocal(clienteERP: any) {
 }
 
 export function mapearArticuloERPaLocal(articuloERP: any) {
+  // LOGGING DETALLADO para diagnóstico
+  const articuloId = articuloERP.Id || articuloERP.ID_Articulo || 'UNKNOWN';
+
   // El ERP devuelve campos diferentes, adaptamos el mapper
   const stock = articuloERP.Stock ?? articuloERP.Cantidad ?? 0;
   const stockMinimo = articuloERP.StockMinimo ?? 0;
-  const precio = articuloERP.PVP ?? articuloERP.Precio ?? 0;
-  const codigo = articuloERP.Codigo ?? articuloERP.ReferenciaBarras ?? '';
-  
-  // Obtener categoría del ID_Categoria si existe
-  let categoria = 'General';
-  if (articuloERP.ID_Categoria) {
-    // Podríamos mapear categorías aquí si tenemos la lista
+
+  // MEJORADO: Intentar múltiples variaciones de campos de precio
+  const precio = articuloERP.PVP ??
+    articuloERP.Precio ??
+    articuloERP.PrecioVenta ??
+    articuloERP.PrecioUnitario ??
+    articuloERP.Importe ??
+    articuloERP.PrecioBase ??
+    0;
+
+  // Log si no hay precio
+  if (precio === 0) {
+    console.warn(`⚠️ [mapearArticuloERPaLocal] Artículo sin precio: ${articuloERP.Nombre || articuloId}`);
+    console.warn(`   Campos disponibles:`, Object.keys(articuloERP).join(', '));
+    console.warn(`   Datos completos:`, JSON.stringify(articuloERP, null, 2).substring(0, 500));
+  }
+
+  const codigo = articuloERP.Codigo ??
+    articuloERP.CodigoArticulo ??
+    articuloERP.ReferenciaBarras ??
+    articuloERP.Referencia ??
+    '';
+
+  // MEJORADO: Obtener categoría con mejor manejo
+  let categoria = 'Sin Categoría';
+  if (articuloERP.Categoria) {
+    // Si viene el nombre de la categoría directamente
+    categoria = articuloERP.Categoria;
+  } else if (articuloERP.NombreCategoria) {
+    categoria = articuloERP.NombreCategoria;
+  } else if (articuloERP.ID_Categoria && articuloERP.ID_Categoria !== 0) {
+    // Si solo viene el ID, usamos un nombre descriptivo
     categoria = `Categoría ${articuloERP.ID_Categoria}`;
   }
-  
-  return {
+
+  // Normalizar categoría (eliminar espacios extras, capitalizar)
+  categoria = categoria.trim();
+  if (categoria === '' || categoria === 'null' || categoria === 'undefined') {
+    categoria = 'Sin Categoría';
+  }
+
+  const articuloMapeado = {
     id: articuloERP.Id?.toString() || articuloERP.ID_Articulo?.toString() || '',
-    nombre: articuloERP.Nombre || '',
+    nombre: articuloERP.Nombre || 'Sin nombre',
     cantidad: stock,
     categoria: categoria,
     precio: precio > 0 ? `${precio.toFixed(2).replace('.', ',')} €` : '0,00 €',
     stockMinimo: stockMinimo,
     codigoCorto: codigo
   };
+
+  return articuloMapeado;
 }
 
 export function mapearGastoERPaLocal(gastoERP: GastoERP) {

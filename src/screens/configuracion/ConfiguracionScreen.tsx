@@ -18,14 +18,14 @@ import { printerService } from '../../services/printer.matricial.service';
 
 export default function ConfiguracionScreen() {
   const navigation = useNavigation<any>();
-  const { 
-    userSession, 
-    logout, 
-    syncStatus, 
-    sincronizar, 
-    modoOffline, 
-    config, 
-    updateConfig 
+  const {
+    userSession,
+    logout,
+    syncStatus,
+    sincronizar,
+    modoOffline,
+    config,
+    updateConfig
   } = useApp();
 
   // Estados locales para formularios
@@ -60,7 +60,7 @@ export default function ConfiguracionScreen() {
     setTestingPrinter(true);
     const success = await printerService.testPrint(); // Asume que existe en el servicio
     setTestingPrinter(false);
-    
+
     if (success) {
       Alert.alert('Impresora', 'Prueba de conexión enviada con éxito');
     } else {
@@ -73,11 +73,52 @@ export default function ConfiguracionScreen() {
       Alert.alert('Modo Offline', 'No se puede sincronizar porque la conexión al ERP está deshabilitada o no hay internet.');
       return;
     }
-    
+
     setIsSyncingManual(true);
     await sincronizar();
     setIsSyncingManual(false);
     Alert.alert('Sincronización', 'Proceso finalizado.');
+  };
+
+  const handleTestERPConnection = async () => {
+    try {
+      setIsSyncingManual(true);
+      const axios = require('axios');
+      const testUrl = 'http://x.verial.org:8000/WcfServiceLibraryVerial/GetClientesWS?x=39';
+
+      console.log('🧪 Probando conexión al ERP:', testUrl);
+      const response = await axios.get(testUrl, { timeout: 10000 });
+
+      if (response.data) {
+        const clientCount = Array.isArray(response.data) ? response.data.length : 0;
+        Alert.alert(
+          '✅ Conexión Exitosa',
+          `El ERP respondió correctamente.\n\nClientes encontrados: ${clientCount}\n\nURL: ${testUrl}`,
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('⚠️ Respuesta Vacía', 'El ERP respondió pero no envió datos.');
+      }
+    } catch (error: any) {
+      console.error('❌ Error probando ERP:', error);
+      let errorMsg = 'Error desconocido';
+
+      if (error.code === 'ECONNABORTED') {
+        errorMsg = 'Tiempo de espera agotado (10s). El servidor no responde.';
+      } else if (error.code === 'ENOTFOUND') {
+        errorMsg = 'No se pudo resolver el dominio x.verial.org';
+      } else if (error.message) {
+        errorMsg = error.message;
+      }
+
+      Alert.alert(
+        '❌ Error de Conexión',
+        `No se pudo conectar al ERP.\n\nError: ${errorMsg}\n\nVerifica:\n• Estás conectado a Internet\n• El servidor ERP está activo\n• La URL es correcta`,
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsSyncingManual(false);
+    }
   };
 
   const handleLogout = () => {
@@ -86,9 +127,9 @@ export default function ConfiguracionScreen() {
       '¿Estás seguro de que quieres salir?',
       [
         { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Salir', 
-          style: 'destructive', 
+        {
+          text: 'Salir',
+          style: 'destructive',
           onPress: () => {
             logout();
             // Navegar a Login y resetear el stack de navegación
@@ -96,22 +137,22 @@ export default function ConfiguracionScreen() {
               index: 0,
               routes: [{ name: 'Login' }],
             });
-          } 
+          }
         }
       ]
     );
   };
 
   // Formatear fecha
-  const lastSyncDate = syncStatus.ultimaSync 
-    ? new Date(syncStatus.ultimaSync).toLocaleString('es-ES') 
+  const lastSyncDate = syncStatus.ultimaSync
+    ? new Date(syncStatus.ultimaSync).toLocaleString('es-ES')
     : 'Nunca';
 
   return (
     <ScreenWithSidebar currentScreen="Configuracion" scrollable={false}>
       <View style={styles.container}>
-        <ScrollView 
-          style={styles.scrollView} 
+        <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
         >
@@ -128,7 +169,7 @@ export default function ConfiguracionScreen() {
           <View style={styles.gridContainer}>
             {/* COLUMNA IZQUIERDA: Usuario y Sync */}
             <View style={styles.column}>
-              
+
               {/* Tarjeta de Usuario */}
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
@@ -138,7 +179,7 @@ export default function ConfiguracionScreen() {
                 <View style={styles.userInfo}>
                   <View style={styles.avatarCircle}>
                     <Text style={styles.avatarText}>
-                      {userSession.username ? userSession.username.substring(0,2).toUpperCase() : 'US'}
+                      {userSession.username ? userSession.username.substring(0, 2).toUpperCase() : 'US'}
                     </Text>
                   </View>
                   <View>
@@ -159,7 +200,7 @@ export default function ConfiguracionScreen() {
                   <Text style={styles.cardIcon}>🔄</Text>
                   <Text style={styles.cardTitle}>Estado Sincronización</Text>
                 </View>
-                
+
                 <View style={styles.syncStatusRow}>
                   <Text style={styles.syncLabel}>Estado:</Text>
                   <View style={[styles.statusBadge, modoOffline ? styles.badgeOffline : styles.badgeOnline]}>
@@ -181,8 +222,8 @@ export default function ConfiguracionScreen() {
                   </Text>
                 </View>
 
-                <TouchableOpacity 
-                  style={[styles.syncButton, isSyncingManual && { opacity: 0.7 }]} 
+                <TouchableOpacity
+                  style={[styles.syncButton, isSyncingManual && { opacity: 0.7 }]}
                   onPress={handleManualSync}
                   disabled={isSyncingManual}
                 >
@@ -202,20 +243,28 @@ export default function ConfiguracionScreen() {
                     )}
                   </LinearGradient>
                 </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.testButton, isSyncingManual && { opacity: 0.7 }]}
+                  onPress={handleTestERPConnection}
+                  disabled={isSyncingManual}
+                >
+                  <Text style={styles.testButtonText}>🧪 Probar Conexión ERP</Text>
+                </TouchableOpacity>
               </View>
 
             </View>
 
             {/* COLUMNA DERECHA: Impresora y App */}
             <View style={styles.column}>
-              
+
               {/* Configuración Impresora */}
               <View style={styles.card}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.cardIcon}>🖨️</Text>
                   <Text style={styles.cardTitle}>Impresora de Tickets</Text>
                 </View>
-                
+
                 <Text style={styles.inputLabel}>Dirección IP Impresora</Text>
                 <TextInput
                   style={styles.input}
@@ -235,14 +284,14 @@ export default function ConfiguracionScreen() {
                 />
 
                 <View style={styles.printerActions}>
-                  <TouchableOpacity 
-                    style={styles.secondaryButton} 
+                  <TouchableOpacity
+                    style={styles.secondaryButton}
                     onPress={handleTestPrint}
                     disabled={testingPrinter}
                   >
-                     {testingPrinter ? <ActivityIndicator color="#092090" /> : <Text style={styles.secondaryButtonText}>Test Impresión</Text>}
+                    {testingPrinter ? <ActivityIndicator color="#092090" /> : <Text style={styles.secondaryButtonText}>Test Impresión</Text>}
                   </TouchableOpacity>
-                  
+
                   <TouchableOpacity style={styles.primaryButton} onPress={handleSavePrinter}>
                     <Text style={styles.primaryButtonText}>Guardar</Text>
                   </TouchableOpacity>
@@ -263,7 +312,7 @@ export default function ConfiguracionScreen() {
                   <Text style={styles.infoLabel}>ERP:</Text>
                   <Text style={styles.infoValue}>Verial Soft (v.2024)</Text>
                 </View>
-                 <View style={styles.infoRow}>
+                <View style={styles.infoRow}>
                   <Text style={styles.infoLabel}>ID Dispositivo:</Text>
                   <Text style={styles.infoValue}>TAB-001</Text>
                 </View>
@@ -281,7 +330,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#ffffff' },
   scrollView: { flex: 1 },
   scrollContent: { padding: 40, paddingHorizontal: 60 },
-  
+
   header: { flexDirection: 'row', alignItems: 'center', marginBottom: 30 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   backButton: { width: 44, height: 44, borderRadius: 10, borderWidth: 1, borderColor: '#e2e8f0', alignItems: 'center', justifyContent: 'center' },
@@ -330,6 +379,8 @@ const styles = StyleSheet.create({
   syncGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14 },
   syncButtonIcon: { color: '#ffffff', fontSize: 20, fontWeight: 'bold' },
   syncButtonText: { color: '#ffffff', fontSize: 18, fontWeight: '600' },
+  testButton: { paddingVertical: 12, alignItems: 'center', borderRadius: 8, backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#64748b', marginTop: 12 },
+  testButtonText: { color: '#64748b', fontWeight: '600', fontSize: 16 },
 
   // Printer Card
   inputLabel: { fontSize: 17, fontWeight: '600', color: '#475569', marginBottom: 8 },

@@ -36,12 +36,17 @@ export default function ArticulosScreen() {
   const [sortBy, setSortBy] = useState<'nombre' | 'cantidad' | 'stock'>('nombre');
   const [selectedArticulo, setSelectedArticulo] = useState<Articulo | null>(null);
 
-  // 1. GENERAR CATEGORÍAS DINÁMICAS + STOCK BAJO
+  // 1. GENERAR CATEGORÍAS DINÁMICAS + STOCK BAJO + SIN PRECIO
   const categorias = useMemo(() => {
     // Obtenemos categorías únicas de los datos reales
-    const cats = new Set(articulos.map(a => a.categoria).filter(Boolean));
-    // Agregamos "Stock Bajo" como una categoría especial para filtrar
-    return ['Todos', 'Stock Bajo', ...Array.from(cats)];
+    const cats = new Set(
+      articulos
+        .map(a => a.categoria)
+        .filter(Boolean)
+        .filter(c => c !== 'null' && c !== 'undefined' && c.trim() !== '')
+    );
+    // Agregamos categorías especiales para filtrar
+    return ['Todos', 'Stock Bajo', 'Sin Precio', ...Array.from(cats)];
   }, [articulos]);
 
   // 2. PREPARAR DATOS (Simular fotos y códigos si no existen)
@@ -67,23 +72,31 @@ export default function ArticulosScreen() {
     });
   }, [articulos]);
 
-  // 3. FILTRADO
+  // 3. FILTRADO MEJORADO
   const filteredArticulos = useMemo(() => {
     return articulosProcesados
       .filter((articulo) => {
-        // Búsqueda por texto
-        const term = searchTerm.toLowerCase();
-        const matchSearch = 
+        // Búsqueda por texto (más flexible)
+        const term = searchTerm.toLowerCase().trim();
+        const matchSearch =
           (articulo.nombre || '').toLowerCase().includes(term) ||
           (articulo.codigoCorto || '').toLowerCase().includes(term) ||
-          (articulo.id || '').toLowerCase().includes(term);
+          (articulo.id || '').toLowerCase().includes(term) ||
+          (articulo.categoria || '').toLowerCase().includes(term);
 
-        // Lógica del filtro de categoría / Stock Bajo
+        // Lógica del filtro de categoría / Stock Bajo / Sin Precio
         let matchFilter = true;
         if (categoriaSeleccionada === 'Stock Bajo') {
-          matchFilter = articulo.cantidad < (articulo.stockMinimo || 0);
+          matchFilter = articulo.cantidad <= (articulo.stockMinimo || 0);
+        } else if (categoriaSeleccionada === 'Sin Precio') {
+          // Filtrar artículos sin precio o con precio 0
+          const precioNum = parseFloat(articulo.precio?.replace(/[€\s,]/g, '').replace(',', '.') || '0');
+          matchFilter = precioNum === 0;
         } else if (categoriaSeleccionada !== 'Todos') {
-          matchFilter = articulo.categoria === categoriaSeleccionada;
+          // Normalizar categorías para comparación
+          const catArticulo = (articulo.categoria || 'Sin Categoría').trim();
+          const catSeleccionada = categoriaSeleccionada.trim();
+          matchFilter = catArticulo === catSeleccionada;
         }
 
         return matchSearch && matchFilter;
@@ -138,7 +151,7 @@ export default function ArticulosScreen() {
           </View>
         </View>
 
-        <ScrollView 
+        <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -149,9 +162,9 @@ export default function ArticulosScreen() {
               <Text style={styles.statLabel}>Total Artículos</Text>
               <Text style={styles.statValue}>{articulos.length}</Text>
             </View>
-            
+
             {/* Al hacer clic filtra por Stock Bajo */}
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.statCard, styles.statCardWarning]}
               onPress={() => setCategoriaSeleccionada('Stock Bajo')}
             >
@@ -179,21 +192,21 @@ export default function ArticulosScreen() {
                 onChangeText={setSearchTerm}
               />
             </View>
-            
+
             {/* Filtros Dinámicos */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
               {categorias.map((categoria) => (
                 <TouchableOpacity
                   key={categoria}
                   style={[
-                    styles.filterChip, 
+                    styles.filterChip,
                     categoriaSeleccionada === categoria && styles.filterChipActive,
                     categoria === 'Stock Bajo' && categoriaSeleccionada === 'Stock Bajo' && { borderColor: '#dc2626', backgroundColor: '#fee2e2' }
                   ]}
                   onPress={() => setCategoriaSeleccionada(categoria)}
                 >
                   <Text style={[
-                    styles.filterText, 
+                    styles.filterText,
                     categoriaSeleccionada === categoria && styles.filterTextActive,
                     categoria === 'Stock Bajo' && categoriaSeleccionada === 'Stock Bajo' && { color: '#dc2626' }
                   ]}>
@@ -246,7 +259,7 @@ export default function ArticulosScreen() {
                   activeOpacity={0.8}
                 >
                   <View style={styles.cardInner}>
-                    
+
                     {/* 1. IMAGEN (Izquierda) */}
                     <View style={styles.imageContainer}>
                       <Image
@@ -260,14 +273,14 @@ export default function ArticulosScreen() {
                     <View style={styles.infoContainer}>
                       <View style={styles.infoHeader}>
                         <View style={styles.badgesRow}>
-                            {/* Badge Código Corto */}
-                            <View style={styles.shortCodeBadge}>
-                                <Text style={styles.shortCodeText}>{articulo.codigoCorto || 'N/D'}</Text>
-                            </View>
-                            {/* ID pequeño */}
-                            <Text style={styles.idText}>{articulo.id}</Text>
+                          {/* Badge Código Corto */}
+                          <View style={styles.shortCodeBadge}>
+                            <Text style={styles.shortCodeText}>{articulo.codigoCorto || 'N/D'}</Text>
+                          </View>
+                          {/* ID pequeño */}
+                          <Text style={styles.idText}>{articulo.id}</Text>
                         </View>
-                        
+
                         {/* Badge Stock Bajo */}
                         {isStockBajo(articulo) && (
                           <View style={styles.alertBadge}>
@@ -279,19 +292,19 @@ export default function ArticulosScreen() {
                       <Text style={styles.articuloNombre} numberOfLines={2}>
                         {articulo.nombre}
                       </Text>
-                      
+
                       <Text style={styles.articuloCategoria}>{articulo.categoria}</Text>
 
                       <View style={styles.infoFooter}>
                         <Text style={styles.articuloPrecio}>{articulo.precio}</Text>
                         <View style={styles.stockBox}>
-                           <Text style={styles.stockLabel}>Stock:</Text>
-                           <Text style={[
-                               styles.stockValueNumber,
-                               isStockBajo(articulo) && { color: '#dc2626' }
-                           ]}>
-                               {articulo.cantidad}
-                           </Text>
+                          <Text style={styles.stockLabel}>Stock:</Text>
+                          <Text style={[
+                            styles.stockValueNumber,
+                            isStockBajo(articulo) && { color: '#dc2626' }
+                          ]}>
+                            {articulo.cantidad}
+                          </Text>
                         </View>
                       </View>
                     </View>
@@ -319,59 +332,59 @@ export default function ArticulosScreen() {
               {selectedArticulo && (
                 <>
                   <View style={styles.modalImageHeader}>
-                     {selectedArticulo.imagen ? (
-                        <Image source={{ uri: selectedArticulo.imagen }} style={styles.modalFullImage} resizeMode="cover" />
-                     ) : (
-                        <View style={[styles.modalFullImage, {backgroundColor:'#f1f5f9', alignItems:'center', justifyContent:'center'}]}>
-                           <Text style={{fontSize:50}}>🌻</Text>
-                        </View>
-                     )}
+                    {selectedArticulo.imagen ? (
+                      <Image source={{ uri: selectedArticulo.imagen }} style={styles.modalFullImage} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.modalFullImage, { backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center' }]}>
+                        <Text style={{ fontSize: 50 }}>🌻</Text>
+                      </View>
+                    )}
                   </View>
 
-                  <View style={{padding: 24}}>
+                  <View style={{ padding: 24 }}>
                     <Text style={styles.modalTitle}>{selectedArticulo.nombre}</Text>
-                    
+
                     <View style={styles.modalSection}>
-                        <Text style={styles.modalSectionLabel}>Código Corto</Text>
-                        <Text style={styles.modalSectionValueLarge}>
+                      <Text style={styles.modalSectionLabel}>Código Corto</Text>
+                      <Text style={styles.modalSectionValueLarge}>
                         {selectedArticulo.codigoCorto}
-                        </Text>
+                      </Text>
                     </View>
 
                     <View style={styles.modalSection}>
-                        <Text style={styles.modalSectionLabel}>Categoría</Text>
-                        <Text style={styles.modalSectionValue}>{selectedArticulo.categoria}</Text>
+                      <Text style={styles.modalSectionLabel}>Categoría</Text>
+                      <Text style={styles.modalSectionValue}>{selectedArticulo.categoria}</Text>
                     </View>
 
                     <View style={styles.modalSection}>
-                        <Text style={styles.modalSectionLabel}>Stock Actual</Text>
-                        <Text style={[
-                            styles.modalSectionValueLarge,
-                            isStockBajo(selectedArticulo) && { color: '#dc2626' }
-                        ]}>
+                      <Text style={styles.modalSectionLabel}>Stock Actual</Text>
+                      <Text style={[
+                        styles.modalSectionValueLarge,
+                        isStockBajo(selectedArticulo) && { color: '#dc2626' }
+                      ]}>
                         {selectedArticulo.cantidad} unidades
-                        </Text>
+                      </Text>
                     </View>
 
                     {selectedArticulo.precio && (
-                        <View style={styles.modalSection}>
+                      <View style={styles.modalSection}>
                         <Text style={styles.modalSectionLabel}>Precio</Text>
                         <Text style={styles.modalSectionValuePrice}>{selectedArticulo.precio}</Text>
-                        </View>
+                      </View>
                     )}
 
                     <TouchableOpacity
-                        style={styles.modalCloseButton}
-                        onPress={() => setSelectedArticulo(null)}
+                      style={styles.modalCloseButton}
+                      onPress={() => setSelectedArticulo(null)}
                     >
-                        <LinearGradient
+                      <LinearGradient
                         colors={['#092090', '#0C2ABF']}
                         start={{ x: 0, y: 0 }}
                         end={{ x: 1, y: 0 }}
                         style={styles.modalCloseButtonGradient}
-                        >
+                      >
                         <Text style={styles.modalCloseButtonText}>Cerrar</Text>
-                        </LinearGradient>
+                      </LinearGradient>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -580,12 +593,12 @@ const styles = StyleSheet.create({
   sortButtonTextActive: {
     color: '#ffffff'
   },
-  
+
   // --- TARJETA ARTÍCULO NUEVA (Horizontal) ---
   grid: {
-      flexDirection: 'row',
-      flexWrap: 'wrap',
-      gap: 12
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12
   },
   cardTablet: {
     width: '32%',
@@ -607,70 +620,70 @@ const styles = StyleSheet.create({
     borderColor: '#fda4af'
   },
   cardInner: {
-      flexDirection: 'row',
-      height: '100%'
+    flexDirection: 'row',
+    height: '100%'
   },
   imageContainer: {
-      width: 110,
-      height: '100%',
-      backgroundColor: '#f1f5f9',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRightWidth: 1,
-      borderRightColor: '#e2e8f0'
+    width: 110,
+    height: '100%',
+    backgroundColor: '#f1f5f9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRightWidth: 1,
+    borderRightColor: '#e2e8f0'
   },
   articuloImagen: {
-      width: '100%',
-      height: '100%'
+    width: '100%',
+    height: '100%'
   },
   imagePlaceholder: {
-      flex: 1,
-      alignItems: 'center',
-      justifyContent: 'center'
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   infoContainer: {
-      flex: 1,
-      padding: 12,
-      justifyContent: 'space-between'
+    flex: 1,
+    padding: 12,
+    justifyContent: 'space-between'
   },
   infoHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start'
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start'
   },
   badgesRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 8
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8
   },
   shortCodeBadge: {
-      backgroundColor: '#e0e7ff',
-      paddingHorizontal: 6,
-      paddingVertical: 2,
-      borderRadius: 4,
-      borderWidth: 1,
-      borderColor: '#c7d2fe'
+    backgroundColor: '#e0e7ff',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#c7d2fe'
   },
   shortCodeText: {
-      fontSize: 15,
-      fontWeight: '800',
-      color: '#092090'
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#092090'
   },
   idText: {
-      fontSize: 15,
-      color: '#94a3b8',
-      fontWeight: '500'
+    fontSize: 15,
+    color: '#94a3b8',
+    fontWeight: '500'
   },
   alertBadge: {
-      backgroundColor: '#dc2626',
-      paddingHorizontal: 10,
-      paddingVertical: 3,
-      borderRadius: 10
+    backgroundColor: '#dc2626',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10
   },
   alertBadgeText: {
-      fontSize: 14,
-      fontWeight: '700',
-      color: '#ffffff'
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff'
   },
   articuloNombre: {
     fontSize: 19,
@@ -680,37 +693,37 @@ const styles = StyleSheet.create({
     lineHeight: 24
   },
   articuloCategoria: {
-      fontSize: 16,
-      color: '#64748b'
+    fontSize: 16,
+    color: '#64748b'
   },
   infoFooter: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'flex-end',
-      borderTopWidth: 1,
-      borderTopColor: 'rgba(0,0,0,0.05)',
-      paddingTop: 8
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0,0,0,0.05)',
+    paddingTop: 8
   },
   articuloPrecio: {
-      fontSize: 20,
-      fontWeight: '700',
-      color: '#092090'
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#092090'
   },
   stockBox: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 4
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4
   },
   stockLabel: {
-      fontSize: 16,
-      color: '#64748b'
+    fontSize: 16,
+    color: '#64748b'
   },
   stockValueNumber: {
-      fontSize: 18,
-      fontWeight: '700',
-      color: '#1a1a1a'
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1a1a1a'
   },
-  
+
   emptyState: {
     padding: 60,
     alignItems: 'center'
@@ -720,9 +733,9 @@ const styles = StyleSheet.create({
     color: '#697b92'
   },
   emptyIcon: {
-      fontSize: 52,
-      marginBottom: 20,
-      opacity: 0.5
+    fontSize: 52,
+    marginBottom: 20,
+    opacity: 0.5
   },
   // MODAL
   modalOverlay: {
@@ -740,13 +753,13 @@ const styles = StyleSheet.create({
     overflow: 'hidden'
   },
   modalImageHeader: {
-      width: '100%',
-      height: 200,
-      backgroundColor: '#f1f5f9'
+    width: '100%',
+    height: 200,
+    backgroundColor: '#f1f5f9'
   },
   modalFullImage: {
-      width: '100%',
-      height: '100%'
+    width: '100%',
+    height: '100%'
   },
   modalTitle: {
     fontSize: 26,

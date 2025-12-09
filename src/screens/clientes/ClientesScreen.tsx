@@ -37,14 +37,15 @@ export default function ClientesScreen() {
   const [selectedCliente, setSelectedCliente] = useState<ClienteExtendido | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProvincia, setSelectedProvincia] = useState('Todas');
+  const [filterConDeudas, setFilterConDeudas] = useState(false); // NUEVO: Filtro de deudas
   const [sortBy, setSortBy] = useState<'nombre' | 'ultimaVisita' | 'cobros'>('nombre');
 
   // 1. PREPARAR DATOS (Calculamos cobros y aseguramos el código)
   const clientesData: ClienteExtendido[] = useMemo(() => {
     return clientes.map(cliente => {
       // Calcular cobros pendientes
-      const pendientes = cobros.filter(c => 
-        c.estado === 'pendiente' && 
+      const pendientes = cobros.filter(c =>
+        c.estado === 'pendiente' &&
         (c.clienteId === cliente.id || c.cliente.includes(cliente.nombre))
       ).length;
 
@@ -59,7 +60,7 @@ export default function ClientesScreen() {
   }, [clientes, cobros]);
 
   // Obtener provincias únicas para el filtro
-  const provincias = useMemo(() => 
+  const provincias = useMemo(() =>
     ['Todas', ...Array.from(new Set(clientesData.map(c => c.provincia || 'N/A').filter(Boolean)))],
     [clientesData]
   );
@@ -67,18 +68,20 @@ export default function ClientesScreen() {
   // 2. FILTRADO Y ORDENAMIENTO
   const filteredClientes = useMemo(() => {
     const term = searchTerm.toLowerCase();
-    
+
     return clientesData
       .filter(cliente => {
-        const matchesSearch = 
+        const matchesSearch =
           cliente.nombre.toLowerCase().includes(term) ||
           (cliente.empresa || '').toLowerCase().includes(term) ||
           cliente.codigoVisual.toLowerCase().includes(term) || // Buscar por el código visual
           (cliente.direccion || '').toLowerCase().includes(term) ||
           (cliente.provincia || '').toLowerCase().includes(term);
-          
+
         const matchesProvincia = selectedProvincia === 'Todas' || cliente.provincia === selectedProvincia;
-        return matchesSearch && matchesProvincia;
+        const matchesDeudas = !filterConDeudas || cliente.cobrosPendientes > 0; // NUEVO: Filtro de deudas
+
+        return matchesSearch && matchesProvincia && matchesDeudas;
       })
       .sort((a, b) => {
         if (sortBy === 'nombre') return a.nombre.localeCompare(b.nombre);
@@ -126,9 +129,9 @@ export default function ClientesScreen() {
             <View style={styles.headerRow}>
               {/* CÓDIGO VISIBLE Y DESTACADO */}
               <View style={styles.codeBadge}>
-                 <Text style={styles.codeText}>Cód. {item.codigoVisual}</Text>
+                <Text style={styles.codeText}>Cód. {item.codigoVisual}</Text>
               </View>
-              
+
               {/* Nombre Principal */}
               <Text style={styles.nameText} numberOfLines={1}>
                 {item.nombre}
@@ -137,24 +140,24 @@ export default function ClientesScreen() {
 
             {/* Empresa / Razón Social */}
             {item.empresa && (
-                <Text style={styles.empresaText} numberOfLines={1}>{item.empresa}</Text>
+              <Text style={styles.empresaText} numberOfLines={1}>{item.empresa}</Text>
             )}
 
             {/* Dirección y NIF */}
             <Text style={styles.addressText} numberOfLines={1}>
-                NIF: {item.nif || '-'} • {item.direccion || 'Sin dirección'}
+              NIF: {item.nif || '-'} • {item.direccion || 'Sin dirección'}
             </Text>
 
             {/* Badge de Cobros (si tiene) */}
             {item.cobrosPendientes > 0 && (
-               <View style={styles.debtBadge}>
-                  <Text style={styles.debtText}>⚠️ {item.cobrosPendientes} pagos pendientes</Text>
-               </View>
+              <View style={styles.debtBadge}>
+                <Text style={styles.debtText}>⚠️ {item.cobrosPendientes} pagos pendientes</Text>
+              </View>
             )}
           </View>
 
           {/* 3. Botón Llamada */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.callButton}
             onPress={() => handleLlamar(item.telefono || '')}
           >
@@ -169,66 +172,78 @@ export default function ClientesScreen() {
     // IMPORTANTE: scrollable={false} porque usamos FlatList adentro
     <ScreenWithSidebar currentScreen="Clientes" scrollable={false}>
       <View style={styles.container}>
-        
+
         {/* Header Fijo */}
         <View style={styles.header}>
           <View style={styles.headerLeft}>
-             <TouchableOpacity onPress={() => navigation.navigate('Main')} style={styles.backBtn}>
-               <Text style={styles.backIcon}>←</Text>
-             </TouchableOpacity>
-             <Text style={styles.title}>Clientes</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Main')} style={styles.backBtn}>
+              <Text style={styles.backIcon}>←</Text>
+            </TouchableOpacity>
+            <Text style={styles.title}>Clientes</Text>
           </View>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={styles.addButton}
             onPress={() => navigation.navigate('NuevaVenta')}
           >
             <LinearGradient
-                colors={['#092090', '#0C2ABF']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.addGradient}
+              colors={['#092090', '#0C2ABF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.addGradient}
             >
-                <Text style={styles.addText}>+ Nueva Venta</Text>
+              <Text style={styles.addText}>+ Nueva Venta</Text>
             </LinearGradient>
           </TouchableOpacity>
         </View>
 
         {/* Controles: Buscador y Filtros */}
         <View style={styles.controlsWrapper}>
-            {/* Buscador */}
-            <View style={styles.searchBox}>
-                <Text style={styles.searchIcon}>🔍</Text>
-                <TextInput
-                    style={styles.searchInput}
-                    placeholder="Buscar cliente, código, NIF..."
-                    placeholderTextColor="#94a3b8"
-                    value={searchTerm}
-                    onChangeText={setSearchTerm}
-                />
-            </View>
+          {/* Buscador */}
+          <View style={styles.searchBox}>
+            <Text style={styles.searchIcon}>🔍</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar cliente, código, NIF..."
+              placeholderTextColor="#94a3b8"
+              value={searchTerm}
+              onChangeText={setSearchTerm}
+            />
+          </View>
 
-            {/* Filtros Horizontales */}
-            <View style={styles.filtersRow}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollFilters}>
-                    {provincias.map(prov => (
-                        <TouchableOpacity
-                        key={prov}
-                        style={[styles.filterChip, selectedProvincia === prov && styles.filterChipActive]}
-                        onPress={() => setSelectedProvincia(prov)}
-                        >
-                        <Text style={[styles.filterText, selectedProvincia === prov && styles.filterTextActive]}>
-                            {prov}
-                        </Text>
-                        </TouchableOpacity>
-                    ))}
-                </ScrollView>
-            </View>
-            
-            {/* Stats rápidas */}
-            <Text style={styles.resultsText}>
-                {filteredClientes.length} clientes encontrados
-            </Text>
+          {/* Filtros Horizontales */}
+          <View style={styles.filtersRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scrollFilters}>
+              {provincias.map(prov => (
+                <TouchableOpacity
+                  key={prov}
+                  style={[styles.filterChip, selectedProvincia === prov && styles.filterChipActive]}
+                  onPress={() => setSelectedProvincia(prov)}
+                >
+                  <Text style={[styles.filterText, selectedProvincia === prov && styles.filterTextActive]}>
+                    {prov}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* NUEVO: Filtro de Deudas */}
+          <View style={styles.debtFilterRow}>
+            <TouchableOpacity
+              style={[styles.debtFilterChip, filterConDeudas && styles.debtFilterChipActive]}
+              onPress={() => setFilterConDeudas(!filterConDeudas)}
+            >
+              <Text style={[styles.filterText, filterConDeudas && styles.filterTextActive]}>
+                {filterConDeudas ? '✓ ' : ''}Con Deudas
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Stats rápidas */}
+          <Text style={styles.resultsText}>
+            {filteredClientes.length} clientes encontrados
+          </Text>
         </View>
 
         {/* LISTA DE CLIENTES (FLEX: 1 ES CRÍTICO PARA EL SCROLL) */}
@@ -241,8 +256,8 @@ export default function ClientesScreen() {
           showsVerticalScrollIndicator={true}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-                <Text style={styles.emptyIcon}>👥</Text>
-                <Text style={styles.emptyText}>No se encontraron clientes.</Text>
+              <Text style={styles.emptyIcon}>👥</Text>
+              <Text style={styles.emptyText}>No se encontraron clientes.</Text>
             </View>
           }
         />
@@ -251,42 +266,42 @@ export default function ClientesScreen() {
         <Modal visible={isModalOpen} animationType="slide" transparent={true} onRequestClose={() => setIsModalOpen(false)}>
           <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPressOut={() => setIsModalOpen(false)}>
             <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-               <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>{selectedCliente?.nombre}</Text>
-                  <TouchableOpacity onPress={() => setIsModalOpen(false)}>
-                     <Text style={styles.modalCloseText}>✕</Text>
-                  </TouchableOpacity>
-               </View>
-               
-               <ScrollView style={styles.modalBody}>
-                  {selectedCliente && (
-                      <>
-                        <View style={styles.modalRow}>
-                            <Text style={styles.modalLabel}>Código:</Text>
-                            <View style={styles.codeBadge}>
-                                <Text style={styles.codeText}>{selectedCliente.codigoVisual}</Text>
-                            </View>
-                        </View>
-                        <View style={styles.modalDivider}/>
-                        <View style={styles.modalRow}><Text style={styles.modalLabel}>Razón Social:</Text><Text style={styles.modalValue}>{selectedCliente.empresa || '-'}</Text></View>
-                        <View style={styles.modalRow}><Text style={styles.modalLabel}>NIF:</Text><Text style={styles.modalValue}>{selectedCliente.nif}</Text></View>
-                        <View style={styles.modalRow}><Text style={styles.modalLabel}>Dirección:</Text><Text style={styles.modalValue}>{selectedCliente.direccion}</Text></View>
-                        <View style={styles.modalRow}><Text style={styles.modalLabel}>Teléfono:</Text><Text style={styles.modalValue}>{selectedCliente.telefono}</Text></View>
-                        <View style={styles.modalRow}><Text style={styles.modalLabel}>Email:</Text><Text style={styles.modalValue}>{selectedCliente.email}</Text></View>
-                        <View style={styles.modalRow}><Text style={styles.modalLabel}>Última Visita:</Text><Text style={styles.modalValue}>{selectedCliente.ultimaVisita || 'N/A'}</Text></View>
-                        
-                        {/* Acciones Modal */}
-                        <View style={styles.modalActions}>
-                           <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => {setIsModalOpen(false); navigation.navigate('NuevaVenta', {clienteSeleccionado: selectedCliente});}}>
-                              <Text style={styles.modalBtnText}>+ Nueva Venta</Text>
-                           </TouchableOpacity>
-                           <TouchableOpacity style={styles.modalBtnSecondary} onPress={() => {setIsModalOpen(false); navigation.navigate('CobrosList');}}>
-                              <Text style={[styles.modalBtnText, {color: '#092090'}]}>Ver Cobros</Text>
-                           </TouchableOpacity>
-                        </View>
-                      </>
-                  )}
-               </ScrollView>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>{selectedCliente?.nombre}</Text>
+                <TouchableOpacity onPress={() => setIsModalOpen(false)}>
+                  <Text style={styles.modalCloseText}>✕</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={styles.modalBody}>
+                {selectedCliente && (
+                  <>
+                    <View style={styles.modalRow}>
+                      <Text style={styles.modalLabel}>Código:</Text>
+                      <View style={styles.codeBadge}>
+                        <Text style={styles.codeText}>{selectedCliente.codigoVisual}</Text>
+                      </View>
+                    </View>
+                    <View style={styles.modalDivider} />
+                    <View style={styles.modalRow}><Text style={styles.modalLabel}>Razón Social:</Text><Text style={styles.modalValue}>{selectedCliente.empresa || '-'}</Text></View>
+                    <View style={styles.modalRow}><Text style={styles.modalLabel}>NIF:</Text><Text style={styles.modalValue}>{selectedCliente.nif}</Text></View>
+                    <View style={styles.modalRow}><Text style={styles.modalLabel}>Dirección:</Text><Text style={styles.modalValue}>{selectedCliente.direccion}</Text></View>
+                    <View style={styles.modalRow}><Text style={styles.modalLabel}>Teléfono:</Text><Text style={styles.modalValue}>{selectedCliente.telefono}</Text></View>
+                    <View style={styles.modalRow}><Text style={styles.modalLabel}>Email:</Text><Text style={styles.modalValue}>{selectedCliente.email}</Text></View>
+                    <View style={styles.modalRow}><Text style={styles.modalLabel}>Última Visita:</Text><Text style={styles.modalValue}>{selectedCliente.ultimaVisita || 'N/A'}</Text></View>
+
+                    {/* Acciones Modal */}
+                    <View style={styles.modalActions}>
+                      <TouchableOpacity style={styles.modalBtnPrimary} onPress={() => { setIsModalOpen(false); navigation.navigate('NuevaVenta', { clienteSeleccionado: selectedCliente }); }}>
+                        <Text style={styles.modalBtnText}>+ Nueva Venta</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.modalBtnSecondary} onPress={() => { setIsModalOpen(false); navigation.navigate('CobrosList'); }}>
+                        <Text style={[styles.modalBtnText, { color: '#092090' }]}>Ver Cobros</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+              </ScrollView>
             </View>
           </TouchableOpacity>
         </Modal>
@@ -309,7 +324,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 100 // Espacio extra al final
   },
-  
+
   // Header
   header: {
     flexDirection: 'row',
@@ -325,7 +340,7 @@ const styles = StyleSheet.create({
   backBtn: { padding: 5 },
   backIcon: { fontSize: 28, color: '#64748b' },
   title: { fontSize: 28, fontWeight: '700', color: '#1e293b' },
-  
+
   addButton: { borderRadius: 30, overflow: 'hidden' },
   addGradient: { paddingVertical: 10, paddingHorizontal: 20 },
   addText: { fontSize: 18, fontWeight: '600', color: '#ffffff' },
@@ -352,14 +367,19 @@ const styles = StyleSheet.create({
   },
   searchIcon: { fontSize: 18, marginRight: 10, opacity: 0.5 },
   searchInput: { flex: 1, fontSize: 17, color: '#1e293b' },
-  
+
   filtersRow: { flexDirection: 'row', marginBottom: 8 },
   scrollFilters: { flexGrow: 0 },
   filterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#e2e8f0', marginRight: 8 },
   filterChipActive: { backgroundColor: '#092090', borderColor: '#092090' },
   filterText: { fontSize: 17, color: '#64748b', fontWeight: '500' },
   filterTextActive: { color: '#fff' },
-  
+
+  // Filtro de Deudas
+  debtFilterRow: { flexDirection: 'row', marginBottom: 8 },
+  debtFilterChip: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#f59e0b', marginRight: 8 },
+  debtFilterChipActive: { backgroundColor: '#f59e0b', borderColor: '#f59e0b' },
+
   resultsText: { fontSize: 16, color: '#94a3b8', marginTop: 4 },
 
   // Tarjeta Cliente
@@ -377,7 +397,7 @@ const styles = StyleSheet.create({
     elevation: 2
   },
   cardContent: { flexDirection: 'row', alignItems: 'center', gap: 16 },
-  
+
   avatarContainer: {
     width: 56, height: 56, borderRadius: 28,
     backgroundColor: '#eff6ff',
@@ -385,10 +405,10 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: '#bfdbfe'
   },
   avatarText: { fontSize: 22, fontWeight: '700', color: '#1d4ed8' },
-  
+
   infoColumn: { flex: 1 },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' },
-  
+
   // ESTILOS DEL CÓDIGO (Más visible)
   codeBadge: {
     backgroundColor: '#092090', // Azul oscuro fuerte
@@ -401,11 +421,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700'
   },
-  
+
   nameText: { fontSize: 20, fontWeight: '700', color: '#1e293b', flex: 1 },
   empresaText: { fontSize: 17, color: '#64748b', marginBottom: 4 },
   addressText: { fontSize: 16, color: '#94a3b8' },
-  
+
   debtBadge: { marginTop: 6, alignSelf: 'flex-start', backgroundColor: '#fff7ed', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 4, borderWidth: 1, borderColor: '#fed7aa' },
   debtText: { fontSize: 15, color: '#c2410c', fontWeight: '600' },
 
