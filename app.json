@@ -31,10 +31,20 @@
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE"
-      ],
-      "usesCleartextTraffic": true,
-      "networkSecurityConfig": "./android/app/src/main/res/xml/network_security_config.xml"
+      ]
     },
+    "plugins": [
+      "./plugins/withNetworkSecurityConfig",
+      "./plugins/withNetworkSecurityConfigFile",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": "5174a310-8108-4ccd-8e54-4fb75f8cca96"

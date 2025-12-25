@@ -4,7 +4,7 @@
  * - Al pulsar un borrador, se navega a NuevaVenta para editar.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -244,8 +244,21 @@ export default function ResumenDiaScreen() {
   
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
+  const [vendedorActualId, setVendedorActualId] = useState<string | null>(null);
 
   const layout = useResponsiveLayout();
+
+  // Obtener el vendedor actual al cargar la pantalla
+  useEffect(() => {
+    const obtenerVendedorActual = async () => {
+      const { vendorService } = await import('../../services/vendor.service');
+      const vendedor = await vendorService.getVendedorActual();
+      if (vendedor) {
+        setVendedorActualId(vendedor.id);
+      }
+    };
+    obtenerVendedorActual();
+  }, []);
 
   // --- HANDLERS ---
 
@@ -297,6 +310,16 @@ export default function ResumenDiaScreen() {
     try {
         const clienteFull = clientes.find(c => c.id === cobro.clienteId || c.nombre === cobro.cliente);
         const montoNum = parseFloat(cobro.monto.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+        // Buscar la nota de venta original para obtener los productos
+        const notaOriginal = notasVenta.find(n => n.id === cobro.notaVentaId);
+        const articulos = notaOriginal?.items?.map((art: any) => ({
+          nombre: art.nombre || '',
+          cantidad: parseFloat(art.cantidad || 0),
+          precioUnitario: parseFloat(art.precioUnitario || 0),
+          descuento: art.descuento || 0,
+          tipoDescuento: art.tipoDescuento || 'porcentaje'
+        })) || [];
+        
         const comprobante: ComprobanteCobro = {
             cobroId: cobro.id,
             cliente: {
@@ -310,7 +333,8 @@ export default function ResumenDiaScreen() {
                 id: cobro.notaVentaId || 'S/N',
                 client: cobro.cliente,
                 date: cobro.fecha,
-                amount: montoNum
+                amount: montoNum,
+                articulos: articulos
             }],
             metodoPago: cobro.formaPago || 'Efectivo',
             subtotal: montoNum,
@@ -345,7 +369,10 @@ export default function ResumenDiaScreen() {
     
     const ventasHoy = notasVenta.filter(n => {
       const fechaTime = parseDateString(n.fecha || '');
-      return fechaTime === hoyTime && n.estado !== 'anulada' && n.estado !== 'abierta';
+      // Si hay vendedor actual, SOLO mostrar ventas de ese vendedor
+      // Si no hay vendedorId en la nota, no mostrarla (es una nota antigua)
+      const perteneceVendedor = vendedorActualId ? (n.vendedorId === vendedorActualId) : false;
+      return fechaTime === hoyTime && n.estado !== 'anulada' && n.estado !== 'abierta' && perteneceVendedor;
     });
     
     const gastosHoy = gastos.filter(g => {
@@ -354,17 +381,25 @@ export default function ResumenDiaScreen() {
     });
 
     // Filtrar notas normales (cerradas/pendientes)
+    // IMPORTANTE: Solo mostrar ventas del vendedor actual
     const filteredVentas = notasVenta.filter(n => {
         const matchesSearch = n.cliente.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesPeriod = isDateInPeriod(n.fecha || '', periodToFilter, startDate, endDate);
+        // Si hay vendedor actual, SOLO mostrar ventas de ese vendedor
+        // Si no hay vendedorId en la nota, no mostrarla (es una nota antigua)
+        const perteneceVendedor = vendedorActualId ? (n.vendedorId === vendedorActualId) : false;
         // Excluimos anuladas y abiertas (las abiertas van a su propia lista)
-        return n.estado !== 'anulada' && n.estado !== 'abierta' && matchesSearch && matchesPeriod;
+        return n.estado !== 'anulada' && n.estado !== 'abierta' && matchesSearch && matchesPeriod && perteneceVendedor;
     });
 
     // Filtrar borradores (Abiertas) - Sin filtro de fecha estricto para no perderlos
+    // IMPORTANTE: Solo mostrar borradores del vendedor actual
     const filteredBorradores = notasVenta.filter(n => {
         const matchesSearch = n.cliente.toLowerCase().includes(searchTerm.toLowerCase());
-        return n.estado === 'abierta' && matchesSearch;
+        // Si hay vendedor actual, SOLO mostrar borradores de ese vendedor
+        // Si no hay vendedorId en la nota, no mostrarla (es una nota antigua o de otro sistema)
+        const perteneceVendedor = vendedorActualId ? (n.vendedorId === vendedorActualId) : false;
+        return n.estado === 'abierta' && matchesSearch && perteneceVendedor;
     });
 
     const filteredGastosCalc = gastos.filter(g => {

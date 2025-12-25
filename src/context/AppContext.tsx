@@ -104,7 +104,8 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     erpEnabled: true, // MODO PRUEBA: false para usar datos locales/mock
     autoSyncEnabled: true, 
     syncInterval: 3600000, 
-    modoOffline: false
+    modoOffline: false,
+    catalogoPdfUrl: 'https://docs.google.com/spreadsheets/d/1KEeYssoGwAa_oEvHjfINP24cjTEZsHng8jik4Qs8hf8/edit?usp=sharing'
   });
 
 
@@ -282,14 +283,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         console.log(`❌ [AppContext] No se recibieron clientes del sync service (undefined/null)`);
       }
       
-      // Actualizar artículos - SIEMPRE actualizar si hay datos del ERP
+      // Actualizar artículos - SIEMPRE actualizar, incluso si está vacío
       if (artSync !== undefined && artSync !== null) {
         if (artSync.length > 0) {
           console.log(`✅ [AppContext] Actualizando ${artSync.length} artículos en el estado`);
-          setArticulos(artSync);
         } else {
-          console.log(`⚠️ [AppContext] Artículos vacío del ERP, manteniendo estado actual`);
+          console.log(`⚠️ [AppContext] Artículos vacío del ERP, pero actualizando estado de todas formas`);
         }
+        setArticulos(artSync);
       } else {
         console.log(`❌ [AppContext] No se recibieron artículos del sync service (undefined/null)`);
       }
@@ -318,7 +319,21 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       
       setSyncStatus(status);
       setModoOffline(status.clientes === 'error' && status.articulos === 'error');
+      
+      // Mostrar alerta si hay errores
+      if (status.error || status.clientes === 'error' || status.articulos === 'error') {
+        console.error('❌ [AppContext] Error en sincronización:', status.error);
+        console.error(`   Clientes: ${status.clientes}, Artículos: ${status.articulos}`);
+      }
+      
+      // Mostrar advertencia si no hay datos
+      if ((cliSync?.length === 0 || artSync?.length === 0) && status.clientes !== 'error' && status.articulos !== 'error') {
+        console.warn('⚠️ [AppContext] Sincronización completada pero sin datos:');
+        console.warn(`   Clientes: ${cliSync?.length || 0}, Artículos: ${artSync?.length || 0}`);
+      }
     } catch (error: any) {
+      console.error('❌ [AppContext] Error crítico en sincronización:', error);
+      console.error('   Stack:', error.stack);
       setSyncStatus(p => ({ ...p, error: error.message, clientes: 'error', articulos: 'error' }));
       setModoOffline(true);
     }

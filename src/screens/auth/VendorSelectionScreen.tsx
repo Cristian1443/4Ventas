@@ -40,7 +40,10 @@ export default function VendorSelectionScreen() {
     const loadVendedores = async () => {
         try {
             setLoading(true);
+            
+            // Inicializar vendedores por defecto (no hay endpoint en el ERP)
             await vendorService.inicializarVendedoresPorDefecto();
+            
             const lista = await vendorService.getVendedores();
             const activos = lista.filter(v => v.activo);
 

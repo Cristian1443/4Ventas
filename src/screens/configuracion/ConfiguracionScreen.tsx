@@ -33,6 +33,7 @@ export default function ConfiguracionScreen() {
   const [printerPort, setPrinterPort] = useState('9100');
   const [isSyncingManual, setIsSyncingManual] = useState(false);
   const [testingPrinter, setTestingPrinter] = useState(false);
+  const [catalogoPdfUrl, setCatalogoPdfUrl] = useState('');
 
   // Cargar configuración inicial
   useEffect(() => {
@@ -42,9 +43,11 @@ export default function ConfiguracionScreen() {
       const currentConfig = printerService.getConfig();
       setPrinterIp(currentConfig.host);
       setPrinterPort(currentConfig.port);
+      // Cargar URL del catálogo PDF
+      setCatalogoPdfUrl(config.catalogoPdfUrl || '');
     };
     loadSettings();
-  }, []);
+  }, [config]);
 
   // Handlers
   const handleSavePrinter = async () => {
@@ -84,7 +87,7 @@ export default function ConfiguracionScreen() {
     try {
       setIsSyncingManual(true);
       const axios = require('axios');
-      const testUrl = 'http://x.verial.org:8000/WcfServiceLibraryVerial/GetClientesWS?x=39';
+      const testUrl = 'http://80.58.154.71:8000/WcfServiceLibraryVerial/GetClientesWS?x=39';
 
       console.log('🧪 Probando conexión al ERP:', testUrl);
       const response = await axios.get(testUrl, { timeout: 10000 });
@@ -106,7 +109,7 @@ export default function ConfiguracionScreen() {
       if (error.code === 'ECONNABORTED') {
         errorMsg = 'Tiempo de espera agotado (10s). El servidor no responde.';
       } else if (error.code === 'ENOTFOUND') {
-        errorMsg = 'No se pudo resolver el dominio x.verial.org';
+        errorMsg = 'No se pudo resolver el servidor ERP (80.58.154.71)';
       } else if (error.message) {
         errorMsg = error.message;
       }
@@ -296,6 +299,34 @@ export default function ConfiguracionScreen() {
                     <Text style={styles.primaryButtonText}>Guardar</Text>
                   </TouchableOpacity>
                 </View>
+              </View>
+
+              {/* Catálogo PDF */}
+              <View style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cardIcon}>📄</Text>
+                  <Text style={styles.cardTitle}>Catálogo PDF</Text>
+                </View>
+
+                <Text style={styles.inputLabel}>URL del Catálogo (Drive o Endpoint)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="https://drive.google.com/... o endpoint de Verial"
+                  value={catalogoPdfUrl}
+                  onChangeText={setCatalogoPdfUrl}
+                  autoCapitalize="none"
+                  keyboardType="url"
+                />
+
+                <TouchableOpacity 
+                  style={styles.primaryButton} 
+                  onPress={async () => {
+                    await updateConfig({ catalogoPdfUrl });
+                    Alert.alert('Éxito', 'URL del catálogo guardada correctamente');
+                  }}
+                >
+                  <Text style={styles.primaryButtonText}>Guardar URL</Text>
+                </TouchableOpacity>
               </View>
 
               {/* Información App */}

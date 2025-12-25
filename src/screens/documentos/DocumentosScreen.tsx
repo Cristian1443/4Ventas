@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   ScrollView,
   TextInput,
-  Alert
+  Alert,
+  Linking
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -15,13 +16,39 @@ import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 
 export default function DocumentosScreen() {
   const navigation = useNavigation<any>();
-  const { documentos, addDocumento, deleteDocumento } = useApp();
+  const { documentos, addDocumento, deleteDocumento, config } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState('Todos');
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   const categorias = ['Todos', 'Catálogos', 'Contratos', 'Facturas', 'Informes', 'Otros'];
+
+  // URL del catálogo PDF
+  const catalogoUrl = config.catalogoPdfUrl || 'https://docs.google.com/spreadsheets/d/1KEeYssoGwAa_oEvHjfINP24cjTEZsHng8jik4Qs8hf8/edit?usp=sharing';
+
+  // Crear documento virtual del catálogo
+  const catalogoDocumento = useMemo(() => ({
+    id: 'CATALOGO-PDF',
+    nombre: 'Catálogo de Productos',
+    categoria: 'Catálogos',
+    fecha: 'Actualizado',
+    tamano: 'Online',
+    tipo: 'pdf' as const,
+    url: catalogoUrl,
+    esCatalogo: true // Flag para identificar que es el catálogo
+  }), [catalogoUrl]);
+
+  // Combinar documentos reales con el catálogo
+  const documentosConCatalogo = useMemo(() => {
+    const docs = [...documentos];
+    // Agregar catálogo solo si no existe ya o si está filtrando por Catálogos
+    const existeCatalogo = docs.some(d => d.id === 'CATALOGO-PDF');
+    if (!existeCatalogo) {
+      docs.unshift(catalogoDocumento);
+    }
+    return docs;
+  }, [documentos, catalogoDocumento]);
 
   // Helper fecha
   const getFechaHoy = () => {
@@ -84,10 +111,25 @@ export default function DocumentosScreen() {
   };
 
   const handleDownloadDocument = async (doc: any) => {
+    // Si es el catálogo, abrir el link directamente
+    if (doc.esCatalogo && doc.url) {
+      try {
+        const canOpen = await Linking.canOpenURL(doc.url);
+        if (canOpen) {
+          await Linking.openURL(doc.url);
+        } else {
+          Alert.alert('Error', 'No se puede abrir el catálogo. Verifica tu conexión a Internet.');
+        }
+      } catch (error) {
+        Alert.alert('Error', 'No se pudo abrir el catálogo.');
+      }
+      return;
+    }
+    
     Alert.alert('Descargar', `Descargando archivo: ${doc.nombre}\n(Simulación de descarga offline)`);
   };
 
-  const filteredDocumentos = documentos.filter(doc => {
+  const filteredDocumentos = documentosConCatalogo.filter(doc => {
     const matchesSearch = doc.nombre.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategoria = selectedCategoria === 'Todos' || doc.categoria === selectedCategoria;
     return matchesSearch && matchesCategoria;
@@ -193,7 +235,7 @@ export default function DocumentosScreen() {
           ) : (
             <View style={styles.documentsGrid}>
               {filteredDocumentos.map((doc) => (
-                <View key={doc.id} style={styles.docCard}>
+                <View key={doc.id} style={[styles.docCard, doc.esCatalogo && styles.docCardCatalogo]}>
                   <View style={styles.docHeader}>
                     <View style={styles.docIconContainer}>
                       {getIconForType(doc.tipo)}
@@ -220,15 +262,17 @@ export default function DocumentosScreen() {
                       style={styles.downloadButton}
                       onPress={() => handleDownloadDocument(doc)}
                     >
-                      <Text style={styles.downloadIcon}>⬇</Text>
-                      <Text style={styles.downloadText}>Descargar</Text>
+                      <Text style={styles.downloadIcon}>{doc.esCatalogo ? '🔗' : '⬇'}</Text>
+                      <Text style={styles.downloadText}>{doc.esCatalogo ? 'Abrir Catálogo' : 'Descargar'}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.deleteButton}
-                      onPress={() => handleDeleteDocument(doc.id)}
-                    >
-                      <Text style={styles.deleteIcon}>🗑</Text>
-                    </TouchableOpacity>
+                    {!doc.esCatalogo && (
+                      <TouchableOpacity
+                        style={styles.deleteButton}
+                        onPress={() => handleDeleteDocument(doc.id)}
+                      >
+                        <Text style={styles.deleteIcon}>🗑</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               ))}
@@ -272,6 +316,7 @@ const styles = StyleSheet.create({
   statsCount: { fontSize: 32, fontWeight: '700', color: '#1a1a1a' },
   documentsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 20 },
   docCard: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#e2e8f0', borderRadius: 12, padding: 22, width: '100%', minWidth: 300, maxWidth: 400, flex: 1 },
+  docCardCatalogo: { borderWidth: 2, borderColor: '#0C2ABF', backgroundColor: '#f8faff' },
   docHeader: { flexDirection: 'row', gap: 16, marginBottom: 16 },
   docIconContainer: { flexShrink: 0 },
   docInfo: { flex: 1, minWidth: 0 },

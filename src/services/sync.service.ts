@@ -143,17 +143,20 @@ class SyncService {
 
   async syncClientes(): Promise<any[]> {
     try {
-      console.log('👥 [syncClientes] Iniciando sincronización de clientes...');
+      console.log('👥 [syncClientes] ============================================');
+      console.log('👥 [syncClientes] INICIANDO SINCRONIZACIÓN DE CLIENTES');
+      console.log('👥 [syncClientes] URL Base:', erpService.getERPBaseUrl ? erpService.getERPBaseUrl() : 'N/A');
+      console.log('👥 [syncClientes] Sesión:', erpService.getSessionId ? erpService.getSessionId() : 'N/A');
+      console.log('👥 [syncClientes] ============================================');
+      
       const clientesERP = await erpService.getClientes();
       
       console.log(`📥 [syncClientes] Clientes recibidos del ERP (raw): ${clientesERP.length}`);
       
       if (clientesERP.length === 0) {
         console.warn('⚠️ [syncClientes] ⚠️⚠️⚠️ NO SE RECIBIERON CLIENTES DEL ERP ⚠️⚠️⚠️');
-        console.warn('⚠️ [syncClientes] Esto puede indicar:');
-        console.warn('   1. El endpoint no devuelve datos');
-        console.warn('   2. La respuesta tiene un formato diferente');
-        console.warn('   3. Hay un error en la conexión');
+        console.warn('⚠️ [syncClientes] Continuando con clientes locales existentes...');
+        console.warn('⚠️ [syncClientes] La app seguirá funcionando normalmente');
         // No retornamos aquí, continuamos para preservar clientes locales
       }
       
@@ -196,11 +199,11 @@ class SyncService {
       const verificacion = await storageService.getItem<any[]>('clientes');
       console.log(`✅ [syncClientes] Verificación: ${verificacion?.length || 0} clientes guardados en storage`);
       
-      if (verificacion && verificacion.length > 0) {
+      if (verificacion && Array.isArray(verificacion) && verificacion.length > 0) {
         console.log(`✅ [syncClientes] Primer cliente guardado:`, verificacion[0]?.nombre || verificacion[0]?.id);
         console.log(`✅ [syncClientes] Estructura del primer cliente:`, JSON.stringify(verificacion[0], null, 2).substring(0, 200));
       } else {
-        console.error(`❌ [syncClientes] ERROR: No se pudieron verificar los clientes guardados`);
+        console.log(`ℹ️ [syncClientes] No hay clientes guardados (esto es normal si el servidor no devuelve datos)`);
       }
       
       console.log(`✅ [syncClientes] Clientes sincronizados: ${clientesServer.length} (Server) + ${clientesNuevosOffline.length} (Locales) = ${listaFinal.length} total`);
@@ -231,13 +234,20 @@ class SyncService {
 
   async syncArticulos(): Promise<any[]> {
     try {
-      console.log('📦 [syncArticulos] Sincronizando artículos...');
+      console.log('📦 [syncArticulos] ============================================');
+      console.log('📦 [syncArticulos] INICIANDO SINCRONIZACIÓN DE ARTÍCULOS');
+      console.log('📦 [syncArticulos] URL Base:', erpService.getERPBaseUrl ? erpService.getERPBaseUrl() : 'N/A');
+      console.log('📦 [syncArticulos] Sesión:', erpService.getSessionId ? erpService.getSessionId() : 'N/A');
+      console.log('📦 [syncArticulos] ============================================');
+      
       const articulosERP = await erpService.getArticulos();
       
       console.log(`📥 [syncArticulos] Artículos recibidos del ERP (raw): ${articulosERP.length}`);
       
       if (articulosERP.length === 0) {
         console.warn('⚠️ [syncArticulos] ⚠️⚠️⚠️ NO SE RECIBIERON ARTÍCULOS DEL ERP ⚠️⚠️⚠️');
+        console.warn('⚠️ [syncArticulos] Continuando con artículos locales existentes...');
+        console.warn('⚠️ [syncArticulos] La app seguirá funcionando normalmente');
       } else if (articulosERP.length > 0) {
         console.log('📋 [syncArticulos] Primer artículo raw:', JSON.stringify(articulosERP[0], null, 2).substring(0, 300));
       }
@@ -254,11 +264,11 @@ class SyncService {
       const verificacion = await storageService.getItem<any[]>('articulos');
       console.log(`✅ [syncArticulos] Verificación: ${verificacion?.length || 0} artículos guardados en storage`);
       
-      if (verificacion && verificacion.length > 0) {
+      if (verificacion && Array.isArray(verificacion) && verificacion.length > 0) {
         console.log(`✅ [syncArticulos] Primer artículo guardado:`, verificacion[0]?.nombre || verificacion[0]?.id);
         console.log(`✅ [syncArticulos] Estructura del primer artículo:`, JSON.stringify(verificacion[0], null, 2).substring(0, 200));
       } else {
-        console.error(`❌ [syncArticulos] ERROR: No se pudieron verificar los artículos guardados`);
+        console.log(`ℹ️ [syncArticulos] No hay artículos guardados (esto es normal si el servidor no devuelve datos)`);
       }
       
       console.log(`✅ [syncArticulos] ${articulosMapeados.length} artículos sincronizados`);

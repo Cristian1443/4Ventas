@@ -92,13 +92,25 @@ export default function CobrosScreen() {
     try {
       const itemsAPagar = pendingDebts.filter(d => selectedDebtIds.includes(d.id));
       
-      // Datos para el recibo
-      const notasParaRecibo = itemsAPagar.map(item => ({
-        id: item.notaId !== 'S/N' ? item.notaId : item.id,
-        client: item.client,
-        date: item.date,
-        amount: item.amount
-      }));
+      // Datos para el recibo (incluyendo productos de cada nota)
+      const notasParaRecibo = itemsAPagar.map(item => {
+        const nota = item.originalNota;
+        const articulos = nota?.items?.map((art: any) => ({
+          nombre: art.nombre || '',
+          cantidad: parseFloat(art.cantidad || 0),
+          precioUnitario: parseFloat(art.precioUnitario || 0),
+          descuento: art.descuento || 0,
+          tipoDescuento: art.tipoDescuento || 'porcentaje'
+        })) || [];
+        
+        return {
+          id: item.notaId !== 'S/N' ? item.notaId : item.id,
+          client: item.client,
+          date: item.date,
+          amount: item.amount,
+          articulos: articulos
+        };
+      });
 
       // B. ACTUALIZAR BASE DE DATOS
       // Actualizar todos los cobros de una vez para evitar problemas de estado

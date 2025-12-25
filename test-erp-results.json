@@ -1,0 +1,25 @@
+{
+  "timestamp": "2025-12-24T23:42:55.157Z",
+  "baseUrl": "http://80.58.154.71:8000/WcfServiceLibraryVerial",
+  "sessionId": "39",
+  "tests": {
+    "clientes": {
+      "exito": true,
+      "total": 0,
+      "muestra": [],
+      "error": {
+        "Codigo": 1,
+        "Descripcion": "No existe el fichero INI del servicio"
+      }
+    },
+    "articulos": {
+      "exito": true,
+      "total": 0,
+      "muestra": [],
+      "error": {
+        "Codigo": 1,
+        "Descripcion": "No existe el fichero INI del servicio"
+      }
+    }
+  }
+}

@@ -1,6 +1,7 @@
 /**
  * Servicio de Gestión de Vendedores
  * Sistema local para manejar múltiples vendedores sin autenticación ERP
+ * Sincroniza desde Google Sheets (no hay endpoint en el ERP)
  */
 
 import { storageService } from './storage.service';
@@ -156,6 +157,7 @@ class VendorService {
         }
     }
 
+
     // ============================================================================
     // INICIALIZACIÓN CON VENDEDORES POR DEFECTO
     // ============================================================================
@@ -170,12 +172,20 @@ class VendorService {
                 return;
             }
 
-            // Crear vendedores por defecto con sessionId ÚNICOS del ERP
-            // IMPORTANTE: Cada vendedor debe tener su propio sessionId del ERP
+            // Crear vendedores por defecto con códigos de agente (902, 903, etc.)
+            // Estos son los agentes mencionados por el usuario:
+            // Teixido Flor: Agente 902, 903, 904, 905, 908, 909
+            // Xosé María Teixido Núñez: Agente 906, 912, 913
             const vendedoresPorDefecto: Omit<Vendedor, 'id' | 'fechaCreacion'>[] = [
-                { nombre: 'Juan Pérez', codigo: 'V001', sessionId: '18', activo: true },
-                { nombre: 'María García', codigo: 'V002', sessionId: '39', activo: true },
-                { nombre: 'Carlos López', codigo: 'V003', sessionId: '40', activo: true },
+                { nombre: 'Agente 902', codigo: 'Agente 902', sessionId: '902', activo: true },
+                { nombre: 'Agente 903', codigo: 'Agente 903', sessionId: '903', activo: true },
+                { nombre: 'Agente 904', codigo: 'Agente 904', sessionId: '904', activo: true },
+                { nombre: 'Agente 905', codigo: 'Agente 905', sessionId: '905', activo: true },
+                { nombre: 'Agente 906', codigo: 'Agente 906', sessionId: '906', activo: true },
+                { nombre: 'Agente 908', codigo: 'Agente 908', sessionId: '908', activo: true },
+                { nombre: 'Agente 909', codigo: 'Agente 909', sessionId: '909', activo: true },
+                { nombre: 'Agente 912', codigo: 'Agente 912', sessionId: '912', activo: true },
+                { nombre: 'Agente 913', codigo: 'Agente 913', sessionId: '913', activo: true },
             ];
 
             for (const vendedor of vendedoresPorDefecto) {

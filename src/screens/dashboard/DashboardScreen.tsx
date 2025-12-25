@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { useResponsiveLayout } from '../../constants/layout';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
+import { vendorService } from '../../services/vendor.service';
 
 export default function DashboardScreen() {
   const navigation = useNavigation<any>();
@@ -28,6 +29,18 @@ export default function DashboardScreen() {
   } = useApp();
 
   const [refreshing, setRefreshing] = React.useState(false);
+  const [vendedorActualId, setVendedorActualId] = useState<string | null>(null);
+
+  // Obtener el vendedor actual al cargar la pantalla
+  useEffect(() => {
+    const obtenerVendedorActual = async () => {
+      const vendedor = await vendorService.getVendedorActual();
+      if (vendedor) {
+        setVendedorActualId(vendedor.id);
+      }
+    };
+    obtenerVendedorActual();
+  }, []);
 
   // Función de refresco manual (fuerza sincronización con ERP)
   const onRefresh = React.useCallback(async () => {
@@ -100,8 +113,14 @@ export default function DashboardScreen() {
 
   const hoyString = getTodayString();
 
-  // 1. Ventas
-  const ventasActivas = notasVenta.filter(n => n.estado !== 'anulada');
+  // 1. Ventas (filtradas por vendedor)
+  // IMPORTANTE: Solo mostrar ventas del vendedor actual
+  const ventasActivas = notasVenta.filter(n => {
+    // Si hay vendedor actual, SOLO mostrar ventas de ese vendedor
+    // Si no hay vendedorId en la nota, no mostrarla (es una nota antigua)
+    const perteneceVendedor = vendedorActualId ? (n.vendedorId === vendedorActualId) : false;
+    return n.estado !== 'anulada' && perteneceVendedor;
+  });
   const ventasHoy = ventasActivas.filter(n => {
     if (!n.fecha) return false;
     const fechaNota = n.fecha.split(',')[0].trim();

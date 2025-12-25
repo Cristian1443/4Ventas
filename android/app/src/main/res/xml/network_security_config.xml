@@ -4,6 +4,7 @@
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">x.verial.org</domain>
         <domain includeSubdomains="true">212.78.130.144</domain>
+        <domain includeSubdomains="true">80.58.154.71</domain>
     </domain-config>
     
     <!-- Configuración base para el resto de dominios -->

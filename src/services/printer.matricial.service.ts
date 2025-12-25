@@ -327,6 +327,13 @@ export interface ComprobanteCobro {
     client: string;
     date: string;
     amount: number;
+    articulos?: Array<{
+      nombre: string;
+      cantidad: number;
+      precioUnitario: number;
+      descuento?: number;
+      tipoDescuento?: 'porcentaje' | 'pesos';
+    }>;
   }>;
   metodoPago: string;
   subtotal: number;
@@ -382,6 +389,39 @@ const generarTextoComprobanteCobro = (comprobante: ComprobanteCobro): string => 
     const fechaNota = String(nota.date).substring(0, 12);
     const importe = nota.amount.toFixed(2) + ' €';
     texto += pad(notaId, 12) + pad(fechaNota, 12) + pad(importe, 18, 'right') + '\n';
+    
+    // Mostrar productos de la nota si están disponibles
+    if (nota.articulos && nota.articulos.length > 0) {
+      texto += pad('  PRODUCTOS:', width) + '\n';
+      nota.articulos.forEach(art => {
+        const nombre = String(art.nombre || '').substring(0, 20);
+        const cantidad = String(art.cantidad || '');
+        let precio = '';
+        
+        if (art.precioUnitario !== undefined) {
+          const subtotal = art.precioUnitario * Number(art.cantidad || 1);
+          let descuentoAplicado = 0;
+          
+          if (art.descuento && art.descuento > 0) {
+            if (art.tipoDescuento === 'porcentaje') {
+              descuentoAplicado = (subtotal * art.descuento) / 100;
+            } else {
+              descuentoAplicado = art.descuento * Number(art.cantidad || 1);
+            }
+          }
+          
+          precio = (subtotal - descuentoAplicado).toFixed(2) + ' €';
+        }
+        
+        texto += pad(`  ${nombre}`, 22) + pad(cantidad, 6, 'right') + pad(precio, 14, 'right') + '\n';
+        
+        if (art.descuento && art.descuento > 0) {
+          const descStr = art.tipoDescuento === 'porcentaje' ? `-${art.descuento}%` : `-${art.descuento}€`;
+          texto += pad(`    Desc: ${descStr}`, width) + '\n';
+        }
+      });
+      texto += '-'.repeat(width) + '\n';
+    }
   });
   
   texto += '='.repeat(width) + '\n';

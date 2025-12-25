@@ -15,7 +15,9 @@ import {
   TextInput,
   Modal,
   Image,
-  FlatList
+  FlatList,
+  Linking,
+  Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
@@ -28,8 +30,24 @@ const imgPlaceholder = require('../../../assets/blue-image-panel.png');
 
 export default function ArticulosScreen() {
   const navigation = useNavigation<any>();
-  const { articulos } = useApp();
+  const { articulos, config } = useApp();
   const { isTablet, isSmallDevice } = useResponsiveLayout();
+
+  const handleAbrirCatalogo = async () => {
+    // URL del Google Sheet del catálogo (configurable en Configuración)
+    const catalogoUrl = config.catalogoPdfUrl || 'https://docs.google.com/spreadsheets/d/1KEeYssoGwAa_oEvHjfINP24cjTEZsHng8jik4Qs8hf8/edit?usp=sharing';
+    
+    try {
+      const canOpen = await Linking.canOpenURL(catalogoUrl);
+      if (canOpen) {
+        await Linking.openURL(catalogoUrl);
+      } else {
+        Alert.alert('Error', 'No se puede abrir el catálogo. Verifica tu conexión a Internet.');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'No se pudo abrir el catálogo.');
+    }
+  };
 
   const [searchTerm, setSearchTerm] = useState('');
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Todos');
@@ -138,6 +156,12 @@ export default function ArticulosScreen() {
             <Text style={styles.title}>Artículos</Text>
           </View>
           <View style={styles.headerActions}>
+            <TouchableOpacity 
+              style={styles.catalogoButton}
+              onPress={handleAbrirCatalogo}
+            >
+              <Text style={styles.catalogoButtonText}>📄 Catálogo PDF</Text>
+            </TouchableOpacity>
             <View style={[styles.searchBoxHeader, isSmallDevice && { minWidth: 200 }]}>
               <Text style={styles.searchIcon}>🔍</Text>
               <TextInput
@@ -430,6 +454,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12
+  },
+  catalogoButton: {
+    backgroundColor: '#092090',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#0C2ABF'
+  },
+  catalogoButtonText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600'
   },
   backButton: {
     width: 40,

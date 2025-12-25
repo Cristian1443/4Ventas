@@ -16,10 +16,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 import { imprimirComprobanteCobro, ComprobanteCobro } from '../../services/printer.matricial.service';
+import { useApp } from '../../context/AppContext';
 
 export default function CobrosConfirmacionScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const { notasVenta } = useApp();
   const cobranzaActual = route.params?.cobranzaActual;
 
   const [showPrintMessage, setShowPrintMessage] = useState(false);
@@ -34,6 +36,28 @@ export default function CobrosConfirmacionScreen() {
         return;
       }
 
+      // Las notas ya deberían venir con los productos desde CobrosScreen
+      // Si no vienen, obtenerlos desde el contexto
+      const notasConProductos = (cobranzaActual.notas || []).map((nota: any) => {
+        // Si ya tiene productos, usarlos
+        if (nota.articulos && nota.articulos.length > 0) {
+          return nota;
+        }
+        // Si no, buscar la nota original y obtener sus productos
+        const notaOriginal = notasVenta.find(n => n.id === nota.id);
+        if (notaOriginal && notaOriginal.items) {
+          const articulos = notaOriginal.items.map((art: any) => ({
+            nombre: art.nombre || '',
+            cantidad: parseFloat(art.cantidad || 0),
+            precioUnitario: parseFloat(art.precioUnitario || 0),
+            descuento: art.descuento || 0,
+            tipoDescuento: art.tipoDescuento || 'porcentaje'
+          }));
+          return { ...nota, articulos };
+        }
+        return nota;
+      });
+      
       const comprobante: ComprobanteCobro = {
         cobroId: cobranzaActual.cobroId || `PAGO-${Date.now().toString().slice(-6)}`,
         cliente: {
@@ -43,7 +67,7 @@ export default function CobrosConfirmacionScreen() {
           direccion: cobranzaActual.cliente?.direccion,
           nif: cobranzaActual.cliente?.nif
         },
-        notas: cobranzaActual.notas || [],
+        notas: notasConProductos,
         metodoPago: cobranzaActual.metodoPago || cobranzaActual.formaPago || 'Efectivo',
         subtotal: cobranzaActual.subtotal || 0,
         fecha: cobranzaActual.fecha || new Date()

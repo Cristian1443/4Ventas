@@ -21,6 +21,7 @@ import { useApp } from '../../context/AppContext';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 import SeleccionarArticuloModal from '../../components/SeleccionarArticuloModal';
 import SeleccionarClienteModal from '../../components/SeleccionarClienteModal';
+import { vendorService } from '../../services/vendor.service';
 
 // ... (Tipos y Helpers se mantienen igual) ...
 interface ArticuloVenta {
@@ -63,6 +64,18 @@ export default function NuevaVentaScreen() {
   const { addNotaVenta, addCobro, clientes, articulos, deleteNotaVenta } = useApp();
 
   const ventaDataInicial = route.params?.ventaData;
+  const [vendedorActualId, setVendedorActualId] = useState<string | null>(null);
+
+  // Obtener el vendedor actual al cargar la pantalla
+  useEffect(() => {
+    const obtenerVendedorActual = async () => {
+      const vendedor = await vendorService.getVendedorActual();
+      if (vendedor) {
+        setVendedorActualId(vendedor.id);
+      }
+    };
+    obtenerVendedorActual();
+  }, []);
 
   // ... (Estados se mantienen igual, incluyendo descuento global) ...
   const [clienteSeleccionado, setClienteSeleccionado] = useState<any>(null);
@@ -316,7 +329,8 @@ export default function NuevaVentaScreen() {
       items: carrito, 
       totalesNumericos: totales,
       aplicarDescGlobal: enableGlobalDiscount,
-      descGlobal: globalDiscountValue
+      descGlobal: globalDiscountValue,
+      vendedorId: vendedorActualId || undefined
     };
 
     await addNotaVenta(ventaTemp as any);
@@ -353,7 +367,8 @@ export default function NuevaVentaScreen() {
             items: carrito, 
             totalesNumericos: totales,
             aplicarDescGlobal: enableGlobalDiscount,
-            descGlobal: globalDiscountValue
+            descGlobal: globalDiscountValue,
+            vendedorId: vendedorActualId || undefined
           };
           
           // Guardar la nueva nota oficial
