@@ -27,7 +27,7 @@ const getEtiquetaTipoNota = (valor: string) => {
 export default function VerNotaScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { updateNotaVenta, clientes } = useApp();
+  const { updateNotaVenta, clientes, currentVendor } = useApp();
   
   const ventaData = route.params?.ventaData;
 
@@ -102,7 +102,7 @@ export default function VerNotaScreen() {
   const estadoPagoLabel = ventaData.estado === 'pendiente' ? 'Crédito (Pendiente)' : 'Contado (Pagado)';
 
   const handleModificar = () => {
-    navigation.navigate('NuevaVenta', { ventaData });
+    navigation.navigate('NuevaVenta', { ventaData, vendorId: currentVendor?.id });
   };
 
   // Preparar datos para impresión con los nuevos campos

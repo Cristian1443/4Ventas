@@ -31,7 +31,7 @@ interface ClienteExtendido extends Cliente {
 
 export default function ClientesScreen() {
   const navigation = useNavigation<any>();
-  const { clientes, cobros } = useApp();
+  const { clientes, cobros, currentVendor } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCliente, setSelectedCliente] = useState<ClienteExtendido | null>(null);
@@ -43,21 +43,20 @@ export default function ClientesScreen() {
   // 1. PREPARAR DATOS (Calculamos cobros y aseguramos el código)
   const clientesData: ClienteExtendido[] = useMemo(() => {
     return clientes.map(cliente => {
-      // Calcular cobros pendientes
+      // Calcular cobros pendientes filtrados por vendedor actual si aplica
       const pendientes = cobros.filter(c =>
         c.estado === 'pendiente' &&
-        (c.clienteId === cliente.id || c.cliente.includes(cliente.nombre))
+        (c.clienteId === cliente.id || (c.cliente || '').includes(cliente.nombre)) &&
+        (!currentVendor?.id || c.vendedorId === currentVendor.id)
       ).length;
 
       return {
         ...cliente,
         cobrosPendientes: pendientes,
-        // LÓGICA VISUAL DEL CÓDIGO:
-        // Si existe cliente.codigo úsalo, si no, usa cliente.id, si no, "S/C"
         codigoVisual: cliente.codigo || cliente.id || 'S/C'
       };
     });
-  }, [clientes, cobros]);
+  }, [clientes, cobros, currentVendor?.id]);
 
   // Obtener provincias únicas para el filtro
   const provincias = useMemo(() =>
@@ -185,6 +184,7 @@ export default function ClientesScreen() {
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => navigation.navigate('NuevaVenta')}
+            disabled={!currentVendor?.id}
           >
             <LinearGradient
               colors={['#092090', '#0C2ABF']}

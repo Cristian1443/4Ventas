@@ -21,7 +21,7 @@ import { useApp } from '../../context/AppContext';
 export default function CobrosConfirmacionScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
-  const { notasVenta } = useApp();
+  const { notasVenta, currentVendor } = useApp();
   const cobranzaActual = route.params?.cobranzaActual;
 
   const [showPrintMessage, setShowPrintMessage] = useState(false);
@@ -30,6 +30,10 @@ export default function CobrosConfirmacionScreen() {
   const subtotal = cobranzaActual?.subtotal || 0;
 
   const handleImprimir = async () => {
+    if (!currentVendor?.id) {
+      Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de imprimir.');
+      return;
+    }
     try {
       if (!cobranzaActual) {
         Alert.alert('Error', 'No hay datos de cobro para imprimir');

@@ -20,8 +20,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsiveLayout } from '../../constants/layout';
 import { vendorService, Vendedor } from '../../services/vendor.service';
-import { setSessionId } from '../../services/erp.service';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useApp } from '../../context/AppContext';
 
 const { width } = Dimensions.get('window');
 
@@ -29,6 +28,7 @@ export default function VendorSelectionScreen() {
     const navigation = useNavigation<any>();
     const insets = useSafeAreaInsets();
     const layout = useResponsiveLayout();
+    const { login } = useApp();
     const [vendedores, setVendedores] = useState<Vendedor[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -68,30 +68,12 @@ export default function VendorSelectionScreen() {
         try {
             setSelectedId(vendedor.id);
 
-            // IMPORTANTE: Limpiar datos del vendedor anterior para aislamiento de sesión
-            console.log(`🔄 Limpiando datos del vendedor anterior...`);
-
-            // Obtener todas las claves y filtrar las que queremos mantener
-            const keysToKeep = ['vendedores', 'vendedor_actual', 'config'];
-            const allKeys = await AsyncStorage.getAllKeys();
-            const keysToRemove = allKeys.filter((key: string) => !keysToKeep.includes(key));
-
-            if (keysToRemove.length > 0) {
-                await AsyncStorage.multiRemove(keysToRemove);
-                console.log(`✅ ${keysToRemove.length} claves de datos limpiadas (sesión aislada)`);
-            }
-
-            // Iniciar sesión con el nuevo vendedor
-            const result = await vendorService.iniciarSesion(vendedor.id);
+            // Iniciar sesión con el nuevo vendedor y refrescar datos en contexto global
+            const result = await login(vendedor.id);
 
             if (result) {
-                // Configurar el sessionId del ERP ÚNICO para este vendedor
-                setSessionId(vendedor.sessionId);
                 console.log(`✅ Sesión iniciada: ${vendedor.nombre} (ERP Session: ${vendedor.sessionId})`);
-
-                setTimeout(() => {
-                    navigation.replace('Main');
-                }, 400);
+                navigation.replace('Main');
             } else {
                 Alert.alert('Error', 'No se pudo iniciar sesión');
                 setSelectedId(null);

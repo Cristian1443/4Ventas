@@ -13,7 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { useResponsiveLayout } from '../../constants/layout';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
-import { vendorService } from '../../services/vendor.service';
+// El vendedor actual se obtiene desde el contexto; no necesitamos leer AsyncStorage aquí.
 
 export default function DashboardScreen() {
   const navigation = useNavigation<any>();
@@ -25,22 +25,17 @@ export default function DashboardScreen() {
     clientes,
     syncStatus,
     modoOffline,
-    sincronizar
+    sincronizar,
+    currentVendor
   } = useApp();
 
   const [refreshing, setRefreshing] = React.useState(false);
   const [vendedorActualId, setVendedorActualId] = useState<string | null>(null);
 
-  // Obtener el vendedor actual al cargar la pantalla
+  // Sincronizar vendedor con el contexto (cambia al cambiar de cuenta)
   useEffect(() => {
-    const obtenerVendedorActual = async () => {
-      const vendedor = await vendorService.getVendedorActual();
-      if (vendedor) {
-        setVendedorActualId(vendedor.id);
-      }
-    };
-    obtenerVendedorActual();
-  }, []);
+    setVendedorActualId(currentVendor?.id || null);
+  }, [currentVendor?.id]);
 
   // Función de refresco manual (fuerza sincronización con ERP)
   const onRefresh = React.useCallback(async () => {
@@ -130,17 +125,24 @@ export default function DashboardScreen() {
   const totalVentasDia = ventasHoy.reduce((sum, nota) => sum + parsePrecio(nota.precio), 0);
   const numeroVentasHoy = ventasHoy.length;
 
-  // 2. Gastos
+  // 2. Gastos (filtrados por vendedor)
   const gastosHoy = gastos.filter(g => {
     if (!g.fecha) return false;
+    if (!vendedorActualId) return false;
+    if (g.vendedorId && g.vendedorId !== vendedorActualId) return false;
     const fechaGasto = g.fecha.split(',')[0].trim();
     return fechaGasto.startsWith(hoyString);
   });
   // Usar solo gastos de hoy para el total
   const totalGastos = gastosHoy.reduce((sum, gasto) => sum + parsePrecio(gasto.precio), 0);
 
-  // 3. Cobros Pendientes
-  const cobrosPendientes = cobros.filter(c => c.estado === 'pendiente');
+  // 3. Cobros Pendientes (filtrados por vendedor)
+  const cobrosPendientes = cobros.filter(c => {
+    if (c.estado !== 'pendiente') return false;
+    if (!vendedorActualId) return false;
+    if (c.vendedorId && c.vendedorId !== vendedorActualId) return false;
+    return true;
+  });
   const totalCobrosPendientes = cobrosPendientes.reduce((sum, cobro) => sum + parsePrecio(cobro.monto), 0);
 
   // 4. Clientes (Cartera vs Atendidos)

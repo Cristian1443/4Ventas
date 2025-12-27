@@ -4,43 +4,82 @@ export const articulosService = {
     async getArticulos(fecha?: string, hora?: string): Promise<any[]> {
         console.log('🚀 [getArticulos] Iniciando solicitud');
         const params = getCommonParams();
-        const fechaHoy = new Date().toISOString().split('T')[0];
 
-        const variaciones = [
-            { params: `${params}`, desc: 'solo sesión' },
-            { params: `${params}&fecha=${fechaHoy}`, desc: 'fecha hoy' },
-            { params: `${params}&fecha=${fecha || fechaHoy}&hora=${hora || '12:00'}`, desc: 'con parámetros' },
-        ];
+        try {
+            // 1. Obtener Lista Base
+            console.log(`🔄 [getArticulos] Solicitando lista base...`);
+            const response = await erpClient.get(`/GetArticulosWS?${params}`);
 
-        for (const variacion of variaciones) {
-            try {
-                console.log(`🔄 [getArticulos] Intentando (${variacion.desc})...`);
-                const response = await erpClient.get(`/GetArticulosWS?${variacion.params}`);
+            let articulos: any[] = [];
+            if (Array.isArray(response.data)) articulos = response.data;
+            else if (Array.isArray(response.data?.Articulos)) articulos = response.data.Articulos;
+            else if (response.data?.Articulos) articulos = [response.data.Articulos];
 
-                let articulos: any[] = [];
-                if (Array.isArray(response.data)) articulos = response.data;
-                else if (Array.isArray(response.data?.Articulos)) articulos = response.data.Articulos;
-                else if (response.data?.Articulos) articulos = [response.data.Articulos];
+            if (articulos.length > 0) {
+                console.log(`✅ [getArticulos] ${articulos.length} artículos base recibidos.`);
 
-                if (articulos.length > 0) {
-                    // Enriquecer con Stock si es posible
-                    try {
-                        const stockData = await articulosService.getStockArticulos(0);
-                        const stockMap = new Map();
-                        if (Array.isArray(stockData)) {
-                            stockData.forEach((item: any) => stockMap.set(item.ID_Articulo || item.Id, item));
-                        }
-                        return articulos.map(art => ({
-                            ...art,
-                            Stock: stockMap.get(art.Id || art.ID_Articulo)?.Stock || art.Stock || 0,
-                            StockMinimo: stockMap.get(art.Id || art.ID_Articulo)?.StockMinimo || art.StockMinimo || 0
-                        }));
-                    } catch (e) {
-                        return articulos;
+                // 2. Obtener Stock y Tarifas (Independientemente)
+                let stockMap = new Map();
+                let tarifaMap = new Map();
+
+                try {
+                    console.log('🔄 [getArticulos] Obteniendo Stock...');
+                    const stockData = await articulosService.getStockArticulos(0);
+                    if (Array.isArray(stockData)) {
+                        stockData.forEach((item: any) => {
+                            const key = item.ID_Articulo || item.Id;
+                            if (key) stockMap.set(String(key), item); // Normalizar Key a String
+                        });
+                        console.log(`✅ [getArticulos] Stock cargado: ${stockData.length} items`);
                     }
+                } catch (e) {
+                    console.warn('⚠️ [getArticulos] Falló la carga de Stock:', e);
                 }
-            } catch (error) { /* continue */ }
+
+                try {
+                    console.log('🔄 [getArticulos] Obteniendo Tarifas...');
+                    const tarifaData = await articulosService.getCondicionesTarifa(0);
+                    if (Array.isArray(tarifaData)) {
+                        tarifaData.forEach((item: any) => {
+                            const key = item.ID_Articulo || item.Id;
+                            if (key) tarifaMap.set(String(key), item); // Normalizar Key a String
+                        });
+                        console.log(`✅ [getArticulos] Tarifas cargadas: ${tarifaData.length} items`);
+                    }
+                } catch (e) {
+                    console.warn('⚠️ [getArticulos] Falló la carga de Tarifas:', e);
+                }
+
+                // 3. Merge Final
+                return articulos.map(art => {
+                    const id = String(art.Id || art.ID_Articulo); // Normalizar búsqueda a String
+                    const stockInfo = stockMap.get(id);
+                    const tarifaInfo = tarifaMap.get(id);
+
+                    // Lógica de Prioridad de Precios: Tarifa > Artículo Base > 0
+                    const precioTarifa = tarifaInfo?.Precio;
+                    const precioBase = art.Precio || art.PVP;
+                    const precioFinal = (precioTarifa !== undefined && precioTarifa !== null) ? precioTarifa : (precioBase || 0);
+
+                    return {
+                        ...art,
+                        // Unificar campos de Stock
+                        Stock: stockInfo?.Stock ?? art.Stock ?? 0,
+                        StockMinimo: stockInfo?.StockMinimo ?? art.StockMinimo ?? 0,
+
+                        // Unificar campos de Precio
+                        Precio: precioFinal,
+                        PVP: precioFinal
+                    };
+                });
+            } else {
+                console.warn('⚠️ [getArticulos] No se encontraron artículos en la respuesta base.');
+            }
+        } catch (error) {
+            console.error('❌ [getArticulos] Error Crítico:', error);
+            // Si falla todo, intentamos devolver error o array vacío
         }
+
         return [];
     },
 
@@ -48,8 +87,26 @@ export const articulosService = {
         try {
             const response = await erpClient.get(`/GetStockArticulosWS?${getCommonParams()}&id_articulo=${id_articulo}`);
             if (Array.isArray(response.data)) return response.data;
-            // Buscar propiedad array
-            return Object.values(response.data).find(v => Array.isArray(v)) as any[] || [];
+            if (response.data?.Stock && Array.isArray(response.data.Stock)) return response.data.Stock;
+
+            const values = Object.values(response.data);
+            const foundArray = values.find(v => Array.isArray(v));
+            return (foundArray as any[]) || [];
+        } catch (e) { return []; }
+    },
+
+    async getCondicionesTarifa(id_articulo = 0): Promise<any[]> {
+        try {
+            const fecha = new Date().toISOString().split('T')[0];
+            const url = `/GetCondicionesTarifaWS?${getCommonParams()}&id_articulo=${id_articulo}&id_cliente=0&fecha=${fecha}`;
+            const response = await erpClient.get(url);
+
+            if (Array.isArray(response.data)) return response.data;
+            if (response.data?.CondicionesTarifa && Array.isArray(response.data.CondicionesTarifa)) return response.data.CondicionesTarifa;
+
+            const values = Object.values(response.data);
+            const foundArray = values.find(v => Array.isArray(v));
+            return (foundArray as any[]) || [];
         } catch (e) { return []; }
     },
 

@@ -3,6 +3,7 @@
  * - Mantiene: Stats, Botones de cabecera (Proveedores/Divisiones), Buscador original.
  * - Añade: Filtros dinámicos + Filtro "Stock Bajo".
  * - Nuevo Diseño: Tarjeta con Foto y Código Corto.
+ * - CORRECCIÓN: Contador de "Stock Bajo" ahora usa criterio <= para coincidir con las tarjetas.
  */
 
 import React, { useState, useMemo } from 'react';
@@ -36,7 +37,7 @@ export default function ArticulosScreen() {
   const handleAbrirCatalogo = async () => {
     // URL del Google Sheet del catálogo (configurable en Configuración)
     const catalogoUrl = config.catalogoPdfUrl || 'https://docs.google.com/spreadsheets/d/1KEeYssoGwAa_oEvHjfINP24cjTEZsHng8jik4Qs8hf8/edit?usp=sharing';
-    
+
     try {
       const canOpen = await Linking.canOpenURL(catalogoUrl);
       if (canOpen) {
@@ -133,7 +134,9 @@ export default function ArticulosScreen() {
   }, [articulosProcesados, searchTerm, categoriaSeleccionada, sortBy]);
 
   // Cálculos para las Stats (sobre el total de artículos, no los filtrados)
-  const articulosStockBajo = articulos.filter(a => a.cantidad < (a.stockMinimo || 0));
+  // FIX: Usar <= para ser consistente con isStockBajo y la visualización
+  const articulosStockBajo = articulos.filter(a => a.cantidad <= (a.stockMinimo || 0));
+
   const valorTotal = articulos.reduce((sum, a) => {
     const precio = parseFloat(a.precio?.replace(',', '.').replace('€', '').trim() || '0');
     return sum + (precio * a.cantidad);
@@ -156,7 +159,7 @@ export default function ArticulosScreen() {
             <Text style={styles.title}>Artículos</Text>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={styles.catalogoButton}
               onPress={handleAbrirCatalogo}
             >
@@ -799,29 +802,24 @@ const styles = StyleSheet.create({
     height: '100%'
   },
   modalTitle: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     color: '#1a1a1a',
-    marginBottom: 20,
-    textAlign: 'center'
+    marginBottom: 20
   },
   modalSection: {
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
-    paddingBottom: 8
+    marginBottom: 16
   },
   modalSectionLabel: {
-    fontSize: 18,
-    color: '#697b92'
+    fontSize: 14,
+    color: '#64748b',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4
   },
   modalSectionValue: {
-    fontSize: 20,
-    color: '#1a1a1a',
-    fontWeight: '500'
+    fontSize: 18,
+    color: '#1a1a1a'
   },
   modalSectionValueLarge: {
     fontSize: 22,
@@ -829,22 +827,24 @@ const styles = StyleSheet.create({
     color: '#1a1a1a'
   },
   modalSectionValuePrice: {
-    fontSize: 24,
-    fontWeight: '700',
+    fontSize: 28,
+    fontWeight: '800',
     color: '#092090'
   },
   modalCloseButton: {
-    borderRadius: 8,
+    marginTop: 20,
+    borderRadius: 12,
     overflow: 'hidden',
-    marginTop: 24
+    height: 50
   },
   modalCloseButtonGradient: {
-    paddingVertical: 12,
-    alignItems: 'center'
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
   },
   modalCloseButtonText: {
+    color: '#ffffff',
     fontSize: 18,
-    fontWeight: '600',
-    color: '#ffffff'
+    fontWeight: '600'
   }
 });

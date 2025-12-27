@@ -166,9 +166,14 @@ class VendorService {
         try {
             const vendedores = await this.getVendedores();
 
-            // Si ya hay vendedores, no hacer nada
+            // Si ya hay vendedores, asegurar que cada uno tenga sessionId propio (sin sobreescribir)
             if (vendedores.length > 0) {
-                console.log(`ℹ️ [VendorService] Ya existen ${vendedores.length} vendedores configurados`);
+                const fixed = vendedores.map(v => {
+                    if (v.sessionId && v.sessionId.trim() !== '') return v;
+                    const inferred = v.codigo.replace(/[^\d]/g, '') || v.codigo;
+                    return { ...v, sessionId: inferred };
+                });
+                await storageService.setItem(this.STORAGE_KEY, fixed);
                 return;
             }
 
@@ -177,15 +182,15 @@ class VendorService {
             // Teixido Flor: Agente 902, 903, 904, 905, 908, 909
             // Xosé María Teixido Núñez: Agente 906, 912, 913
             const vendedoresPorDefecto: Omit<Vendedor, 'id' | 'fechaCreacion'>[] = [
-                { nombre: 'Agente 902', codigo: 'Agente 902', sessionId: '902', activo: true },
-                { nombre: 'Agente 903', codigo: 'Agente 903', sessionId: '903', activo: true },
-                { nombre: 'Agente 904', codigo: 'Agente 904', sessionId: '904', activo: true },
-                { nombre: 'Agente 905', codigo: 'Agente 905', sessionId: '905', activo: true },
-                { nombre: 'Agente 906', codigo: 'Agente 906', sessionId: '906', activo: true },
-                { nombre: 'Agente 908', codigo: 'Agente 908', sessionId: '908', activo: true },
-                { nombre: 'Agente 909', codigo: 'Agente 909', sessionId: '909', activo: true },
-                { nombre: 'Agente 912', codigo: 'Agente 912', sessionId: '912', activo: true },
-                { nombre: 'Agente 913', codigo: 'Agente 913', sessionId: '913', activo: true },
+                { nombre: 'Agente 902', codigo: '902', sessionId: '902', activo: true },
+                { nombre: 'Agente 903', codigo: '903', sessionId: '903', activo: true },
+                { nombre: 'Agente 904', codigo: '904', sessionId: '904', activo: true },
+                { nombre: 'Agente 905', codigo: '905', sessionId: '905', activo: true },
+                { nombre: 'Agente 906', codigo: '906', sessionId: '906', activo: true },
+                { nombre: 'Agente 908', codigo: '908', sessionId: '908', activo: true },
+                { nombre: 'Agente 909', codigo: '909', sessionId: '909', activo: true },
+                { nombre: 'Agente 912', codigo: '912', sessionId: '912', activo: true },
+                { nombre: 'Agente 913', codigo: '913', sessionId: '913', activo: true },
             ];
 
             for (const vendedor of vendedoresPorDefecto) {

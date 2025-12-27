@@ -24,7 +24,7 @@ export default function CobrosScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   
-  const { notasVenta, updateNotaVenta, cobros, updateCobro, addCobro } = useApp();
+  const { notasVenta, updateNotaVenta, cobros, updateCobro, addCobro, currentVendor } = useApp();
 
   const clienteSeleccionado = route.params?.clienteSeleccionado;
 
@@ -84,6 +84,10 @@ export default function CobrosScreen() {
 
   // 2. PROCESO DE COBRO BLINDADO
   const handleConfirmarCobro = async () => {
+    if (!currentVendor?.id) {
+      Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de registrar cobros.');
+      return;
+    }
     if (!clienteSeleccionado || selectedDebtIds.length === 0 || !selectedPaymentMethod) {
       Alert.alert('Faltan datos', 'Selecciona método de pago y al menos una deuda.');
       return;

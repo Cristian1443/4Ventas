@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
+import { useApp } from '../../context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsiveLayout } from '../../constants/layout';
 
@@ -26,6 +27,7 @@ export default function LoginScreen() {
   const navigation = useNavigation<any>();
   const layout = useResponsiveLayout();
   const insets = useSafeAreaInsets();
+  const { currentVendor } = useApp();
   const [isVendorHovered, setIsVendorHovered] = useState(false);
   const [isAdminHovered, setIsAdminHovered] = useState(false);
 
@@ -66,6 +68,7 @@ export default function LoginScreen() {
               onPressOut={() => setIsVendorHovered(false)}
               onPress={handleVendorLogin}
               style={[styles.button, isVendorHovered && styles.buttonElevated]}
+              disabled={false}
             >
               <LinearGradient
                 colors={isVendorHovered ? ['#a0e000', '#d4ff77'] : ['#8bd600', '#c4ff57']}
@@ -91,6 +94,7 @@ export default function LoginScreen() {
               onPressOut={() => setIsAdminHovered(false)}
               onPress={handleAdminLogin}
               style={[styles.button, isAdminHovered && styles.buttonElevated]}
+              disabled={false}
             >
               <LinearGradient
                 colors={isAdminHovered ? ['#0a2ba0', '#0d2ed0'] : ['#092090', '#0C2ABF']}

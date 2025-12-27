@@ -19,7 +19,7 @@ import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 
 export default function VentasListScreen() {
   const navigation = useNavigation<any>();
-  const { clientes, cobros } = useApp();
+  const { clientes, cobros, currentVendor } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterBy, setFilterBy] = useState<'todos' | 'cobros' | 'sin-cobros'>('todos');
   const [showFilterMenu, setShowFilterMenu] = useState(false);
@@ -28,6 +28,7 @@ export default function VentasListScreen() {
   const buscarCobrosDeCliente = (cliente: any) => {
     return cobros.filter(c => {
       if (c.estado !== 'pendiente') return false;
+      // Cobros ya vienen filtrados por vendedor en el contexto
       
       // Match por ID
       if (c.clienteId && c.clienteId === cliente.id) {
@@ -82,11 +83,14 @@ export default function VentasListScreen() {
   const totalCobrosPendientes = clientesData.reduce((sum, c) => sum + c.cobrosPendientes, 0);
 
   const handleNuevaVenta = (cliente?: any) => {
-    if (cliente) {
-      navigation.navigate('NuevaVenta', { clienteSeleccionado: cliente });
-    } else {
-      navigation.navigate('NuevaVenta');
+    if (!currentVendor?.id) {
+      return;
     }
+
+    const params: any = { vendorId: currentVendor.id };
+    if (cliente) params.clienteSeleccionado = cliente;
+
+    navigation.navigate('NuevaVenta', params);
   };
 
   return (
@@ -108,6 +112,7 @@ export default function VentasListScreen() {
                 style={styles.createButton}
                 onPress={() => handleNuevaVenta()}
                 activeOpacity={0.8}
+                disabled={!currentVendor?.id}
               >
                 <LinearGradient
                   colors={['#092090', '#0C2ABF']}
@@ -244,87 +249,93 @@ export default function VentasListScreen() {
           </Text>
 
           {/* Cliente list */}
-          {filteredClientes.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyStateText}>No se encontraron clientes</Text>
-              {searchTerm && (
-                <TouchableOpacity
-                  style={styles.clearSearchButton}
-                  onPress={() => {
-                    setSearchTerm('');
-                    setFilterBy('todos');
-                  }}
-                >
-                  <LinearGradient
-                    colors={['#092090', '#0C2ABF']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.clearSearchButtonGradient}
-                  >
-                    <Text style={styles.clearSearchButtonText}>Limpiar búsqueda</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-              )}
-            </View>
-          ) : (
-            <View style={styles.clientesList}>
-              {filteredClientes.map((cliente) => (
-                <View key={cliente.id} style={styles.clienteCard}>
-                  <View style={styles.clienteHeader}>
-                    <View style={styles.clienteIdBadge}>
-                      <Text style={styles.clienteIdText}>{cliente.id}</Text>
-                    </View>
-                    <Text style={styles.clienteNombre}>{cliente.nombre}</Text>
-                    <View style={styles.clienteMeta}>
-                      <View style={styles.clienteMetaItem}>
-                        <Text style={styles.clienteMetaLabel}>Razón Social:</Text>
-                        <Text style={styles.clienteMetaValue}>
-                          {cliente.razonSocial || '-'}
-                        </Text>
-                      </View>
-                      <View style={styles.clienteMetaItem}>
-                        <Text style={styles.clienteMetaLabel}>Cobros Pendientes:</Text>
-                        <Text style={[
-                          styles.clienteMetaValue,
-                          { color: cliente.cobrosPendientes > 0 ? '#f59e0b' : '#10b981' }
-                        ]}>
-                          {cliente.cobrosPendientes}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.clienteInfo}>
-                    <View style={styles.clienteInfoRow}>
-                      <InfoField label="NIF:" value={cliente.nif || '-'} />
-                      <InfoField 
-                        label="Dirección:" 
-                        value={`${cliente.direccion || ''}, ${cliente.poblacion || ''}, ${cliente.provincia || ''}`.replace(/^,\s*|,\s*$/g, '') || '-'} 
-                      />
-                    </View>
-                    <View style={styles.clienteInfoRow}>
-                      <InfoField label="Teléfono:" value={cliente.telefono || '-'} />
-                      <InfoField label="E-mail:" value={cliente.email || '-'} />
-                    </View>
-                  </View>
-
+          {currentVendor?.id ? (
+            filteredClientes.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyStateText}>No se encontraron clientes</Text>
+                {searchTerm && (
                   <TouchableOpacity
-                    style={styles.nuevaNotaButton}
-                    onPress={() => handleNuevaVenta(cliente)}
-                    activeOpacity={0.8}
+                    style={styles.clearSearchButton}
+                    onPress={() => {
+                      setSearchTerm('');
+                      setFilterBy('todos');
+                    }}
                   >
                     <LinearGradient
                       colors={['#092090', '#0C2ABF']}
                       start={{ x: 0, y: 0 }}
                       end={{ x: 1, y: 0 }}
-                      style={styles.nuevaNotaButtonGradient}
+                      style={styles.clearSearchButtonGradient}
                     >
-                      <Text style={styles.nuevaNotaButtonIcon}>+</Text>
-                      <Text style={styles.nuevaNotaButtonText}>Nueva Nota de Venta</Text>
+                      <Text style={styles.clearSearchButtonText}>Limpiar búsqueda</Text>
                     </LinearGradient>
                   </TouchableOpacity>
-                </View>
-              ))}
+                )}
+              </View>
+            ) : (
+              <View style={styles.clientesList}>
+                {filteredClientes.map((cliente) => (
+                  <View key={cliente.id} style={styles.clienteCard}>
+                    <View style={styles.clienteHeader}>
+                      <View style={styles.clienteIdBadge}>
+                        <Text style={styles.clienteIdText}>{cliente.id}</Text>
+                      </View>
+                      <Text style={styles.clienteNombre}>{cliente.nombre}</Text>
+                      <View style={styles.clienteMeta}>
+                        <View style={styles.clienteMetaItem}>
+                          <Text style={styles.clienteMetaLabel}>Razón Social:</Text>
+                          <Text style={styles.clienteMetaValue}>
+                            {cliente.razonSocial || '-'}
+                          </Text>
+                        </View>
+                        <View style={styles.clienteMetaItem}>
+                          <Text style={styles.clienteMetaLabel}>Cobros Pendientes:</Text>
+                          <Text style={[
+                            styles.clienteMetaValue,
+                            { color: cliente.cobrosPendientes > 0 ? '#f59e0b' : '#10b981' }
+                          ]}>
+                            {cliente.cobrosPendientes}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    <View style={styles.clienteInfo}>
+                      <View style={styles.clienteInfoRow}>
+                        <InfoField label="NIF:" value={cliente.nif || '-'} />
+                        <InfoField 
+                          label="Dirección:" 
+                          value={`${cliente.direccion || ''}, ${cliente.poblacion || ''}, ${cliente.provincia || ''}`.replace(/^,\s*|,\s*$/g, '') || '-'} 
+                        />
+                      </View>
+                      <View style={styles.clienteInfoRow}>
+                        <InfoField label="Teléfono:" value={cliente.telefono || '-'} />
+                        <InfoField label="E-mail:" value={cliente.email || '-'} />
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.nuevaNotaButton}
+                      onPress={() => handleNuevaVenta(cliente)}
+                      activeOpacity={0.8}
+                    >
+                      <LinearGradient
+                        colors={['#092090', '#0C2ABF']}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.nuevaNotaButtonGradient}
+                      >
+                        <Text style={styles.nuevaNotaButtonIcon}>+</Text>
+                        <Text style={styles.nuevaNotaButtonText}>Nueva Nota de Venta</Text>
+                      </LinearGradient>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>Inicia sesión con un vendedor para crear ventas.</Text>
             </View>
           )}
         </ScrollView>

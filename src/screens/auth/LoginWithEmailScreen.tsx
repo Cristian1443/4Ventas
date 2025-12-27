@@ -23,7 +23,7 @@ const logoImage = require('../../../assets/logo-login.png');
 
 export default function LoginWithEmailScreen() {
   const navigation = useNavigation<any>();
-  const { setUserSession } = useApp();
+  const { setUserSession, setCurrentVendor } = useApp();
   const insets = useSafeAreaInsets();
   
   const [email, setEmail] = useState('');
@@ -42,11 +42,12 @@ export default function LoginWithEmailScreen() {
     setTimeout(() => {
       setLoading(false);
       
-      // Guardar sesión
+      // Guardar sesión (modo admin) sin vendedor
+      setCurrentVendor(null);
       setUserSession({
         isLoggedIn: true,
         email: email,
-        username: 'Vendedor'
+        username: 'Admin'
       });
 
       // Navegar al Main (que contiene el Dashboard)

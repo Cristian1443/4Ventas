@@ -18,6 +18,7 @@ import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 export default function VentasMenuScreen() {
   const navigation = useNavigation<any>();
   const layout = useResponsiveLayout();
+  // Se asume vendedor activo a nivel de contexto; no lógica adicional aquí
 
   const menuItems = [
     { label: 'Notas Venta', icon: '📋', screen: 'Ventas' },

@@ -7,4 +7,5 @@ export interface Cobro {
     notaVentaId?: string;
     clienteId?: string;
     formaPago?: string;
+    vendedorId?: string; // ID del vendedor que registró el cobro
 }

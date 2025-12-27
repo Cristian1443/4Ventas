@@ -18,7 +18,7 @@ import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 
 export default function GastosScreen() {
   const navigation = useNavigation<any>();
-  const { gastos, addGasto, deleteGasto } = useApp();
+  const { gastos, addGasto, deleteGasto, currentVendor } = useApp();
   const { width } = useWindowDimensions();
 
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
@@ -46,6 +46,10 @@ export default function GastosScreen() {
   };
 
   const handleAddGasto = () => {
+    if (!currentVendor?.id) {
+      Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de registrar un gasto.');
+      return;
+    }
     if (!nombreGasto || !selectedType || !valorGasto) {
       Alert.alert('Error', 'Completa todos los campos');
       return;

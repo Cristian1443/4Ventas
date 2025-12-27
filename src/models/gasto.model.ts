@@ -5,4 +5,5 @@ export interface Gasto {
     precio: string;
     fecha: string;
     imagen?: string;
+    vendedorId?: string; // ID del vendedor que creó el gasto
 }

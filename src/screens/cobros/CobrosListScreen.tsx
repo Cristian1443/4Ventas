@@ -23,7 +23,7 @@ import SeleccionarClienteModal from '../../components/SeleccionarClienteModal';
 
 export default function CobrosListScreen() {
   const navigation = useNavigation<any>();
-  const { cobros, clientes } = useApp();
+  const { cobros, clientes, currentVendor } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'nombre' | 'monto' | 'notas'>('nombre');
@@ -133,7 +133,7 @@ export default function CobrosListScreen() {
                   <Text style={styles.printIcon}>🖨️</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity style={styles.newCobranzaButton} onPress={() => setShowModal(true)}>
+                <TouchableOpacity style={styles.newCobranzaButton} onPress={() => setShowModal(true)} disabled={!currentVendor?.id}>
                   <LinearGradient colors={['#092090', '#0C2ABF']} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.newCobranzaGradient}>
                     <Text style={styles.newCobranzaIcon}>+</Text>
                     <Text style={styles.newCobranzaText}>Nueva Cobranza</Text>

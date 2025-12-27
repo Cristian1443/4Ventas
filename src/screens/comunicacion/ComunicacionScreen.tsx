@@ -17,6 +17,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
+import { syncService } from '../../services/sync.service';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 import * as FileSystemLegacy from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -29,11 +30,14 @@ export default function ComunicacionScreen() {
     notasVenta, 
     gastos, 
     documentos, 
+    cobros,
     forzarSincronizacion,
     syncStatus,
     modoOffline,
     config,
-    logout
+    logout,
+    updateSyncStatus,
+    currentVendor
   } = useApp();
 
   const [showExportModal, setShowExportModal] = useState(false);
@@ -66,6 +70,22 @@ export default function ComunicacionScreen() {
 
   // EXPORTACIÓN: Usa datos reales del contexto
   const handleExport = async () => {
+    if (!currentVendor?.id) {
+      Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de exportar.');
+      return;
+    }
+
+    // Opcional: antes de exportar, intentar vaciar la cola del vendedor activo
+    try {
+      await syncService.setVendor(currentVendor.id);
+      if (config.erpEnabled) {
+        const status = await syncService.syncAll();
+        updateSyncStatus(status);
+      }
+    } catch {
+      // Si falla la sync, igual exportamos los datos locales actuales
+    }
+
     let dataToExport: any = {};
     let filename = '';
     const dateStr = new Date().toISOString().split('T')[0];
@@ -83,6 +103,7 @@ export default function ComunicacionScreen() {
         dataToExport = { 
           ventas: notasVenta, 
           gastos, 
+          cobros,
           documentos,
           meta: {
             fecha: new Date().toISOString(),
@@ -126,15 +147,22 @@ export default function ComunicacionScreen() {
         Alert.alert('Modo Offline', 'No se puede sincronizar. Verifique su conexión o la configuración del ERP.');
         return;
     }
+    if (!currentVendor?.id) {
+        Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de sincronizar.');
+        return;
+    }
 
     setInternalSyncState('syncing');
     setShowSyncModal(true);
     
     try {
-      await forzarSincronizacion();
-      // Verificamos el resultado real en syncStatus
-      if (syncStatus.error) {
-          throw new Error(syncStatus.error);
+      await syncService.setVendor(currentVendor.id);
+      const status = await syncService.syncAll();
+      // Recalcular pendientes tras la sync real
+      const pendientes = syncService.getPendingCount();
+      updateSyncStatus({ ...status, operacionesPendientes: pendientes });
+      if (status.error || status.clientes === 'error' || status.articulos === 'error') {
+          throw new Error(status.error || 'Error de sincronización');
       }
       setInternalSyncState('success');
       setTimeout(() => {
@@ -242,6 +270,33 @@ export default function ComunicacionScreen() {
               </LinearGradient>
             </TouchableOpacity>
           </View>
+
+          {/* Acción rápida: limpiar cola */}
+          <TouchableOpacity
+            style={[styles.actionButton, { marginTop: 12 }]}
+            onPress={async () => {
+              if (!currentVendor?.id) {
+                Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de limpiar la cola.');
+                return;
+              }
+              await syncService.setVendor(currentVendor.id);
+              syncService.clearQueue(true); // elimina pendientes y errores del vendor actual
+              const pendientes = syncService.getPendingCount();
+              updateSyncStatus({ ...syncStatus, operacionesPendientes: pendientes });
+              Alert.alert('Cola limpiada', `Operaciones pendientes ahora: ${pendientes}`);
+            }}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#ef4444', '#f97316']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 0, y: 1 }}
+              style={styles.actionButtonGradient}
+            >
+              <Text style={styles.actionIcon}>🧹</Text>
+              <Text style={styles.actionText}>Limpiar Cola</Text>
+            </LinearGradient>
+          </TouchableOpacity>
 
           {/* Información de Estado REAL */}
           <View style={styles.infoCard}>

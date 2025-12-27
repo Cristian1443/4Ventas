@@ -236,7 +236,7 @@ function CobroItem({ cobro, onPrint }: { cobro: Cobro, onPrint: (c: Cobro) => vo
 export default function ResumenDiaScreen() {
   const navigation = useNavigation<any>();
   const { isTablet, isSmallDevice } = useResponsiveLayout();
-  const { notasVenta, gastos, cobros, clientes } = useApp();
+  const { notasVenta, gastos, cobros, clientes, currentVendor } = useApp();
   
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('Totales del Día'); 
@@ -248,17 +248,10 @@ export default function ResumenDiaScreen() {
 
   const layout = useResponsiveLayout();
 
-  // Obtener el vendedor actual al cargar la pantalla
+  // Mantener el vendedor actual sincronizado con el contexto (cambia al cambiar de cuenta)
   useEffect(() => {
-    const obtenerVendedorActual = async () => {
-      const { vendorService } = await import('../../services/vendor.service');
-      const vendedor = await vendorService.getVendedorActual();
-      if (vendedor) {
-        setVendedorActualId(vendedor.id);
-      }
-    };
-    obtenerVendedorActual();
-  }, []);
+    setVendedorActualId(currentVendor?.id || null);
+  }, [currentVendor?.id]);
 
   // --- HANDLERS ---
 
@@ -357,27 +350,23 @@ export default function ResumenDiaScreen() {
   const { 
     totalVentas, totalGastos, numeroVentas, ventasPendientes, clientesVisitadosHoy,
     filteredNotasVenta, filteredGastos, liquidacionData, cobrosDelDia, notasAbiertas,
-    ventasDelDia, gastosDelDia
+    ventasDelPeriodo, gastosDelPeriodo
   } = useMemo(() => {
     const periodToFilter = (selectedPeriod === 'Hoy' || selectedPeriod === 'Ayer' || selectedPeriod === 'Semana' || selectedPeriod === 'Mes') 
       ? selectedPeriod 
       : 'Rango';
     
-    // Calcular ventas y gastos del día actual (independiente del período seleccionado)
-    const hoy = new Date();
-    const hoyTime = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate()).getTime();
-    
-    const ventasHoy = notasVenta.filter(n => {
+    // Ventas y gastos filtrados por período seleccionado
+    const ventasPeriodo = notasVenta.filter(n => {
       const fechaTime = parseDateString(n.fecha || '');
-      // Si hay vendedor actual, SOLO mostrar ventas de ese vendedor
-      // Si no hay vendedorId en la nota, no mostrarla (es una nota antigua)
       const perteneceVendedor = vendedorActualId ? (n.vendedorId === vendedorActualId) : false;
-      return fechaTime === hoyTime && n.estado !== 'anulada' && n.estado !== 'abierta' && perteneceVendedor;
+      const matchesPeriod = isDateInPeriod(n.fecha || '', periodToFilter, startDate, endDate);
+      return n.estado !== 'anulada' && n.estado !== 'abierta' && perteneceVendedor && matchesPeriod;
     });
     
-    const gastosHoy = gastos.filter(g => {
-      const fechaTime = parseDateString(g.fecha || '');
-      return fechaTime === hoyTime;
+    const gastosPeriodo = gastos.filter(g => {
+      const matchesPeriod = isDateInPeriod(g.fecha || '', periodToFilter, startDate, endDate);
+      return matchesPeriod;
     });
 
     // Filtrar notas normales (cerradas/pendientes)
@@ -442,9 +431,9 @@ export default function ResumenDiaScreen() {
     const liquidacionEfectivo = ventasEfectivo + cobrosEfectivo - totalGastosMonto;
     const totalVentasMonto = filteredVentas.reduce((sum, n) => sum + parsePrecio(n.precio || '0'), 0);
     
-    // Calcular totales del día actual
-    const ventasDelDiaMonto = ventasHoy.reduce((sum, n) => sum + parsePrecio(n.precio || '0'), 0);
-    const gastosDelDiaMonto = gastosHoy.reduce((sum, g) => sum + parsePrecio(g.precio || '0'), 0);
+    // Calcular totales del período seleccionado (no solo hoy)
+    const ventasPeriodoMonto = ventasPeriodo.reduce((sum, n) => sum + parsePrecio(n.precio || '0'), 0);
+    const gastosPeriodoMonto = gastosPeriodo.reduce((sum, g) => sum + parsePrecio(g.precio || '0'), 0);
 
     return {
         totalVentas: totalVentasMonto,
@@ -458,10 +447,10 @@ export default function ResumenDiaScreen() {
         cobrosDelDia: filteredCobros,
         notasAbiertas: filteredBorradores, // Usamos la lista filtrada
         historialCambios: [],
-        ventasDelDia: ventasDelDiaMonto,
-        gastosDelDia: gastosDelDiaMonto
+        ventasDelPeriodo: ventasPeriodoMonto,
+        gastosDelPeriodo: gastosPeriodoMonto
     };
-  }, [notasVenta, gastos, cobros, searchTerm, selectedPeriod, startDate, endDate]);
+  }, [notasVenta, gastos, cobros, searchTerm, selectedPeriod, startDate, endDate, vendedorActualId]);
 
   // Función para imprimir el informe (placeholder)
   const handleImprimirInforme = async () => {
@@ -543,14 +532,14 @@ export default function ResumenDiaScreen() {
 
       {/* VISTAS SEGÚN TAB */}
       
-      {/* 1. TOTALES */}
+      {/* 1. TOTALES (según período seleccionado) */}
       {activeTab === 'Totales del Día' && (
         <View style={styles.statsGrid}>
            <TouchableOpacity style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]} onPress={() => setActiveTab('Notas de Venta')}>
-              <StatsCard title="Ventas del Día" value={`${ventasDelDia.toFixed(2).replace('.', ',')} €`} change="Total Facturado Hoy" changeColor="#91e600" bgGradient={true} />
+              <StatsCard title={`Ventas (${selectedPeriod})`} value={`${ventasDelPeriodo.toFixed(2).replace('.', ',')} €`} change="Total facturado" changeColor="#91e600" bgGradient={true} />
             </TouchableOpacity>
             <TouchableOpacity style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]} onPress={() => setActiveTab('Gastos')}>
-              <StatsCard title="Gastos del Día" value={`${gastosDelDia.toFixed(2).replace('.', ',')} €`} change="Total Gastos Hoy" changeColor="#f59f0a" titleBg="#0C2ABF" />
+              <StatsCard title={`Gastos (${selectedPeriod})`} value={`${gastosDelPeriodo.toFixed(2).replace('.', ',')} €`} change="Total gastos" changeColor="#f59f0a" titleBg="#0C2ABF" />
             </TouchableOpacity>
             <TouchableOpacity style={[styles.statWrapper, isTablet ? { width: '23%' } : { width: '48%' }]}>
               <StatsCard title="Nº Ventas" value={numeroVentas.toString()} change={ventasPendientes > 0 ? `${ventasPendientes} pendientes` : 'Cerrado'} changeColor="#91e600" />

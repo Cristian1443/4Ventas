@@ -1,0 +1,2675 @@
+{
+  "meta": {
+    "url": "http://80.58.154.71:8000/WcfServiceLibraryVerial",
+    "session": "39",
+    "time": "2025-12-26T18:12:13.295Z"
+  },
+  "articles": {
+    "count": 517,
+    "sample": {
+      "Alto": 0,
+      "Ancho": 0,
+      "Autores": null,
+      "Aux1": "",
+      "Aux2": "",
+      "Aux3": "",
+      "Aux4": "",
+      "Aux5": "",
+      "Aux6": "",
+      "CamposConfigurables": null,
+      "DecPrecioVentas": 3,
+      "DecUdsVentas": 0,
+      "Descripcion": "",
+      "Edicion": "",
+      "FechaDisponibilidad": null,
+      "FechaEdicion": null,
+      "FechaInactivo": null,
+      "FechaInicioVenta": null,
+      "Grueso": 0,
+      "ID_ArticuloEcotasas": 0,
+      "ID_Asignatura": 0,
+      "ID_Categoria": 1,
+      "ID_CategoriaWeb1": 0,
+      "ID_CategoriaWeb2": 0,
+      "ID_CategoriaWeb3": 0,
+      "ID_CategoriaWeb4": 0,
+      "ID_Coleccion": 0,
+      "ID_Curso": 0,
+      "ID_Fabricante": 0,
+      "ID_PaisPublicacion": 0,
+      "Id": 1,
+      "IdiomaOriginal": null,
+      "IdiomaPublicacion": null,
+      "Indice": "",
+      "Menciones": "",
+      "Nexo": "",
+      "Nombre": "FLOR VARIADA",
+      "NombreUds": "",
+      "NombreUdsAux": "",
+      "NombreUdsOCU": "",
+      "NumDimensiones": 0,
+      "NumeroColeccion": "",
+      "NumeroVolumen": "",
+      "ObraCompleta": "",
+      "Paginas": 0,
+      "Peso": 0,
+      "PorcentajeIVA": 10,
+      "PorcentajeRE": 0,
+      "PrecioEcotasas": 0,
+      "ReferenciaBarras": "1",
+      "RelacionUdsAux": 0,
+      "RelacionUdsOCU": 0,
+      "Resumen": "",
+      "Subtitulo": "",
+      "Tipo": 1,
+      "VenderUdsAux": false,
+      "Volumenes": 0
+    },
+    "rawKeys": [
+      "Articulos",
+      "InfoError"
+    ]
+  },
+  "stock": {
+    "count": 517,
+    "sample": {
+      "ID_Articulo": 1,
+      "Stock": 3795,
+      "StockAux": 0
+    },
+    "rawResponse": {
+      "InfoError": {
+        "Codigo": 0,
+        "Descripcion": null
+      },
+      "Stock": [
+        {
+          "ID_Articulo": 1,
+          "Stock": 3795,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 11,
+          "Stock": 2065,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 23,
+          "Stock": 24560,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 28,
+          "Stock": 35866,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 37,
+          "Stock": 15047,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 41,
+          "Stock": 543,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 44,
+          "Stock": 18159,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 47,
+          "Stock": 14186,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 50,
+          "Stock": 737,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 53,
+          "Stock": 6695,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 59,
+          "Stock": 110,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 62,
+          "Stock": 1870,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 68,
+          "Stock": 83,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 71,
+          "Stock": 582,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 74,
+          "Stock": 208,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 80,
+          "Stock": 518,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 87,
+          "Stock": 36320,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 91,
+          "Stock": 104680,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 95,
+          "Stock": 66,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 98,
+          "Stock": 7962,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 101,
+          "Stock": 401857,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 107,
+          "Stock": 1900,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 116,
+          "Stock": 2857328,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 119,
+          "Stock": 1961834,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 122,
+          "Stock": 481399,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 125,
+          "Stock": 479,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 130,
+          "Stock": 1084,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 133,
+          "Stock": 169797,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 136,
+          "Stock": 80,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 139,
+          "Stock": 39765,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 153,
+          "Stock": 189,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 157,
+          "Stock": 2440,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 160,
+          "Stock": 279,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 163,
+          "Stock": 49,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 166,
+          "Stock": 78,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 172,
+          "Stock": 364,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 175,
+          "Stock": 12357,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 178,
+          "Stock": 57032,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 181,
+          "Stock": 1344,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 184,
+          "Stock": 693,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 185,
+          "Stock": 274,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 188,
+          "Stock": 11509,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 189,
+          "Stock": 4,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 191,
+          "Stock": 1258,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 194,
+          "Stock": 116095,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 196,
+          "Stock": 73158,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 197,
+          "Stock": 283665,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 205,
+          "Stock": 11304,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 208,
+          "Stock": 697,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 211,
+          "Stock": 71784,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 213,
+          "Stock": 65,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 218,
+          "Stock": 19,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 219,
+          "Stock": 609,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 220,
+          "Stock": 2179,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 226,
+          "Stock": 3205,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 229,
+          "Stock": 224,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 232,
+          "Stock": 1522,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 238,
+          "Stock": 10843,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 244,
+          "Stock": 18,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 248,
+          "Stock": 9604,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 254,
+          "Stock": 40,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 258,
+          "Stock": 24137,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 261,
+          "Stock": 4786,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 264,
+          "Stock": 1612,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 283,
+          "Stock": 235,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 285,
+          "Stock": 40,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 287,
+          "Stock": 31509,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 288,
+          "Stock": 15149,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 297,
+          "Stock": 43,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 300,
+          "Stock": 2794,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 309,
+          "Stock": 52,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 312,
+          "Stock": 514,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 316,
+          "Stock": 25620,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 319,
+          "Stock": 64,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 326,
+          "Stock": 2137,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 329,
+          "Stock": 181278,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 332,
+          "Stock": 27726,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 336,
+          "Stock": 1098,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 341,
+          "Stock": 229,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 342,
+          "Stock": 209,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 345,
+          "Stock": 39,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 348,
+          "Stock": 1500,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 351,
+          "Stock": 200,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 354,
+          "Stock": 500,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 357,
+          "Stock": 500,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 360,
+          "Stock": 492734,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 363,
+          "Stock": 415061,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 366,
+          "Stock": 912997,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 369,
+          "Stock": 50082,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 372,
+          "Stock": 28896,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 378,
+          "Stock": 6915,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 381,
+          "Stock": 1325,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 384,
+          "Stock": 80,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 387,
+          "Stock": 77,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 390,
+          "Stock": 306,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 393,
+          "Stock": 9959,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 394,
+          "Stock": 7500,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 398,
+          "Stock": 3044,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 413,
+          "Stock": 100,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 414,
+          "Stock": 6063,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 416,
+          "Stock": 694,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 419,
+          "Stock": 18954,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 421,
+          "Stock": 369,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 422,
+          "Stock": 4199,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 435,
+          "Stock": 6,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 438,
+          "Stock": 10626,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 440,
+          "Stock": 1756,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 443,
+          "Stock": 76535,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 449,
+          "Stock": 4728,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 450,
+          "Stock": 1462,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 451,
+          "Stock": 5360,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 452,
+          "Stock": 78850,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 454,
+          "Stock": 17225,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 455,
+          "Stock": 88937,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 457,
+          "Stock": 49,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 459,
+          "Stock": 695,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 461,
+          "Stock": 1811,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 462,
+          "Stock": 474,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 464,
+          "Stock": 769,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 465,
+          "Stock": 1574,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 466,
+          "Stock": 236,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 470,
+          "Stock": 7380,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 471,
+          "Stock": 206,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 472,
+          "Stock": 693,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 477,
+          "Stock": 416,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 478,
+          "Stock": 220,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 479,
+          "Stock": 4,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 480,
+          "Stock": 38,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 2,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 3,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 4,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 5,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 6,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 7,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 8,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 9,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 10,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 12,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 13,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 14,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 15,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 16,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 17,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 18,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 19,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 20,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 21,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 22,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 24,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 25,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 26,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 27,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 29,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 30,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 31,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 32,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 33,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 35,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 36,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 38,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 39,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 40,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 42,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 43,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 45,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 46,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 48,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 49,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 51,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 52,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 54,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 55,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 56,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 57,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 58,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 60,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 61,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 63,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 64,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 65,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 66,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 67,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 69,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 70,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 72,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 73,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 75,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 76,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 77,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 78,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 79,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 81,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 82,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 83,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 84,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 85,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 86,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 88,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 89,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 90,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 92,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 93,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 94,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 96,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 97,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 99,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 100,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 102,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 103,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 104,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 105,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 520,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 521,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 106,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 108,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 109,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 110,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 111,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 112,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 113,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 114,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 115,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 117,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 118,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 120,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 121,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 123,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 124,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 126,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 127,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 128,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 129,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 131,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 132,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 134,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 135,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 137,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 138,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 140,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 141,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 142,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 143,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 144,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 145,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 146,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 147,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 148,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 149,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 150,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 151,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 152,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 154,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 155,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 156,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 158,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 159,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 161,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 162,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 164,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 165,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 167,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 168,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 169,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 170,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 171,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 173,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 174,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 176,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 177,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 179,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 180,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 182,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 183,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 186,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 187,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 190,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 192,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 193,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 195,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 198,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 199,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 200,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 201,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 202,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 203,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 204,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 206,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 207,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 209,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 210,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 212,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 214,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 215,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 216,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 217,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 221,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 222,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 223,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 224,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 225,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 227,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 228,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 230,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 231,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 233,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 234,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 235,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 236,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 237,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 239,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 241,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 242,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 243,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 245,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 246,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 247,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 249,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 250,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 251,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 252,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 253,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 255,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 256,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 257,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 259,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 260,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 262,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 263,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 265,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 266,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 267,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 268,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 269,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 270,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 271,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 272,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 273,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 274,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 275,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 276,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 277,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 278,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 279,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 280,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 281,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 282,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 284,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 286,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 289,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 290,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 291,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 292,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 293,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 294,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 295,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 296,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 298,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 299,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 301,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 302,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 303,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 304,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 305,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 306,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 307,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 308,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 310,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 311,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 313,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 314,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 315,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 317,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 318,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 320,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 321,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 322,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 323,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 324,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 325,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 327,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 328,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 330,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 331,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 333,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 334,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 335,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 337,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 338,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 339,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 340,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 343,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 344,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 346,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 347,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 349,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 350,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 352,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 353,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 355,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 356,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 358,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 359,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 361,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 362,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 364,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 365,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 367,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 368,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 370,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 371,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 373,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 374,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 375,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 376,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 377,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 379,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 380,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 382,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 383,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 385,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 386,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 388,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 389,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 391,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 395,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 396,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 397,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 399,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 400,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 401,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 402,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 403,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 404,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 405,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 406,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 407,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 408,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 409,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 410,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 411,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 412,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 415,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 417,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 418,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 420,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 423,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 424,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 425,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 426,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 427,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 428,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 429,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 430,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 431,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 432,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 433,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 434,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 436,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 437,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 439,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 441,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 442,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 444,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 445,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 446,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 447,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 448,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 453,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 456,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 458,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 460,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 463,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 467,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 468,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 469,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 473,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 474,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 475,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 476,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 481,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 482,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 483,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 484,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 485,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 486,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 487,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 488,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 489,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 490,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 491,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 492,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 493,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 494,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 495,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 496,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 497,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 498,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 499,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 500,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 501,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 502,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 503,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 504,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 505,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 506,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 507,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 508,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 509,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 510,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 511,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 512,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 513,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 515,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 516,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 517,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 518,
+          "Stock": 0,
+          "StockAux": 0
+        },
+        {
+          "ID_Articulo": 519,
+          "Stock": 0,
+          "StockAux": 0
+        }
+      ]
+    }
+  },
+  "error": null
+}

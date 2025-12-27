@@ -22,7 +22,7 @@ import { Visita } from '../../types';
 
 export default function AgendaScreen() {
   const navigation = useNavigation<any>();
-  const { visitas, addVisita, toggleVisita, clientes, notasVenta, cobros } = useApp();
+  const { visitas, addVisita, toggleVisita, clientes, notasVenta, cobros, currentVendor } = useApp();
 
   // Obtener fecha actual
   const fechaActual = new Date();
@@ -99,6 +99,10 @@ export default function AgendaScreen() {
   };
 
   const handleAddCliente = async () => {
+    if (!currentVendor?.id) {
+      Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de registrar visitas.');
+      return;
+    }
     if (!newVisita.nombre || !newVisita.hora || !newVisita.direccion) {
       Alert.alert('Error', 'Por favor completa todos los campos');
       return;
@@ -112,7 +116,8 @@ export default function AgendaScreen() {
       hora: newVisita.hora,
       tipo: newVisita.tipo,
       completado: false,
-      observaciones: 'Creada manualmente'
+      observaciones: 'Creada manualmente',
+      vendedorId: currentVendor.id
     };
 
     await addVisita(nueva);
@@ -124,11 +129,18 @@ export default function AgendaScreen() {
     setDiaSeleccionado(dia);
   };
 
-  // Stats basados en datos reales del día seleccionado
+  // Stats basados en datos reales del día seleccionado y vendedor
   const clientesCompletados = clientesDelDia.filter(c => c.completado).length;
-  // Ventas realizadas HOY (independiente del día seleccionado en calendario, es KPI diario)
-  const ventasHoy = notasVenta.filter(v => v.fecha.includes(new Date().toLocaleDateString('es-ES'))).length;
-  const cobrosPendientes = cobros.filter(c => c.estado === 'pendiente').length;
+  const ventasHoy = notasVenta.filter(v => {
+    const isToday = v.fecha.includes(new Date().toLocaleDateString('es-ES'));
+    const belongs = currentVendor?.id ? v.vendedorId === currentVendor.id : false;
+    return isToday && belongs;
+  }).length;
+  const cobrosPendientes = cobros.filter(c => {
+    if (c.estado !== 'pendiente') return false;
+    if (currentVendor?.id && c.vendedorId && c.vendedorId !== currentVendor.id) return false;
+    return true;
+  }).length;
 
   return (
     <ScreenWithSidebar currentScreen="Agenda" scrollable={false}>

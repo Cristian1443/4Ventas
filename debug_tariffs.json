@@ -1,0 +1,18 @@
+{
+  "tariffs": {
+    "count": 517,
+    "sample": {
+      "Dto": 0,
+      "DtoEurosXUd": 0,
+      "ID_Articulo": 1,
+      "Precio": 0,
+      "UdsMin": 0,
+      "UdsRegalo": 0
+    },
+    "rawResponseKeys": [
+      "CondicionesTarifa",
+      "InfoError"
+    ]
+  },
+  "error": null
+}

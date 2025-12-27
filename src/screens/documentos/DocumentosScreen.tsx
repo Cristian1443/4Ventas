@@ -16,7 +16,7 @@ import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 
 export default function DocumentosScreen() {
   const navigation = useNavigation<any>();
-  const { documentos, addDocumento, deleteDocumento, config } = useApp();
+  const { documentos, addDocumento, deleteDocumento, config, currentVendor } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState('Todos');
@@ -57,6 +57,10 @@ export default function DocumentosScreen() {
   };
 
   const handleUploadDocument = async () => {
+    if (!currentVendor?.id) {
+      Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de subir documentos.');
+      return;
+    }
     Alert.alert(
       'Subir Documento',
       'Selecciona el tipo de archivo (Simulación)',

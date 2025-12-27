@@ -20,6 +20,7 @@ export interface SyncOperation {
   retries: number;
   lastError?: string;
   status: 'pending' | 'syncing' | 'success' | 'error';
+  vendorId?: string;
 }
 
 export interface SyncError {
@@ -43,10 +44,21 @@ class SyncService {
   private isSyncing: boolean = false;
   private maxRetries: number = 3;
   private syncInterval: any = null;
+  private currentVendorId: string | null = null;
 
   constructor() {
     this.loadQueue();
     this.loadErrors();
+  }
+
+  async setVendor(vendorId: string | null): Promise<void> {
+    this.currentVendorId = vendorId || null;
+    await this.loadQueue();
+    await this.loadErrors();
+  }
+
+  private vendorKey(base: string): string {
+    return this.currentVendorId ? `${base}__${this.currentVendorId}` : base;
   }
 
   // ============================================================================
@@ -57,10 +69,10 @@ class SyncService {
     console.log('🔄 Inicializando servicio de sincronización...');
     await this.loadQueue();
     await this.loadErrors();
-    
+
     // Intentar sincronización inicial
     await this.syncAll();
-    
+
     // Configurar sincronización automática cada hora
     this.startAutoSync();
   }
@@ -69,7 +81,7 @@ class SyncService {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
     }
-    
+
     // Sincronizar cada hora (3600000 ms)
     this.syncInterval = setInterval(() => {
       console.log('⏰ Sincronización automática programada');
@@ -90,7 +102,7 @@ class SyncService {
 
   async syncAll(): Promise<SyncStatus> {
     console.log('🔄 Iniciando sincronización completa...');
-    
+
     const status: SyncStatus = {
       clientes: 'syncing',
       articulos: 'syncing',
@@ -100,18 +112,22 @@ class SyncService {
     };
 
     try {
-      // 1. Procesar cola
-      await this.processQueue();
+      // 1. Procesar cola (Subida) - Envuelta en try-catch para no bloquear bajada
+      try {
+        await this.processQueue();
+      } catch (queueError) {
+        console.error('⚠️ [syncAll] Error procesando cola de subida (continuando con bajada):', queueError);
+      }
 
       // 2. Descargar datos
       await Promise.all([
-        this.syncClientes().catch((err) => { 
+        this.syncClientes().catch((err) => {
           console.error('❌ [syncAll] Error en syncClientes:', err);
-          status.clientes = 'error'; 
+          status.clientes = 'error';
         }),
-        this.syncArticulos().catch((err) => { 
+        this.syncArticulos().catch((err) => {
           console.error('❌ [syncAll] Error en syncArticulos:', err);
-          status.articulos = 'error'; 
+          status.articulos = 'error';
         }),
         this.syncGastos(),
         this.syncDocumentos(),
@@ -124,7 +140,7 @@ class SyncService {
       status.articulos = status.articulos === 'error' ? 'error' : 'success';
       status.ultimaSync = new Date().toISOString();
       status.operacionesPendientes = this.getPendingCount();
-      
+
       return status;
     } catch (error: any) {
       console.error('Error Sync:', error);
@@ -148,22 +164,24 @@ class SyncService {
       console.log('👥 [syncClientes] URL Base:', erpService.getERPBaseUrl ? erpService.getERPBaseUrl() : 'N/A');
       console.log('👥 [syncClientes] Sesión:', erpService.getSessionId ? erpService.getSessionId() : 'N/A');
       console.log('👥 [syncClientes] ============================================');
-      
+
       const clientesERP = await erpService.getClientes();
-      
+
       console.log(`📥 [syncClientes] Clientes recibidos del ERP (raw): ${clientesERP.length}`);
-      
+
       if (clientesERP.length === 0) {
         console.warn('⚠️ [syncClientes] ⚠️⚠️⚠️ NO SE RECIBIERON CLIENTES DEL ERP ⚠️⚠️⚠️');
-        console.warn('⚠️ [syncClientes] Continuando con clientes locales existentes...');
-        console.warn('⚠️ [syncClientes] La app seguirá funcionando normalmente');
-        // No retornamos aquí, continuamos para preservar clientes locales
+        console.warn('⚠️ [syncClientes] Abortando actualización para preservar datos locales.');
+        const clientesLocales = (await storageService.getItem<any[]>('clientes')) || [];
+        // Si hay locales, retornamos esos. Si no, retornamos vacío (no hay otra opción)
+        if (clientesLocales.length > 0) return clientesLocales;
+        // Si no hay locales, quizás es la primera carga. Dejamos pasar array vacío.
       }
-      
+
       if (clientesERP.length > 0) {
         console.log('📋 [syncClientes] Primer cliente raw:', JSON.stringify(clientesERP[0], null, 2).substring(0, 300));
       }
-      
+
       const clientesServer = clientesERP.map((cliente: any) => {
         try {
           const mapeado = erpService.mapearClienteERPaLocal(cliente);
@@ -174,9 +192,9 @@ class SyncService {
           return null;
         }
       }).filter((c: any) => c !== null);
-      
+
       console.log(`📊 [syncClientes] Clientes mapeados exitosamente: ${clientesServer.length}`);
-      
+
       // Obtener locales actuales
       const clientesLocales = (await storageService.getItem<any[]>('clientes')) || [];
       console.log(`📂 [syncClientes] Clientes locales actuales: ${clientesLocales.length}`);
@@ -184,30 +202,32 @@ class SyncService {
       // 1. PRESERVAR NUEVOS CLIENTES LOCALES
       // Asumimos que los creados offline tienen un ID temporal que empieza por "CLI-" o timestamp
       // o simplemente aquellos que no están en el servidor aún (pero la ID temporal es más segura)
-      const clientesNuevosOffline = clientesLocales.filter(c => c.id && c.id.toString().startsWith('CLI-'));
+      // 1. PRESERVAR NUEVOS CLIENTES LOCALES
+      // Asumimos que los creados offline tienen un ID no numérico (String temporal, e.g. "CLI-..." o UUID)
+      const clientesNuevosOffline = clientesLocales.filter(c => c.id && isNaN(Number(c.id)));
       console.log(`💾 [syncClientes] Clientes nuevos offline a preservar: ${clientesNuevosOffline.length}`);
 
       // 2. MEZCLAR
       // Los del servidor tienen prioridad para actualizaciones, pero añadimos los nuevos locales
       // Filtramos los del server para no duplicar si por casualidad el ID colisionara (improbable con CLI-)
       const listaFinal = [...clientesServer, ...clientesNuevosOffline];
-      
+
       console.log(`💾 [syncClientes] Guardando ${listaFinal.length} clientes en storage...`);
       await storageService.setItem('clientes', listaFinal);
-      
+
       // Verificar que se guardó correctamente
       const verificacion = await storageService.getItem<any[]>('clientes');
       console.log(`✅ [syncClientes] Verificación: ${verificacion?.length || 0} clientes guardados en storage`);
-      
+
       if (verificacion && Array.isArray(verificacion) && verificacion.length > 0) {
         console.log(`✅ [syncClientes] Primer cliente guardado:`, verificacion[0]?.nombre || verificacion[0]?.id);
         console.log(`✅ [syncClientes] Estructura del primer cliente:`, JSON.stringify(verificacion[0], null, 2).substring(0, 200));
       } else {
         console.log(`ℹ️ [syncClientes] No hay clientes guardados (esto es normal si el servidor no devuelve datos)`);
       }
-      
+
       console.log(`✅ [syncClientes] Clientes sincronizados: ${clientesServer.length} (Server) + ${clientesNuevosOffline.length} (Locales) = ${listaFinal.length} total`);
-      
+
       // Retornar la lista final (no la verificación, por si hay algún problema de timing)
       return listaFinal;
     } catch (error: any) {
@@ -239,38 +259,39 @@ class SyncService {
       console.log('📦 [syncArticulos] URL Base:', erpService.getERPBaseUrl ? erpService.getERPBaseUrl() : 'N/A');
       console.log('📦 [syncArticulos] Sesión:', erpService.getSessionId ? erpService.getSessionId() : 'N/A');
       console.log('📦 [syncArticulos] ============================================');
-      
+
       const articulosERP = await erpService.getArticulos();
-      
+
       console.log(`📥 [syncArticulos] Artículos recibidos del ERP (raw): ${articulosERP.length}`);
-      
+
       if (articulosERP.length === 0) {
         console.warn('⚠️ [syncArticulos] ⚠️⚠️⚠️ NO SE RECIBIERON ARTÍCULOS DEL ERP ⚠️⚠️⚠️');
-        console.warn('⚠️ [syncArticulos] Continuando con artículos locales existentes...');
-        console.warn('⚠️ [syncArticulos] La app seguirá funcionando normalmente');
+        console.warn('⚠️ [syncArticulos] Abortando actualización para preservar datos locales.');
+        const articulosLocales = (await storageService.getItem<any[]>('articulos')) || [];
+        if (articulosLocales.length > 0) return articulosLocales;
       } else if (articulosERP.length > 0) {
         console.log('📋 [syncArticulos] Primer artículo raw:', JSON.stringify(articulosERP[0], null, 2).substring(0, 300));
       }
-      
+
       const articulosMapeados = articulosERP.map(erpService.mapearArticuloERPaLocal);
-      
+
       console.log(`📊 [syncArticulos] Artículos mapeados exitosamente: ${articulosMapeados.length}`);
-      
+
       // Guardar en almacenamiento local
       console.log(`💾 [syncArticulos] Guardando ${articulosMapeados.length} artículos en storage...`);
       await storageService.setItem('articulos', articulosMapeados);
-      
+
       // Verificar que se guardó correctamente
       const verificacion = await storageService.getItem<any[]>('articulos');
       console.log(`✅ [syncArticulos] Verificación: ${verificacion?.length || 0} artículos guardados en storage`);
-      
+
       if (verificacion && Array.isArray(verificacion) && verificacion.length > 0) {
         console.log(`✅ [syncArticulos] Primer artículo guardado:`, verificacion[0]?.nombre || verificacion[0]?.id);
         console.log(`✅ [syncArticulos] Estructura del primer artículo:`, JSON.stringify(verificacion[0], null, 2).substring(0, 200));
       } else {
         console.log(`ℹ️ [syncArticulos] No hay artículos guardados (esto es normal si el servidor no devuelve datos)`);
       }
-      
+
       console.log(`✅ [syncArticulos] ${articulosMapeados.length} artículos sincronizados`);
       return articulosMapeados;
     } catch (error: any) {
@@ -295,7 +316,7 @@ class SyncService {
   async updateArticuloStock(id: string, cantidad: number): Promise<void> {
     const articulos = await this.getArticulosLocal();
     const index = articulos.findIndex(a => a.id === id);
-    
+
     if (index !== -1) {
       articulos[index].cantidad = cantidad;
       await storageService.setItem('articulos', articulos);
@@ -309,18 +330,18 @@ class SyncService {
   async syncGastos(): Promise<any[]> {
     try {
       // No hay endpoint GetGastosWS en el ERP, mantenemos solo datos locales
-      const gastosLocales = (await storageService.getItem<any[]>('gastos')) || [];
-      
+      const gastosLocales = (await storageService.getItem<any[]>(this.vendorKey('gastos'))) || [];
+
       // Filtrar borrados pendientes
       const pendingDeletes = this.queue
         .filter(op => op.type === 'gasto_delete')
         .map(op => op.data.id);
-      
+
       const gastosFiltrados = gastosLocales.filter(g => !pendingDeletes.includes(g.id));
-      
+
       // Guardar lista filtrada
-      await storageService.setItem('gastos', gastosFiltrados);
-      
+      await storageService.setItem(this.vendorKey('gastos'), gastosFiltrados);
+
       console.log(`✅ Gastos locales mantenidos: ${gastosFiltrados.length} gastos`);
       return gastosFiltrados;
     } catch (error) {
@@ -330,7 +351,7 @@ class SyncService {
   }
 
   async getGastosLocal(): Promise<any[]> {
-    return (await storageService.getItem<any[]>('gastos')) || [];
+    return (await storageService.getItem<any[]>(this.vendorKey('gastos'))) || [];
   }
 
   // ============================================================================
@@ -340,7 +361,7 @@ class SyncService {
   async syncDocumentos(): Promise<any[]> {
     try {
       // No hay endpoint GetDocumentosWS en el ERP, mantenemos solo datos locales
-      const docsLocales = (await storageService.getItem<any[]>('documentos')) || [];
+      const docsLocales = (await storageService.getItem<any[]>(this.vendorKey('documentos'))) || [];
 
       // Filtrar borrados pendientes
       const pendingDeletes = this.queue
@@ -348,8 +369,8 @@ class SyncService {
         .map(op => op.data.id);
 
       const docsFiltrados = docsLocales.filter(d => !pendingDeletes.includes(d.id));
-      
-      await storageService.setItem('documentos', docsFiltrados);
+
+      await storageService.setItem(this.vendorKey('documentos'), docsFiltrados);
       console.log(`✅ Documentos locales mantenidos: ${docsFiltrados.length} documentos`);
       return docsFiltrados;
     } catch (error) {
@@ -359,7 +380,7 @@ class SyncService {
   }
 
   async getDocumentosLocal(): Promise<any[]> {
-    return (await storageService.getItem<any[]>('documentos')) || [];
+    return (await storageService.getItem<any[]>(this.vendorKey('documentos'))) || [];
   }
 
   // ============================================================================
@@ -371,15 +392,15 @@ class SyncService {
       console.log('💰 Descargando cobros pendientes del ERP...');
       const cobrosERP = await erpService.getCobrosPendientes();
       const cobrosServer = cobrosERP.map(erpService.mapearCobroERPaLocal);
-      
+
       // Obtener locales
-      const cobrosLocales = (await storageService.getItem<any[]>('cobros')) || [];
+      const cobrosLocales = (await storageService.getItem<any[]>(this.vendorKey('cobros'))) || [];
 
       // ESTRATEGIA DE MEZCLA:
       // 1. Mantenemos los cobros que hemos marcado como "pagados" localmente pero que aún no se han sincronizado
       //    (para que no reaparezcan como pendientes si la cola de subida falla o no ha corrido aún).
       // 2. Mantenemos los cobros nuevos creados localmente (ventas offline).
-      
+
       // IDs de cobros que están en la cola de subida como 'pago'
       const pagosEnColaIds = this.queue
         .filter(op => op.type === 'pago')
@@ -389,18 +410,19 @@ class SyncService {
       const cobrosServerFiltrados = cobrosServer.filter(c => !pagosEnColaIds.includes(c.id));
 
       // Filtramos los locales: Mantenemos los que son locales nuevos (ID temporal 'C...') O los que ya están pagados (histórico local del día)
-      const cobrosLocalesMantener = cobrosLocales.filter(c => 
-        (c.id && c.id.toString().startsWith('C')) || c.estado === 'pagado'
+      // Filtramos los locales: Mantenemos los que son locales nuevos (ID no numérico) O los que ya están pagados
+      const cobrosLocalesMantener = cobrosLocales.filter(c =>
+        (c.id && isNaN(Number(c.id))) || c.estado === 'pagado'
       );
 
       // Combinar: Servidor (Pendientes reales) + Locales (Nuevos o Histórico Pagado)
       // Usamos un Map para evitar duplicados por ID
       const cobrosMap = new Map();
       [...cobrosLocalesMantener, ...cobrosServerFiltrados].forEach(c => cobrosMap.set(c.id, c));
-      
+
       const listaFinal = Array.from(cobrosMap.values());
-      
-      await storageService.setItem('cobros', listaFinal);
+
+      await storageService.setItem(this.vendorKey('cobros'), listaFinal);
       console.log(`✅ Cobros sincronizados: ${listaFinal.length}`);
       return listaFinal;
     } catch (error) {
@@ -410,7 +432,7 @@ class SyncService {
   }
 
   async getCobrosLocal(): Promise<any[]> {
-    return (await storageService.getItem<any[]>('cobros')) || [];
+    return (await storageService.getItem<any[]>(this.vendorKey('cobros'))) || [];
   }
 
   // ============================================================================
@@ -420,10 +442,10 @@ class SyncService {
   async syncNotasAlmacen(): Promise<any[]> {
     try {
       // No hay endpoint GetNotasAlmacenWS en el ERP, mantenemos solo datos locales
-      const notasLocales = (await storageService.getItem<any[]>('notasAlmacen')) || [];
-      
-      await storageService.setItem('notasAlmacen', notasLocales);
-      
+      const notasLocales = (await storageService.getItem<any[]>(this.vendorKey('notasAlmacen'))) || [];
+
+      await storageService.setItem(this.vendorKey('notasAlmacen'), notasLocales);
+
       console.log(`✅ Notas almacén locales mantenidas: ${notasLocales.length} notas`);
       return notasLocales;
     } catch (error) {
@@ -433,7 +455,7 @@ class SyncService {
   }
 
   async getNotasAlmacenLocal(): Promise<any[]> {
-    return (await storageService.getItem<any[]>('notasAlmacen')) || [];
+    return (await storageService.getItem<any[]>(this.vendorKey('notasAlmacen'))) || [];
   }
 
   // ============================================================================
@@ -443,13 +465,13 @@ class SyncService {
   async syncAgenda(): Promise<any[]> {
     try {
       // No hay endpoint GetAgendaWS en el ERP, mantenemos solo datos locales
-      const agendaLocal = (await storageService.getItem<any[]>('visitas')) || [];
+      const agendaLocal = (await storageService.getItem<any[]>(this.vendorKey('visitas'))) || [];
 
       // Filtrar actualizaciones pendientes de la cola
       const pendientesUpdate = this.queue
         .filter(op => op.type === 'visita_update')
         .map(op => op.data.id);
-      
+
       // Aplicar actualizaciones pendientes a las visitas locales
       const agendaActualizada = agendaLocal.map(v => {
         const updatePendiente = this.queue.find(
@@ -461,7 +483,7 @@ class SyncService {
         return v;
       });
 
-      await storageService.setItem('visitas', agendaActualizada);
+      await storageService.setItem(this.vendorKey('visitas'), agendaActualizada);
       console.log(`✅ Agenda local mantenida: ${agendaActualizada.length} visitas`);
       return agendaActualizada;
 
@@ -472,7 +494,7 @@ class SyncService {
   }
 
   async getAgendaLocal(): Promise<any[]> {
-    return (await storageService.getItem<any[]>('visitas')) || [];
+    return (await storageService.getItem<any[]>(this.vendorKey('visitas'))) || [];
   }
 
   // ============================================================================
@@ -486,14 +508,15 @@ class SyncService {
       data,
       timestamp: Date.now(),
       retries: 0,
-      status: 'pending'
+      status: 'pending',
+      vendorId: this.currentVendorId || undefined
     };
 
     this.queue.push(operation);
     this.saveQueue();
-    
+
     console.log(`📝 Operación agregada a la cola: ${type} (${operation.id})`);
-    
+
     return operation.id;
   }
 
@@ -504,7 +527,7 @@ class SyncService {
     }
 
     const pendingOps = this.queue.filter(
-      op => op.status === 'pending' || op.status === 'error'
+      op => op.status === 'pending'
     );
 
     if (pendingOps.length === 0) {
@@ -516,17 +539,21 @@ class SyncService {
 
     this.isSyncing = true;
 
-    for (const operation of pendingOps) {
-      if (operation.retries >= this.maxRetries) {
-        console.error(`❌ Operación ${operation.id} excedió reintentos máximos`);
-        continue;
+    try {
+      for (const operation of pendingOps) {
+        if (operation.retries >= this.maxRetries) {
+          console.error(`❌ Operación ${operation.id} excedió reintentos máximos`);
+          // Marcar como error final para que no bloquee, o mover a histórico de fallidos
+          operation.status = 'error';
+          continue;
+        }
+
+        await this.processOperation(operation);
       }
-
-      await this.processOperation(operation);
+    } finally {
+      this.isSyncing = false;
+      await this.saveQueue();
     }
-
-    this.isSyncing = false;
-    this.saveQueue();
   }
 
   private async processOperation(operation: SyncOperation): Promise<void> {
@@ -573,14 +600,38 @@ class SyncService {
         this.removeFromQueue(operation.id);
         console.log(`✅ Operación ${operation.id} sincronizada correctamente`);
       } else {
-        this.handleSyncError(operation, result.error);
+        // Si la respuesta es 404, asumimos que el recurso no existe en ERP y limpiamos la cola
+        if (this.shouldDropOperation(result.error)) {
+          console.warn(`⚠️ Operación ${operation.id} descartada por 404/No encontrado`);
+          this.removeFromQueue(operation.id);
+        } else {
+          this.handleSyncError(operation, result.error);
+        }
       }
     } catch (error: any) {
-      this.handleSyncError(operation, {
-        codigo: -1,
-        descripcion: error.message || 'Error de conexión'
-      });
+      // Si el error es 404, limpiar de la cola para no bloquear
+      const errObj = {
+        codigo: error?.codigo || -1,
+        descripcion: error?.message || 'Error de conexión'
+      };
+
+      if (this.shouldDropOperation(errObj)) {
+        console.warn(`⚠️ Operación ${operation.id} descartada por 404/No encontrado (catch)`);
+        this.removeFromQueue(operation.id);
+      } else {
+        this.handleSyncError(operation, {
+          codigo: errObj.codigo,
+          descripcion: errObj.descripcion
+        });
+      }
     }
+  }
+
+  private shouldDropOperation(error: any): boolean {
+    if (!error) return false;
+    const code = error.codigo || error.status || error.statusCode;
+    const desc = (error.descripcion || error.message || '').toString().toLowerCase();
+    return code === 404 || desc.includes('404') || desc.includes('not found');
   }
 
   // ============================================================================
@@ -651,7 +702,7 @@ class SyncService {
     try {
       // Convertir monto a número limpio
       const importe = parseFloat(pagoData.monto.replace(/[€\s]/g, '').replace(',', '.'));
-      
+
       const pagoERP = {
         ID_DocCli: pagoData.notaVentaId ? this.parseDocumentoId(pagoData.notaVentaId) : 0, // Si es pago de nota
         ID_Cliente: pagoData.clienteId ? parseInt(pagoData.clienteId, 10) : 0, // Si es pago a cuenta
@@ -758,12 +809,12 @@ class SyncService {
   private async syncGasto(gastoData: any): Promise<any> {
     try {
       const precioNumerico = parseFloat(gastoData.precio.replace(/[€\s]/g, '').replace(',', '.'));
-      
+
       // Convertir fecha local "DD/MM/YYYY, HH:MM" a ISO para el ERP
       // Ojo: Asumimos que el ERP acepta string ISO.
-      const [fechaPart, horaPart] = gastoData.fecha.split(','); 
+      const [fechaPart, horaPart] = gastoData.fecha.split(',');
       // Un parsing robusto dependerá del formato exacto guardado en pantalla
-      
+
       const gastoERP: Partial<erpService.GastoERP> = {
         Concepto: gastoData.nombre,
         Tipo: gastoData.categoria,
@@ -777,21 +828,21 @@ class SyncService {
       if (response && (!response.InfoError || response.InfoError.Codigo === 0)) {
         return { success: true, data: response };
       } else {
-        return { 
-          success: false, 
-          error: { 
+        return {
+          success: false,
+          error: {
             codigo: response.InfoError?.Codigo || -1,
-            descripcion: response.InfoError?.Descripcion || 'Error en ERP' 
-          } 
+            descripcion: response.InfoError?.Descripcion || 'Error en ERP'
+          }
         };
       }
     } catch (error: any) {
-      return { 
-        success: false, 
-        error: { 
+      return {
+        success: false,
+        error: {
           codigo: -1,
-          descripcion: error.message || 'Error de conexión' 
-        } 
+          descripcion: error.message || 'Error de conexión'
+        }
       };
     }
   }
@@ -861,7 +912,7 @@ class SyncService {
     };
 
     this.errors.push(syncError);
-    
+
     operation.status = 'error';
     operation.lastError = syncError.descripcion;
 
@@ -960,6 +1011,16 @@ class SyncService {
     return this.queue.filter(op => op.status === 'pending' || op.status === 'error').length;
   }
 
+  // Limpiar cola (por vendedor actual). Útil para descartar operaciones atascadas.
+  clearQueue(removeErrors: boolean = true): void {
+    if (removeErrors) {
+      this.queue = this.queue.filter(op => op.status !== 'pending' && op.status !== 'error');
+    } else {
+      this.queue = this.queue.filter(op => op.status !== 'pending');
+    }
+    this.saveQueue();
+  }
+
   clearErrors(): void {
     this.errors = [];
     this.saveErrors();
@@ -971,7 +1032,7 @@ class SyncService {
 
   private async saveQueue(): Promise<void> {
     try {
-      await storageService.setItem('syncQueue', this.queue);
+      await storageService.setItem(this.vendorKey('syncQueue'), this.queue);
     } catch (error) {
       console.error('Error guardando cola de sincronización:', error);
     }
@@ -979,9 +1040,23 @@ class SyncService {
 
   private async loadQueue(): Promise<void> {
     try {
-      const stored = await storageService.getItem<SyncOperation[]>('syncQueue');
+      const filterForVendor = (ops: SyncOperation[] = []) =>
+        !this.currentVendorId
+          ? []
+          : ops.filter(op => op.vendorId === this.currentVendorId);
+
+      const stored = await storageService.getItem<SyncOperation[]>(this.vendorKey('syncQueue'));
       if (stored) {
-        this.queue = stored;
+        this.queue = filterForVendor(stored);
+        return;
+      }
+
+      // Fallback para instalaciones previas sin namespacing: cargamos la cola global solo si no hay cola propia
+      if (this.currentVendorId) {
+        const legacy = await storageService.getItem<SyncOperation[]>('syncQueue');
+        this.queue = filterForVendor(legacy || []);
+      } else {
+        this.queue = [];
       }
     } catch (error) {
       console.error('Error cargando cola de sincronización:', error);
@@ -991,7 +1066,7 @@ class SyncService {
 
   private async saveErrors(): Promise<void> {
     try {
-      await storageService.setItem('syncErrors', this.errors);
+      await storageService.setItem(this.vendorKey('syncErrors'), this.errors);
     } catch (error) {
       console.error('Error guardando errores de sincronización:', error);
     }
@@ -999,9 +1074,22 @@ class SyncService {
 
   private async loadErrors(): Promise<void> {
     try {
-      const stored = await storageService.getItem<SyncError[]>('syncErrors');
+      const filterForVendor = (errs: SyncError[] = []) =>
+        !this.currentVendorId
+          ? []
+          : errs.filter(e => e.operation.vendorId === this.currentVendorId);
+
+      const stored = await storageService.getItem<SyncError[]>(this.vendorKey('syncErrors'));
       if (stored) {
-        this.errors = stored;
+        this.errors = filterForVendor(stored);
+        return;
+      }
+
+      if (this.currentVendorId) {
+        const legacy = await storageService.getItem<SyncError[]>('syncErrors');
+        this.errors = filterForVendor(legacy || []);
+      } else {
+        this.errors = [];
       }
     } catch (error) {
       console.error('Error cargando errores de sincronización:', error);
@@ -1011,7 +1099,7 @@ class SyncService {
 }
 
 function capitalizeFirstLetter(string: string) {
-    return string.charAt(0).toUpperCase() + string.slice(1);
+  return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
 export const syncService = new SyncService();
