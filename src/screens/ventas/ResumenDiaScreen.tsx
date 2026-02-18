@@ -452,9 +452,54 @@ export default function ResumenDiaScreen() {
     };
   }, [notasVenta, gastos, cobros, searchTerm, selectedPeriod, startDate, endDate, vendedorActualId]);
 
-  // Función para imprimir el informe (placeholder)
+  // Función para imprimir el informe diario
   const handleImprimirInforme = async () => {
-    Alert.alert("Reporte", "Funcionalidad de reporte global");
+    try {
+      const fecha = new Date().toLocaleString('es-ES');
+      const html = `
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 16px; }
+            h1 { color: #0C2ABF; }
+            h2 { color: #1e293b; margin-top: 18px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th, td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+            th { background: #f8fafc; }
+            .pill { padding: 6px 10px; border-radius: 12px; background: #e0e7ff; display: inline-block; }
+          </style>
+        </head>
+        <body>
+          <h1>Resumen del Día</h1>
+          <div class="pill">Periodo: ${selectedPeriod}</div>
+          <p>Fecha reporte: ${fecha}</p>
+
+          <h2>Totales</h2>
+          <table>
+            <tr><th>Métrica</th><th>Valor</th></tr>
+            <tr><td>Total Ventas (${selectedPeriod})</td><td>${ventasDelPeriodo.toFixed(2).replace('.', ',')} €</td></tr>
+            <tr><td>Total Gastos (${selectedPeriod})</td><td>${gastosDelPeriodo.toFixed(2).replace('.', ',')} €</td></tr>
+            <tr><td>Nº Ventas</td><td>${numeroVentas}</td></tr>
+            <tr><td>Ventas pendientes</td><td>${ventasPendientes}</td></tr>
+            <tr><td>Borradores</td><td>${notasAbiertas.length}</td></tr>
+          </table>
+
+          <h2>Liquidación Efectivo</h2>
+          <table>
+            <tr><th>Concepto</th><th>Importe</th></tr>
+            <tr><td>Ventas (Efectivo)</td><td>${liquidacionData.ventasEfectivo.toFixed(2).replace('.', ',')} €</td></tr>
+            <tr><td>Cobros Notas (Efectivo)</td><td>${liquidacionData.cobrosEfectivo.toFixed(2).replace('.', ',')} €</td></tr>
+            <tr><td>Gastos del período</td><td>-${liquidacionData.totalGastos.toFixed(2).replace('.', ',')} €</td></tr>
+            <tr><td><strong>Total a liquidar</strong></td><td><strong>${liquidacionData.liquidacionEfectivo.toFixed(2).replace('.', ',')} €</strong></td></tr>
+          </table>
+        </body>
+        </html>
+      `;
+
+      await Print.printAsync({ html });
+    } catch (error: any) {
+      Alert.alert('Error', `No se pudo imprimir el informe: ${error?.message || 'desconocido'}`);
+    }
   };
 
   return (

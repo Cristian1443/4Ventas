@@ -23,6 +23,7 @@ export const setSessionId = erpConfig.setSessionId;
 export const getSessionId = erpConfig.getSessionId;
 export const isERPEnabled = erpConfig.isEnabled;
 export const setERPEnabled = erpConfig.setEnabled;
+export const setERPBaseUrl = erpConfig.setBaseUrl;
 export const getERPBaseUrl = erpConfig.getBaseUrl;
 
 // Exponer funciones del servicio de Clientes

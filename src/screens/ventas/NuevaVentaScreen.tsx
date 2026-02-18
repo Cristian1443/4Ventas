@@ -202,8 +202,12 @@ export default function NuevaVentaScreen() {
   };
 
   const handleSelection = (item: any) => {
-    if (selectorType === 'tipoDoc') setTipoNota(item);
-    else if (selectorType === 'formaPago') setFormaPago(item);
+    if (selectorType === 'tipoDoc') {
+      setTipoNota(item);
+    } else if (selectorType === 'formaPago') {
+      // Asegura guardar solo el texto del método para evitar renders inválidos
+      setFormaPago(item?.value || item);
+    }
     setModalSelectorVisible(false);
   };
 
@@ -231,33 +235,46 @@ export default function NuevaVentaScreen() {
   const handleCodigoChange = (text: string) => {
     setCodigoInput(text);
     if (!text) {
-        setArticuloSeleccionado(null);
-        return;
+      setArticuloSeleccionado(null);
+      return;
     }
-    const match = articulos.find(a => 
-        (a.codigoCorto && a.codigoCorto.toLowerCase() === text.toLowerCase()) ||
-        a.id.toLowerCase() === text.toLowerCase()
+    // Evita buscar con 1 solo carácter para no sobrecargar
+    if (text.length < 2) return;
+
+    const normalized = text.toLowerCase();
+    const match = articulos.find(a =>
+      (a.codigoCorto && a.codigoCorto.toLowerCase() === normalized) ||
+      (a.id && a.id.toLowerCase() === normalized)
     );
 
     if (match) {
-        setArticuloSeleccionado(match);
-        setPrecio(match.precio?.toString().replace(/[€\s]/g, '').replace(',', '.') || '');
+      setArticuloSeleccionado(match);
+      setPrecio(match.precio?.toString().replace(/[€\s]/g, '').replace(',', '.') || '');
     }
   };
 
   const agregarAlCarrito = () => {
     let artFinal = articuloSeleccionado;
     if (!artFinal && codigoInput) {
-        artFinal = articulos.find(a => a.nombre.toLowerCase() === codigoInput.toLowerCase());
+      artFinal = articulos.find(a => a.nombre.toLowerCase() === codigoInput.toLowerCase());
     }
 
     if (!artFinal) return Alert.alert('Atención', 'Artículo no válido o no encontrado.');
-    
+
+    // Bloquear venta si el stock es 0 o menor
+    const stockDisponible = typeof artFinal.cantidad === 'number' ? artFinal.cantidad : 0;
+    if (stockDisponible <= 0) {
+      return Alert.alert('Sin stock', 'El artículo no tiene stock disponible.');
+    }
+
     const c = parseFloat(cant.replace(',', '.')) || 0;
     const p = parseFloat(precio.replace(',', '.')) || 0;
     const d = enableDiscount ? (parseFloat(desc.replace(',', '.')) || 0) : 0;
-    
+
     if (c <= 0) return Alert.alert('Error', 'Ingresa una cantidad válida.');
+    if (c > stockDisponible) {
+      return Alert.alert('Stock insuficiente', `Stock disponible: ${stockDisponible}. Ajusta la cantidad.`);
+    }
 
     setCarrito([...carrito, {
       id: Date.now().toString(),
@@ -269,7 +286,7 @@ export default function NuevaVentaScreen() {
       tipoDescuento: 'porcentaje',
       nota: notaItem
     }]);
-    
+
     resetArticuloForm();
   };
 
@@ -302,7 +319,7 @@ export default function NuevaVentaScreen() {
 
     const totalDescuentos = descuentoLineas + descuentoGlobalMonto;
     const baseImponible = subtotalLineas - totalDescuentos;
-    const iva = baseImponible * 0.21;
+    const iva = baseImponible * 0.10; // IVA 10% según ERP
     const total = baseImponible + iva;
 
     return { subtotal: subtotalLineas, descuentos: totalDescuentos, base: baseImponible, iva, total };

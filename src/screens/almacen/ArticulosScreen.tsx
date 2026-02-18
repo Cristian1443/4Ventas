@@ -6,7 +6,7 @@
  * - CORRECCIÓN: Contador de "Stock Bajo" ahora usa criterio <= para coincidir con las tarjetas.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -26,6 +26,7 @@ import { useApp } from '../../context/AppContext';
 import { useResponsiveLayout } from '../../constants/layout';
 import { Articulo } from '../../types';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
+import { catalogosService } from '../../services/erp/catalogos.service';
 
 const imgPlaceholder = require('../../../assets/blue-image-panel.png');
 
@@ -51,26 +52,148 @@ export default function ArticulosScreen() {
   };
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('Todos');
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('todos'); // usar IDs ('todos', 'stock', o id_categoria)
   const [sortBy, setSortBy] = useState<'nombre' | 'cantidad' | 'stock'>('nombre');
   const [selectedArticulo, setSelectedArticulo] = useState<Articulo | null>(null);
+  const [categoriasErp, setCategoriasErp] = useState<{ id: string; nombre: string }[]>([]);
 
-  // 1. GENERAR CATEGORÍAS DINÁMICAS + STOCK BAJO + SIN PRECIO
+  // Helpers de normalización
+  const limpiarNombreCat = (nombre: string) => (nombre || '').replace(/,+$/g, '').trim();
+
+  // Cargar categorías reales del ERP para usarlas como filtros
+  useEffect(() => {
+    const loadCategorias = async () => {
+      try {
+        const data = await catalogosService.getCategorias();
+        const parsed = (data || [])
+          .map((c: any) => ({
+            id: (c.id_categoria || c.IdCategoria || c.ID_Categoria || c.id || c.ID || '').toString(),
+            nombre: limpiarNombreCat((c.nombre || c.Nombre || c.Name || '').toString())
+          }))
+          .filter(c => c.nombre);
+
+        if (parsed.length > 0) {
+          // Unicos por id o nombre normalizado
+          const seen = new Set<string>();
+          const unique = parsed.filter(c => {
+            const key = c.id || c.nombre.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          setCategoriasErp(unique);
+        }
+      } catch {
+        // Silenciar para modo offline
+      }
+    };
+    loadCategorias();
+  }, []);
+
+  const normalizarCategoria = (value: string) =>
+    limpiarNombreCat(value || '')
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+      .trim();
+
+  const obtenerIdCategoriaSeleccionada = (idSel: string) => {
+    if (!idSel || idSel === 'todos' || idSel === 'stock') return null;
+    return idSel;
+  };
+
+  const obtenerIdCategoriaArticulo = (articulo: Articulo) => {
+    if (articulo.categoriaId) return articulo.categoriaId.toString();
+
+    const catArticulo = articulo.categoria || '';
+    const limpio = limpiarNombreCat(catArticulo);
+
+    // 1) Si viene como "Categoría 21" u otro con número explícito
+    const numMatch = limpio.match(/(\d+)/);
+    if (numMatch) return numMatch[1];
+
+    // 2) Coincidencia directa por ID en el string (p.ej. "21 DECORACIÓN")
+    const numeroInicio = limpio.split(' ')[0];
+    if (/^\d+$/.test(numeroInicio)) return numeroInicio;
+
+    // 3) Buscar por nombre normalizado en catálogo ERP
+    const norm = normalizarCategoria(limpio);
+    const match = categoriasErp.find(c => normalizarCategoria(c.nombre) === norm);
+    if (match?.id) return match.id;
+
+    // 4) Coincidencia parcial de nombre
+    const parcial = categoriasErp.find(c => normalizarCategoria(c.nombre).includes(norm) || norm.includes(normalizarCategoria(c.nombre)));
+    return parcial?.id || null;
+  };
+
+  // 1. GENERAR CATEGORÍAS: SOLO LAS DEL ERP (fallback a las de artículos) + "Todos" + "Stock Bajo"
   const categorias = useMemo(() => {
-    // Obtenemos categorías únicas de los datos reales
-    const cats = new Set(
-      articulos
-        .map(a => a.categoria)
-        .filter(Boolean)
-        .filter(c => c !== 'null' && c !== 'undefined' && c.trim() !== '')
-    );
-    // Agregamos categorías especiales para filtrar
-    return ['Todos', 'Stock Bajo', 'Sin Precio', ...Array.from(cats)];
-  }, [articulos]);
+    const base: { id: string; nombre: string }[] = [
+      { id: 'todos', nombre: 'Todos' },
+      { id: 'stock', nombre: 'Stock Bajo' }
+    ];
+    if (categoriasErp.length > 0) {
+      const sortedRaw = [...categoriasErp].sort((a, b) => {
+        const na = Number(a.id);
+        const nb = Number(b.id);
+        if (!isNaN(na) && !isNaN(nb)) return na - nb;
+        return a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' });
+      }).map((c, idx) => {
+        const idVal = (c.id || '').toString().trim();
+        const nameVal = (c.nombre || '').toString().trim();
+        const fallbackId = idVal || normalizarCategoria(nameVal) || `cat_${idx}`;
+        return { id: fallbackId, nombre: nameVal || `Categoría ${fallbackId}` };
+      });
+      const unique: { [k: string]: { id: string; nombre: string } } = {};
+      sortedRaw.forEach(cat => { if (!unique[cat.id]) unique[cat.id] = cat; });
+      return [...base, ...Object.values(unique)];
+    }
+
+    // Fallback a categorías detectadas en artículos cuando no se pudieron leer del ERP
+    const categoriasFallback = Array.from(
+      new Set(
+        articulos
+          .map(a => (a.categoria || 'Sin Categoría').trim())
+          .filter(c => c && c !== 'null' && c !== 'undefined')
+      )
+    ).sort((a, b) => {
+      const regex = /categor[ií]a\s+(\d+)/i;
+      const aMatch = a.match(regex);
+      const bMatch = b.match(regex);
+      if (aMatch && bMatch) return Number(aMatch[1]) - Number(bMatch[1]);
+      if (aMatch) return -1;
+      if (bMatch) return 1;
+      return a.localeCompare(b, 'es', { sensitivity: 'base' });
+    });
+
+    const mappedFallback = categoriasFallback.map(c => ({
+      id: normalizarCategoria(c) || c,
+      nombre: c || 'Sin Categoría'
+    }));
+
+    return [...base, ...mappedFallback];
+  }, [articulos, categoriasErp]);
+
+  const categoriasById = useMemo(() => {
+    const map: Record<string, string> = {};
+    categorias.forEach(c => {
+      if (c.id) map[c.id] = c.nombre;
+    });
+    return map;
+  }, [categorias]);
+
+  // Preseleccionar la primera categoría disponible
+  useEffect(() => {
+    if (categorias.length > 0 && !categoriaSeleccionada) {
+      setCategoriaSeleccionada(categorias[0].id);
+    }
+  }, [categorias, categoriaSeleccionada]);
 
   // 2. PREPARAR DATOS (Simular fotos y códigos si no existen)
   const articulosProcesados = useMemo(() => {
     return articulos.map(art => {
+      const categoriaResuelta = art.categoriaId ? (categoriasById[art.categoriaId.toString()] || art.categoria) : art.categoria;
+
       // Simulación de imagen aleatoria para demo
       const randomId = parseInt(art.id.replace(/\D/g, '') || '0') % 5;
       const imagenesDemo = [
@@ -83,16 +206,22 @@ export default function ArticulosScreen() {
 
       return {
         ...art,
+        categoria: categoriaResuelta,
         // Usar imagen real si existe, sino una demo
         imagen: art.imagen || imagenesDemo[randomId],
         // Generar código corto si no existe
         codigoCorto: art.codigoCorto || (art.nombre.substring(0, 3).toUpperCase() + '-' + art.id.slice(-3))
       };
     });
-  }, [articulos]);
+  }, [articulos, categoriasById]);
 
   // 3. FILTRADO MEJORADO
   const filteredArticulos = useMemo(() => {
+    const selectedCat = categorias.find(c => c.id === categoriaSeleccionada);
+    const selectedNameNorm = normalizarCategoria(selectedCat?.nombre || '');
+    const selectedId = categoriaSeleccionada;
+    const selectedIdNorm = normalizarCategoria(selectedId || '');
+
     return articulosProcesados
       .filter((articulo) => {
         // Búsqueda por texto (más flexible)
@@ -103,19 +232,32 @@ export default function ArticulosScreen() {
           (articulo.id || '').toLowerCase().includes(term) ||
           (articulo.categoria || '').toLowerCase().includes(term);
 
-        // Lógica del filtro de categoría / Stock Bajo / Sin Precio
+        // Lógica del filtro de categoría: usar id del ERP (o fallback) y "Stock Bajo"
         let matchFilter = true;
-        if (categoriaSeleccionada === 'Stock Bajo') {
+        if (selectedId === 'stock') {
           matchFilter = articulo.cantidad <= (articulo.stockMinimo || 0);
-        } else if (categoriaSeleccionada === 'Sin Precio') {
-          // Filtrar artículos sin precio o con precio 0
-          const precioNum = parseFloat(articulo.precio?.replace(/[€\s,]/g, '').replace(',', '.') || '0');
-          matchFilter = precioNum === 0;
-        } else if (categoriaSeleccionada !== 'Todos') {
-          // Normalizar categorías para comparación
-          const catArticulo = (articulo.categoria || 'Sin Categoría').trim();
-          const catSeleccionada = categoriaSeleccionada.trim();
-          matchFilter = catArticulo === catSeleccionada;
+        } else if (selectedId && selectedId !== 'todos') {
+          const artId = obtenerIdCategoriaArticulo(articulo);
+          const artNameNorm = normalizarCategoria(articulo.categoria || '');
+
+          // Si no hay datos de categoría en el artículo, no lo excluimos (fallback)
+          if (!artId && !artNameNorm) {
+            matchFilter = true;
+          } else {
+            matchFilter = false;
+
+            // 1) Coincidir por ID exacto
+            if (artId && artId === selectedId) matchFilter = true;
+
+            // 2) Coincidir por ID normalizado
+            if (!matchFilter && artId && normalizarCategoria(artId) === selectedIdNorm) matchFilter = true;
+
+            // 3) Coincidir por nombre normalizado del chip
+            if (!matchFilter && selectedNameNorm && (artNameNorm === selectedNameNorm || artNameNorm.includes(selectedNameNorm))) matchFilter = true;
+
+            // 4) Coincidir por el id normalizado como texto dentro del nombre
+            if (!matchFilter && selectedIdNorm && artNameNorm.includes(selectedIdNorm)) matchFilter = true;
+          }
         }
 
         return matchSearch && matchFilter;
@@ -193,7 +335,7 @@ export default function ArticulosScreen() {
             {/* Al hacer clic filtra por Stock Bajo */}
             <TouchableOpacity
               style={[styles.statCard, styles.statCardWarning]}
-              onPress={() => setCategoriaSeleccionada('Stock Bajo')}
+              onPress={() => setCategoriaSeleccionada('stock')}
             >
               <Text style={styles.statLabelWarning}>Stock Bajo</Text>
               <Text style={styles.statValueWarning}>{articulosStockBajo.length}</Text>
@@ -224,20 +366,20 @@ export default function ArticulosScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
               {categorias.map((categoria) => (
                 <TouchableOpacity
-                  key={categoria}
+                  key={categoria.id}
                   style={[
                     styles.filterChip,
-                    categoriaSeleccionada === categoria && styles.filterChipActive,
-                    categoria === 'Stock Bajo' && categoriaSeleccionada === 'Stock Bajo' && { borderColor: '#dc2626', backgroundColor: '#fee2e2' }
+                    categoriaSeleccionada === categoria.id && styles.filterChipActive,
+                    categoria.id === 'stock' && categoriaSeleccionada === 'stock' && { borderColor: '#dc2626', backgroundColor: '#fee2e2' }
                   ]}
-                  onPress={() => setCategoriaSeleccionada(categoria)}
+                  onPress={() => setCategoriaSeleccionada(categoria.id)}
                 >
                   <Text style={[
                     styles.filterText,
-                    categoriaSeleccionada === categoria && styles.filterTextActive,
-                    categoria === 'Stock Bajo' && categoriaSeleccionada === 'Stock Bajo' && { color: '#dc2626' }
+                    categoriaSeleccionada === categoria.id && styles.filterTextActive,
+                    categoria.id === 'stock' && categoriaSeleccionada === 'stock' && { color: '#dc2626' }
                   ]}>
-                    {categoria}
+                    {categoria.nombre}
                   </Text>
                 </TouchableOpacity>
               ))}

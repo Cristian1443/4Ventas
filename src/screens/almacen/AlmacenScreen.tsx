@@ -9,6 +9,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
+import { InteractionManager } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useResponsiveLayout } from '../../constants/layout';
@@ -66,9 +67,9 @@ export default function AlmacenScreen() {
           </TouchableOpacity>
 
            {/* Gestión Artículos (Opcional, para llenar el menú si quieres) */}
-           <TouchableOpacity
+          <TouchableOpacity
             style={[styles.buttonWrapper, { width: buttonSize, height: buttonSize * 0.85 }]}
-            onPress={() => navigation.navigate('Articulos')}
+            onPress={() => InteractionManager.runAfterInteractions(() => navigation.navigate('Articulos'))}
             activeOpacity={0.8}
           >
             <LinearGradient

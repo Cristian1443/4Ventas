@@ -114,9 +114,9 @@ export default function VentaCartSummary({
                 <View style={styles.totalRow}>
                     <Text style={styles.totalLabel}>Base Imponible</Text><Text style={styles.totalValue}>{totales.base.toFixed(2)} €</Text>
                 </View>
-                <View style={styles.totalRow}>
-                    <Text style={styles.totalLabel}>IVA (21%)</Text><Text style={styles.totalValue}>{totales.iva.toFixed(2)} €</Text>
-                </View>
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>IVA (10%)</Text><Text style={styles.totalValue}>{totales.iva.toFixed(2)} €</Text>
+            </View>
                 <View style={styles.divider} />
                 <View style={[styles.totalRow, { alignItems: 'center' }]}>
                     <Text style={styles.grandTotalLabel}>TOTAL</Text>

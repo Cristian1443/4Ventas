@@ -3,7 +3,7 @@
  * Tabla de stock con filtros por categoría, stats y resaltado de stock bajo
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,39 +14,107 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
+import { catalogosService } from '../../services/erp/catalogos.service';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 
 export default function ResumenStockScreen() {
   const navigation = useNavigation<any>();
   const { articulos } = useApp();
 
-  const [filtroCategoria, setFiltroCategoria] = useState('Todos');
+  const [filtroCategoria, setFiltroCategoria] = useState('todos');
+  const [categoriasErp, setCategoriasErp] = useState<{ id: string; nombre: string }[]>([]);
 
-  // Usar datos reales del contexto
-  const stockData = articulos.map(art => {
-    const fallbackCode = art.nombre
-      ? `${art.nombre.substring(0, 3).toUpperCase()}-${art.id.slice(-3)}`
-      : art.id || 'N/D';
-    return {
-      id: art.id,
-      codigoCorto: art.codigoCorto || fallbackCode,
-      nombre: art.nombre,
-      categoria: art.categoria,
-      stock: art.cantidad,
-      stockMinimo: art.stockMinimo || 0,
-      // Eliminado hardcodeo de fechas, se puede extender Articulo interface si el ERP provee este dato
-      ultimaEntrada: '-', 
-      ultimaSalida: '-'
+  const normalizar = (v: string) =>
+    (v || '')
+      .trim()
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase();
+
+  useEffect(() => {
+    const loadCategorias = async () => {
+      try {
+        const data = await catalogosService.getCategorias();
+        const parsed = (data || [])
+          .map((c: any, idx: number) => ({
+            id: (c.id_categoria || c.IdCategoria || c.ID_Categoria || c.id || c.ID || `cat_${idx}`).toString(),
+            nombre: (c.nombre || c.Nombre || c.Name || '').toString().trim()
+          }))
+          .filter(c => c.nombre);
+        // Unicos por id
+        const uniq: Record<string, { id: string; nombre: string }> = {};
+        parsed.forEach(c => {
+          if (!uniq[c.id]) uniq[c.id] = c;
+        });
+        setCategoriasErp(Object.values(uniq));
+      } catch {
+        setCategoriasErp([]);
+      }
     };
-  });
+    loadCategorias();
+  }, []);
 
-  const categorias = ['Todos', ...Array.from(new Set(stockData.map(a => a.categoria)))];
+  // Datos stock con id de categoría si existe
+  const stockData = useMemo(() => {
+    return articulos.map(art => {
+      const fallbackCode = art.nombre
+        ? `${art.nombre.substring(0, 3).toUpperCase()}-${art.id.slice(-3)}`
+        : art.id || 'N/D';
+      return {
+        id: art.id,
+        codigoCorto: art.codigoCorto || fallbackCode,
+        nombre: art.nombre,
+        categoria: art.categoria,
+        categoriaId: art.categoriaId ? art.categoriaId.toString() : undefined,
+        stock: art.cantidad,
+        stockMinimo: art.stockMinimo || 0,
+        ultimaEntrada: '-',
+        ultimaSalida: '-'
+      };
+    });
+  }, [articulos]);
 
-  const filteredData = filtroCategoria === 'Todos' 
-    ? stockData 
-    : stockData.filter(a => a.categoria === filtroCategoria);
+  // Categorías a mostrar: Todos + Stock Bajo + ERP (fallback si no hay)
+  const categorias = useMemo(() => {
+    const base = [
+      { id: 'todos', nombre: 'Todos' },
+      { id: 'stock', nombre: 'Stock Bajo' }
+    ];
 
-  const stockBajo = filteredData.filter(a => a.stock < a.stockMinimo);
+    if (categoriasErp.length > 0) {
+      return [...base, ...categoriasErp];
+    }
+
+    const fallback = Array.from(
+      new Set(
+        stockData
+          .map(a => a.categoria)
+          .filter(c => c && c !== 'null' && c !== 'undefined')
+      )
+    ).map((c, idx) => ({
+      id: normalizar(c) || `cat_${idx}`,
+      nombre: c
+    }));
+
+    return [...base, ...fallback];
+  }, [categoriasErp, stockData]);
+
+  const filteredData = useMemo(() => {
+    if (filtroCategoria === 'todos') return stockData;
+    if (filtroCategoria === 'stock') return stockData.filter(a => a.stock <= (a.stockMinimo || 0));
+
+    return stockData.filter(a => {
+      const artId = a.categoriaId;
+      const artNameNorm = normalizar(a.categoria || '');
+      const filtroNorm = normalizar(filtroCategoria);
+      return (artId && artId === filtroCategoria) ||
+        normalizar(artId || '') === filtroNorm ||
+        artNameNorm === filtroNorm ||
+        artNameNorm.includes(filtroNorm);
+    });
+  }, [filtroCategoria, stockData]);
+
+  const stockBajo = filteredData.filter(a => a.stock <= (a.stockMinimo || 0));
   const totalStock = filteredData.reduce((acc, a) => acc + a.stock, 0);
 
   return (
@@ -97,18 +165,18 @@ export default function ResumenStockScreen() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
             {categorias.map((cat) => (
               <TouchableOpacity
-                key={cat}
+                key={cat.id}
                 style={[
                   styles.filterButton,
-                  filtroCategoria === cat && styles.filterButtonActive
+                  filtroCategoria === cat.id && styles.filterButtonActive
                 ]}
-                onPress={() => setFiltroCategoria(cat)}
+                onPress={() => setFiltroCategoria(cat.id)}
               >
                 <Text style={[
                   styles.filterButtonText,
-                  filtroCategoria === cat && styles.filterButtonTextActive
+                  filtroCategoria === cat.id && styles.filterButtonTextActive
                 ]}>
-                  {cat}
+                  {cat.nombre}
                 </Text>
               </TouchableOpacity>
             ))}

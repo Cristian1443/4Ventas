@@ -2,7 +2,10 @@
   "expo": {
     "name": "4Ventas",
     "slug": "4ventas",
-    "version": "1.0.0",
+    "version": "1.0.1",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "sdkVersion": "54.0.0",
     "orientation": "default",
     "userInterfaceStyle": "light",
@@ -30,6 +33,9 @@
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE"
       ]
     },
@@ -49,6 +55,9 @@
       "eas": {
         "projectId": "5174a310-8108-4ccd-8e54-4fb75f8cca96"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/5174a310-8108-4ccd-8e54-4fb75f8cca96"
     }
   }
 }

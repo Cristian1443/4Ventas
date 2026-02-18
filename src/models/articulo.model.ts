@@ -3,6 +3,7 @@ export interface Articulo {
     nombre: string;
     cantidad: number;
     categoria: string;
+    categoriaId?: string;
     precio?: string;
     stockMinimo?: number;
     proveedor?: string;

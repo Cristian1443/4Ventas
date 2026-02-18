@@ -3,7 +3,7 @@
  * Muestra estado real de sincronización y permite exportar datos del contexto.
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -19,8 +19,6 @@ import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { syncService } from '../../services/sync.service';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
-import * as FileSystemLegacy from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 
 export default function ComunicacionScreen() {
   const navigation = useNavigation<any>();
@@ -45,6 +43,8 @@ export default function ComunicacionScreen() {
   const [showSyncModal, setShowSyncModal] = useState(false);
   const [exportType, setExportType] = useState<'ventas' | 'gastos' | 'todo'>('ventas');
   const [internalSyncState, setInternalSyncState] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [queueCounts, setQueueCounts] = useState<Record<string, number>>({});
+  const [lastSyncVendor, setLastSyncVendor] = useState<string>('Nunca');
 
   // HANDLER PARA CERRAR SESIÓN
   const handleLogout = () => {
@@ -68,77 +68,50 @@ export default function ComunicacionScreen() {
     );
   };
 
-  // EXPORTACIÓN: Usa datos reales del contexto
-  const handleExport = async () => {
+  // SUBIR A ERP: usa la cola según el tipo elegido
+  const handleUpload = async () => {
     if (!currentVendor?.id) {
-      Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de exportar.');
+      Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de subir datos.');
       return;
     }
 
-    // Opcional: antes de exportar, intentar vaciar la cola del vendedor activo
+    if (!config.erpEnabled) {
+      Alert.alert('ERP', 'El ERP está deshabilitado en la configuración.');
+      return;
+    }
+
     try {
       await syncService.setVendor(currentVendor.id);
-      if (config.erpEnabled) {
-        const status = await syncService.syncAll();
-        updateSyncStatus(status);
-      }
-    } catch {
-      // Si falla la sync, igual exportamos los datos locales actuales
-    }
 
-    let dataToExport: any = {};
-    let filename = '';
-    const dateStr = new Date().toISOString().split('T')[0];
-
-    switch (exportType) {
-      case 'ventas':
-        dataToExport = notasVenta;
-        filename = `ventas_${dateStr}.json`;
-        break;
-      case 'gastos':
-        dataToExport = gastos;
-        filename = `gastos_${dateStr}.json`;
-        break;
-      case 'todo':
-        dataToExport = { 
-          ventas: notasVenta, 
-          gastos, 
-          cobros,
-          documentos,
-          meta: {
-            fecha: new Date().toISOString(),
-            version: '1.0'
-          }
-        };
-        filename = `backup_completo_${dateStr}.json`;
-        break;
-    }
-
-    try {
-      const jsonString = JSON.stringify(dataToExport, null, 2);
-      const baseDir =
-        (FileSystemLegacy as any).cacheDirectory ||
-        FileSystemLegacy.documentDirectory ||
-        '';
-      const fileUri = `${baseDir}${filename}`;
-      await FileSystemLegacy.writeAsStringAsync(fileUri, jsonString);
-      
-      const canShare = await Sharing.isAvailableAsync();
-      if (canShare) {
-        await Sharing.shareAsync(fileUri);
+      if (exportType === 'ventas') {
+        await syncService.processQueueByTypes(['venta']);
+      } else if (exportType === 'gastos') {
+        await syncService.processQueueByTypes(['gasto', 'gasto_delete']);
       } else {
-        Alert.alert('Éxito', `Archivo guardado localmente: ${filename}`);
+        await syncService.processQueue();
       }
-      
+
+      const pendientes = syncService.getPendingCount();
+      updateSyncStatus({ ...syncStatus, operacionesPendientes: pendientes });
+      setQueueCounts(syncService.getPendingCountsByType());
+      updateSyncStatus({
+        ...syncStatus,
+        operacionesPendientes: pendientes,
+        ultimaSync: new Date().toISOString()
+      });
+      await syncService.setLastSync(new Date().toISOString());
+      const ls = await syncService.getLastSync();
+      setLastSyncVendor(ls ? new Date(ls).toLocaleString('es-ES') : 'Nunca');
+
+      Alert.alert('Listo', 'Los datos seleccionados se enviaron al ERP y se limpiaron de la cola.');
       setShowExportModal(false);
     } catch (error) {
-      Alert.alert('Error', 'No se pudo generar o compartir el archivo de exportación.');
+      Alert.alert('Error', 'No se pudo subir al ERP. Revisa la conexión o credenciales.');
     }
   };
 
   const handleImport = () => {
-    // Funcionalidad requiere expo-document-picker (no incluido en dependencias base)
-    Alert.alert('Importar Datos', 'Para restaurar una copia de seguridad, por favor contacte con soporte técnico para habilitar la selección de archivos nativa.');
+    Alert.alert('Importar Datos', 'Importar backups no está habilitado en esta versión.');
     setShowImportModal(false);
   };
 
@@ -147,23 +120,22 @@ export default function ComunicacionScreen() {
         Alert.alert('Modo Offline', 'No se puede sincronizar. Verifique su conexión o la configuración del ERP.');
         return;
     }
-    if (!currentVendor?.id) {
-        Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de sincronizar.');
-        return;
-    }
-
     setInternalSyncState('syncing');
     setShowSyncModal(true);
     
     try {
-      await syncService.setVendor(currentVendor.id);
-      const status = await syncService.syncAll();
-      // Recalcular pendientes tras la sync real
+      // Usar la misma sincronización centralizada que Configuración
+      await forzarSincronizacion();
       const pendientes = syncService.getPendingCount();
-      updateSyncStatus({ ...status, operacionesPendientes: pendientes });
-      if (status.error || status.clientes === 'error' || status.articulos === 'error') {
-          throw new Error(status.error || 'Error de sincronización');
-      }
+      setQueueCounts(syncService.getPendingCountsByType());
+      updateSyncStatus({
+        ...syncStatus,
+        operacionesPendientes: pendientes,
+        ultimaSync: new Date().toISOString()
+      });
+      await syncService.setLastSync(new Date().toISOString());
+      const ls = await syncService.getLastSync();
+      setLastSyncVendor(ls ? new Date(ls).toLocaleString('es-ES') : 'Nunca');
       setInternalSyncState('success');
       setTimeout(() => {
         setShowSyncModal(false);
@@ -178,10 +150,21 @@ export default function ComunicacionScreen() {
     }
   };
 
+  // Cargar conteos al montar y cuando cambia vendedor
+  useEffect(() => {
+    const loadCounts = async () => {
+      if (currentVendor?.id) {
+        await syncService.setVendor(currentVendor.id);
+      }
+      setQueueCounts(syncService.getPendingCountsByType());
+      const ls = await syncService.getLastSync();
+      setLastSyncVendor(ls ? new Date(ls).toLocaleString('es-ES') : 'Nunca');
+    };
+    loadCounts();
+  }, [currentVendor?.id]);
+
   // CÁLCULOS DE VISUALIZACIÓN
-  const lastSyncLabel = syncStatus.ultimaSync 
-    ? new Date(syncStatus.ultimaSync).toLocaleString('es-ES')
-    : 'Nunca';
+  const lastSyncLabel = lastSyncVendor;
     
   const connectionLabel = modoOffline ? 'Offline / Error' : 'Conectado ERP';
   const connectionColor = modoOffline ? '#dc2626' : '#10b981';
@@ -207,16 +190,16 @@ export default function ComunicacionScreen() {
           {/* Stats: Datos Reales */}
           <View style={styles.statsGrid}>
             <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Ventas Locales</Text>
-              <Text style={styles.statValue}>{notasVenta.length}</Text>
+              <Text style={styles.statLabel}>Ventas en cola</Text>
+              <Text style={styles.statValue}>{queueCounts['venta'] || 0}</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Gastos Locales</Text>
-              <Text style={[styles.statValue, styles.statValueSecondary]}>{gastos.length}</Text>
+              <Text style={styles.statLabel}>Gastos en cola</Text>
+              <Text style={[styles.statValue, styles.statValueSecondary]}>{(queueCounts['gasto'] || 0) + (queueCounts['gasto_delete'] || 0)}</Text>
             </View>
             <View style={styles.statCard}>
-              <Text style={styles.statLabel}>Documentos</Text>
-              <Text style={[styles.statValue, styles.statValueSecondary]}>{documentos.length}</Text>
+              <Text style={styles.statLabel}>Documentos en cola</Text>
+              <Text style={[styles.statValue, styles.statValueSecondary]}>{(queueCounts['documento'] || 0) + (queueCounts['documento_delete'] || 0)}</Text>
             </View>
           </View>
 
@@ -353,16 +336,16 @@ export default function ComunicacionScreen() {
           onPress={() => setShowExportModal(false)}
         >
           <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>Exportar Datos</Text>
+            <Text style={styles.modalTitle}>Subir datos al ERP</Text>
             <Text style={styles.modalDescription}>
-              Genera un archivo JSON con los datos locales actuales. Útil para respaldos manuales.
+              Envía al ERP los registros pendientes en la cola. Se eliminan de la cola al completarse.
             </Text>
             
             <View style={styles.modalOptions}>
               {[
-                { value: 'ventas', label: `Ventas (${notasVenta.length} registros)` },
-                { value: 'gastos', label: `Gastos (${gastos.length} registros)` },
-                { value: 'todo', label: 'Copia Completa del Sistema' }
+                { value: 'ventas', label: `Subir Ventas (cola de ventas)` },
+                { value: 'gastos', label: `Subir Gastos (cola de gastos)` },
+                { value: 'todo', label: 'Subir Todo (todas las colas)' }
               ].map((option) => (
                 <TouchableOpacity
                   key={option.value}
@@ -397,7 +380,7 @@ export default function ComunicacionScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonPrimary]}
-                onPress={handleExport}
+                  onPress={handleUpload}
               >
                 <LinearGradient
                   colors={['#092090', '#0C2ABF']}
@@ -405,7 +388,7 @@ export default function ComunicacionScreen() {
                   end={{ x: 1, y: 0 }}
                   style={styles.modalButtonGradient}
                 >
-                  <Text style={styles.modalButtonPrimaryText}>Generar Archivo</Text>
+                  <Text style={styles.modalButtonPrimaryText}>Subir al ERP</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>

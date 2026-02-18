@@ -58,12 +58,18 @@ export function mapearArticuloERPaLocal(articuloERP: any): Articulo {
         '';
 
     let categoria = 'Sin Categoría';
+    let categoriaId: string | undefined = undefined;
     if (articuloERP.Categoria) {
         categoria = articuloERP.Categoria;
     } else if (articuloERP.NombreCategoria) {
         categoria = articuloERP.NombreCategoria;
     } else if (articuloERP.ID_Categoria && articuloERP.ID_Categoria !== 0) {
         categoria = `Categoría ${articuloERP.ID_Categoria}`;
+    }
+    if (articuloERP.ID_Categoria) {
+        categoriaId = articuloERP.ID_Categoria.toString();
+    } else if (articuloERP.id_categoria) {
+        categoriaId = articuloERP.id_categoria.toString();
     }
 
     categoria = categoria.trim();
@@ -76,6 +82,7 @@ export function mapearArticuloERPaLocal(articuloERP: any): Articulo {
         nombre: articuloERP.Nombre || 'Sin nombre',
         cantidad: stock,
         categoria: categoria,
+        categoriaId,
         precio: precio > 0 ? `${precio.toFixed(2).replace('.', ',')} €` : '0,00 €',
         stockMinimo: stockMinimo,
         codigoCorto: codigo

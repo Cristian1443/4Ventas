@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
+import { InteractionManager } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useResponsiveLayout } from '../../constants/layout';
@@ -47,7 +48,7 @@ export default function VentasMenuScreen() {
             <TouchableOpacity
               key={index}
               activeOpacity={0.8}
-              onPress={() => navigation.navigate(item.screen)}
+              onPress={() => InteractionManager.runAfterInteractions(() => navigation.navigate(item.screen))}
               style={[styles.buttonWrapper, { width: buttonSize, height: buttonSize * 0.85 }]}
             >
               <LinearGradient

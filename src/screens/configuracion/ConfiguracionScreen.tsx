@@ -13,6 +13,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
+import { syncService } from '../../services/sync.service';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 import { printerService } from '../../services/printer.matricial.service';
 
@@ -25,7 +26,8 @@ export default function ConfiguracionScreen() {
     sincronizar,
     modoOffline,
     config,
-    updateConfig
+    updateConfig,
+    currentVendor
   } = useApp();
 
   // Estados locales para formularios
@@ -34,6 +36,7 @@ export default function ConfiguracionScreen() {
   const [isSyncingManual, setIsSyncingManual] = useState(false);
   const [testingPrinter, setTestingPrinter] = useState(false);
   const [catalogoPdfUrl, setCatalogoPdfUrl] = useState('');
+  const [lastSyncVendor, setLastSyncVendor] = useState('Nunca');
 
   // Cargar configuración inicial
   useEffect(() => {
@@ -45,9 +48,16 @@ export default function ConfiguracionScreen() {
       setPrinterPort(currentConfig.port);
       // Cargar URL del catálogo PDF
       setCatalogoPdfUrl(config.catalogoPdfUrl || '');
+      if (currentVendor?.id) {
+        await syncService.setVendor(currentVendor.id);
+        const ls = await syncService.getLastSync();
+        setLastSyncVendor(ls ? new Date(ls).toLocaleString('es-ES') : 'Nunca');
+      } else {
+        setLastSyncVendor('Nunca');
+      }
     };
     loadSettings();
-  }, [config]);
+  }, [config, currentVendor?.id]);
 
   // Handlers
   const handleSavePrinter = async () => {
@@ -79,6 +89,9 @@ export default function ConfiguracionScreen() {
 
     setIsSyncingManual(true);
     await sincronizar();
+    const nowIso = new Date().toISOString();
+    await syncService.setLastSync(nowIso);
+    setLastSyncVendor(new Date(nowIso).toLocaleString('es-ES'));
     setIsSyncingManual(false);
     Alert.alert('Sincronización', 'Proceso finalizado.');
   };
@@ -146,10 +159,9 @@ export default function ConfiguracionScreen() {
     );
   };
 
-  // Formatear fecha
-  const lastSyncDate = syncStatus.ultimaSync
-    ? new Date(syncStatus.ultimaSync).toLocaleString('es-ES')
-    : 'Nunca';
+  // Formatear fecha y vendedor activo
+  const lastSyncDate = lastSyncVendor;
+  const vendorLabel = currentVendor?.nombre || currentVendor?.id || 'Sin vendedor';
 
   return (
     <ScreenWithSidebar currentScreen="Configuracion" scrollable={false}>
@@ -213,6 +225,10 @@ export default function ConfiguracionScreen() {
                   </View>
                 </View>
 
+                <View style={styles.syncStatusRow}>
+                  <Text style={styles.syncLabel}>Vendedor:</Text>
+                  <Text style={styles.syncValue}>{vendorLabel}</Text>
+                </View>
                 <View style={styles.syncStatusRow}>
                   <Text style={styles.syncLabel}>Última vez:</Text>
                   <Text style={styles.syncValue}>{lastSyncDate}</Text>

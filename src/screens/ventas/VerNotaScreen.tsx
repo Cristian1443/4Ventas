@@ -51,7 +51,7 @@ export default function VerNotaScreen() {
   );
 
   // Datos del cliente - usar el cliente completo si existe, sino usar los datos de ventaData
-  const cliente = clienteCompleto ? {
+  const cliente: any = clienteCompleto ? {
     codigo: clienteCompleto.codigo || clienteCompleto.id || '',
     nombre: clienteCompleto.nombre || ventaData.cliente || 'Cliente',
     razonSocial: clienteCompleto.empresa || '',
@@ -477,7 +477,7 @@ export default function VerNotaScreen() {
 
                 {/* IVA o RE */}
                 <View style={styles.totalItem}>
-                  <Text style={styles.totalLabel}>IVA (21%):</Text>
+                  <Text style={styles.totalLabel}>IVA (10%):</Text>
                   <Text style={styles.totalValue}>{totales.iva} €</Text>
                 </View>
 

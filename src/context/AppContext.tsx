@@ -147,8 +147,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const initializeApp = async () => {
     const savedConfig = await storageService.getItem<AppConfig>('appConfig');
-    const finalConfig = savedConfig || config;
-    if (savedConfig) setConfig(savedConfig);
+    const finalConfig = { ...(savedConfig || config), erpEnabled: true }; // Forzar ERP habilitado
+    setConfig(finalConfig);
+    try { setERPEnabled(true); } catch {}
 
     // 0. Cargar Vendedor Actual
     const vendor = await vendorService.getVendedorActual();
@@ -542,7 +543,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     });
 
     if (config.erpEnabled) {
-      syncService.addToQueue('venta', notaConVendor);
+      syncService.addOrReplaceInQueue('venta', notaConVendor, 'id');
       updatePendingFromQueue();
     }
   };
@@ -584,7 +585,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     setCobros(prev => [cobroConVendor, ...prev]);
 
     if (config.erpEnabled) {
-      syncService.addToQueue('pago', cobroConVendor);
+      syncService.addOrReplaceInQueue('pago', cobroConVendor, 'id');
       updatePendingFromQueue();
     }
   };

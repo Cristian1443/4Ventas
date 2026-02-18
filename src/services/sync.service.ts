@@ -51,6 +51,20 @@ class SyncService {
     this.loadErrors();
   }
 
+  /**
+   * Guarda la última fecha de sincronización para el vendedor actual.
+   */
+  async setLastSync(dateIso: string): Promise<void> {
+    await storageService.setItem(this.vendorKey('ultimaSync'), dateIso);
+  }
+
+  /**
+   * Obtiene la última fecha de sincronización para el vendedor actual.
+   */
+  async getLastSync(): Promise<string | null> {
+    return (await storageService.getItem<string>(this.vendorKey('ultimaSync'))) || null;
+  }
+
   async setVendor(vendorId: string | null): Promise<void> {
     this.currentVendorId = vendorId || null;
     await this.loadQueue();
@@ -520,6 +534,24 @@ class SyncService {
     return operation.id;
   }
 
+  /**
+   * Agrega o reemplaza en la cola una operación del mismo tipo y con la misma clave (por defecto, data.id).
+   * Evita duplicar pendientes cuando se actualiza una venta/cobro existente.
+   */
+  addOrReplaceInQueue(type: SyncOperation['type'], data: any, keyField: string = 'id'): string {
+    const keyVal = data?.[keyField];
+    if (!keyVal) {
+      return this.addToQueue(type, data);
+    }
+
+    // Eliminar pendientes del mismo tipo y misma clave
+    this.queue = this.queue.filter(
+      op => !(op.status === 'pending' && op.type === type && op.data?.[keyField] === keyVal)
+    );
+
+    return this.addToQueue(type, data);
+  }
+
   async processQueue(): Promise<void> {
     if (this.isSyncing) {
       console.log('⏳ Sincronización ya en progreso');
@@ -544,6 +576,58 @@ class SyncService {
         if (operation.retries >= this.maxRetries) {
           console.error(`❌ Operación ${operation.id} excedió reintentos máximos`);
           // Marcar como error final para que no bloquee, o mover a histórico de fallidos
+          operation.status = 'error';
+          continue;
+        }
+
+        await this.processOperation(operation);
+      }
+    } finally {
+      this.isSyncing = false;
+      await this.saveQueue();
+    }
+  }
+
+  /**
+   * Devuelve conteos de pendientes por tipo.
+   */
+  getPendingCountsByType(): Record<string, number> {
+    const counts: Record<string, number> = {};
+    this.queue
+      .filter(op => op.status === 'pending')
+      .forEach(op => {
+        counts[op.type] = (counts[op.type] || 0) + 1;
+      });
+    return counts;
+  }
+
+  /**
+   * Procesa únicamente las operaciones de los tipos indicados.
+   * Útil para subir solo ventas o solo gastos desde la UI.
+   */
+  async processQueueByTypes(types: SyncOperation['type'][]): Promise<void> {
+    if (this.isSyncing) {
+      console.log('⏳ Sincronización ya en progreso');
+      return;
+    }
+
+    const pendingOps = this.queue.filter(
+      op => op.status === 'pending' && types.includes(op.type)
+    );
+
+    if (pendingOps.length === 0) {
+      console.log('✓ No hay operaciones pendientes de los tipos solicitados');
+      return;
+    }
+
+    console.log(`🔄 Procesando ${pendingOps.length} operaciones filtradas...`);
+
+    this.isSyncing = true;
+
+    try {
+      for (const operation of pendingOps) {
+        if (operation.retries >= this.maxRetries) {
+          console.error(`❌ Operación ${operation.id} excedió reintentos máximos`);
           operation.status = 'error';
           continue;
         }
