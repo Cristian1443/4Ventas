@@ -7,45 +7,144 @@ import { Cobro } from '../models/cobro.model';
 import { NotaAlmacen } from '../models/almacen.model';
 import { Visita } from '../models/visita.model';
 
+function parseNumber(value: any): number {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value !== 'string') return 0;
+
+    const cleaned = value.replace(/[^\d,.-]/g, '').trim();
+    if (!cleaned) return 0;
+
+    let normalized = cleaned;
+    const hasComma = normalized.includes(',');
+    const hasDot = normalized.includes('.');
+    if (hasComma && hasDot) {
+        if (normalized.lastIndexOf(',') > normalized.lastIndexOf('.')) {
+            normalized = normalized.replace(/\./g, '').replace(',', '.');
+        } else {
+            normalized = normalized.replace(/,/g, '');
+        }
+    } else if (hasComma) {
+        normalized = normalized.replace(',', '.');
+    }
+
+    const parsed = parseFloat(normalized);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeArticuloImage(value: any): string | undefined {
+    if (typeof value !== 'string') return undefined;
+    const raw = value.trim();
+    if (!raw) return undefined;
+    if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('data:image/')) return raw;
+    if (/^[A-Za-z0-9+/=\r\n]+$/.test(raw) && raw.length > 100) {
+        return `data:image/jpeg;base64,${raw.replace(/\s/g, '')}`;
+    }
+    return undefined;
+}
+
 export function mapearClienteERPaLocal(clienteERP: any): Cliente {
     const id = clienteERP.Id || clienteERP.ID_Cliente || clienteERP.id || '';
     const nombre = clienteERP.Nombre || clienteERP.nombre || '';
     const razonSocial = clienteERP.RazonSocial || clienteERP.razonSocial || nombre;
     const direccion = clienteERP.Direccion || clienteERP.direccion || '';
-    const localidad = clienteERP.Localidad || clienteERP.localidad || '';
-    const telefono = clienteERP.Telefono || clienteERP.telefono || '';
-    const email = clienteERP.Email || clienteERP.email || '';
+
+    // El ERP Verial almacena localidades en una tabla de catálogo (ID_Localidad).
+    // La resolución del nombre se hace en syncClientes usando GetLocalidadesWS.
+    // Aquí intentamos leer el nombre textual si el ERP lo devuelve directamente.
+    const localidadCandidatos: any[] = [
+        clienteERP.Localidad,
+        clienteERP.localidad,
+        clienteERP.NombreLocalidad,
+        clienteERP.NombreMunicipio,
+        clienteERP.Municipio,
+        clienteERP.Poblacion,
+        clienteERP.poblacion,
+        clienteERP.NombrePoblacion,
+        clienteERP.Ciudad,
+        clienteERP.ciudad,
+    ];
+
+    // Tomar el primer valor textual (no numérico) disponible
+    const localidad = localidadCandidatos.reduce((found: string, val: any) => {
+        if (found) return found;
+        if (val === null || val === undefined || val === '') return '';
+        const str = String(val).trim();
+        // Descartar IDs numéricos (ej. "2879", "2.879", "2,879")
+        if (!str || /^\d+[\.,]?\d*$/.test(str)) return '';
+        return str;
+    }, '');
+
+    const telefono = clienteERP.Telefono || clienteERP.telefono || clienteERP.Telefono1 || clienteERP.TelefonoN1 || '';
+    const email = clienteERP.Email || clienteERP.email || clienteERP.Email1 || '';
     const nif = clienteERP.NIF || clienteERP.nif || '';
-    const codigoPostal = clienteERP.CPostal || clienteERP.codigoPostal || clienteERP.CPostal || '';
-    const provincia = clienteERP.Provincia || clienteERP.provincia || '';
+    const codigoPostal = clienteERP.CPostal || clienteERP.CodigoPostal || clienteERP.codigoPostal || '';
+    const provincia = clienteERP.Provincia || clienteERP.NombreProvincia || clienteERP.provincia || '';
+
+    // Régimen fiscal: el ERP Verial devuelve el ID numérico en RegFiscal o ID_RegFiscal.
+    // 1=IVA normal · 2=IVA+R.E. · 3=UE intracomunitario · 4=Exento nac. · 5=Exento ext.
+    // 6=Agricultura · 7=Canarias IGIC
+    const regimenFiscalRaw = clienteERP.RegFiscal ?? clienteERP.ID_RegFiscal ??
+        clienteERP.RegimenFiscal ?? clienteERP.regFiscal ?? null;
+    const regimenFiscal = regimenFiscalRaw !== null ? Number(regimenFiscalRaw) : undefined;
+    const recargoEquivalencia = regimenFiscal === 2;
+
+    // LOG: confirmar qué campo usa el ERP para el régimen fiscal (solo en los primeros clientes)
+    if (id && (Number(id) <= 3 || recargoEquivalencia)) {
+        console.log(`🧾 [cliente ${id}] RegFiscal raw: ${regimenFiscalRaw} → regimenFiscal: ${regimenFiscal} → RE: ${recargoEquivalencia}`);
+    }
+
+    // Código comercial del cliente (lo que memorizan los vendedores); el Id interno puede diferir.
+    const codigoClienteRaw =
+        clienteERP.Codigo ??
+        clienteERP.codigo ??
+        clienteERP.CodigoCliente ??
+        clienteERP.codigoCliente ??
+        clienteERP.NumCliente ??
+        clienteERP.NumeroCliente ??
+        clienteERP.NCliente ??
+        clienteERP.CodCli ??
+        clienteERP.RefCliente ??
+        clienteERP.ReferenciaCliente ??
+        clienteERP.Cuenta ??
+        clienteERP.CuentaContable ??
+        '';
+    const codigoComercial =
+        codigoClienteRaw !== '' && codigoClienteRaw !== null && codigoClienteRaw !== undefined
+            ? String(codigoClienteRaw).trim()
+            : '';
 
     return {
         id: id.toString(),
-        codigo: id.toString(),
+        codigo: codigoComercial || id.toString(),
         nombre: nombre,
         empresa: razonSocial || nombre,
-        direccion: `${direccion} ${localidad}`.trim() || 'Sin dirección',
+        // Dirección solo contiene la calle; la localidad se muestra por separado
+        direccion: direccion || 'Sin dirección',
+        localidad: localidad,
         telefono: telefono,
         email: email,
         ultimaVisita: 'Sin registrar',
         nif: nif,
         codigoPostal: codigoPostal,
-        provincia: provincia
+        provincia: provincia,
+        regimenFiscal: regimenFiscal,
+        recargoEquivalencia: recargoEquivalencia
     };
 }
 
 export function mapearArticuloERPaLocal(articuloERP: any): Articulo {
-    const articuloId = articuloERP.Id || articuloERP.ID_Articulo || 'UNKNOWN';
     const stock = articuloERP.Stock ?? articuloERP.Cantidad ?? 0;
     const stockMinimo = articuloERP.StockMinimo ?? 0;
 
-    const precio = articuloERP.PVP ??
+    const precioRaw = articuloERP.PVP ??
         articuloERP.Precio ??
         articuloERP.PrecioVenta ??
         articuloERP.PrecioUnitario ??
         articuloERP.Importe ??
+        articuloERP.PrecioTarifa ??
         articuloERP.PrecioBase ??
         0;
+    const precio = parseNumber(precioRaw);
 
     if (precio === 0) {
         // console.warn(`⚠️ [mapearArticuloERPaLocal] Artículo sin precio: ${articuloERP.Nombre || articuloId}`);
@@ -59,22 +158,49 @@ export function mapearArticuloERPaLocal(articuloERP: any): Articulo {
 
     let categoria = 'Sin Categoría';
     let categoriaId: string | undefined = undefined;
-    if (articuloERP.Categoria) {
-        categoria = articuloERP.Categoria;
-    } else if (articuloERP.NombreCategoria) {
-        categoria = articuloERP.NombreCategoria;
-    } else if (articuloERP.ID_Categoria && articuloERP.ID_Categoria !== 0) {
-        categoria = `Categoría ${articuloERP.ID_Categoria}`;
+
+    // Determinar ID numérico de categoría
+    const idCatNum = articuloERP.ID_Categoria ?? articuloERP.id_categoria ?? null;
+    if (idCatNum !== null && idCatNum !== 0) {
+        categoriaId = String(idCatNum);
     }
-    if (articuloERP.ID_Categoria) {
-        categoriaId = articuloERP.ID_Categoria.toString();
-    } else if (articuloERP.id_categoria) {
-        categoriaId = articuloERP.id_categoria.toString();
+
+    // Determinar NOMBRE de categoría — priorizar campos de texto,
+    // descartar si el valor es puramente numérico (es un ID, no un nombre)
+    const categoriaRaw = articuloERP.NombreCategoria ?? articuloERP.Categoria ?? null;
+    const categoriaStr = categoriaRaw !== null ? String(categoriaRaw).trim() : '';
+    if (categoriaStr && !/^\d+$/.test(categoriaStr)) {
+        // Es un texto real (no un número puro): usarlo como nombre
+        categoria = categoriaStr;
+    } else if (categoriaId) {
+        // Solo tenemos el ID: usar como placeholder; syncArticulos lo resolverá con el catálogo
+        categoria = `Categoría ${categoriaId}`;
     }
 
     categoria = categoria.trim();
     if (categoria === '' || categoria === 'null' || categoria === 'undefined') {
         categoria = 'Sin Categoría';
+    }
+
+    const ivaCandidates = [
+        articuloERP.PorcentajeIVA,
+        articuloERP.PorcentajeIva,
+        articuloERP.porcentajeIva,
+        articuloERP.PorcIVA,
+        articuloERP.PorcIva,
+        articuloERP.IVA,
+        articuloERP.TasaIVA,
+        articuloERP.TipoIVAPorc,
+        articuloERP.P_IVA,
+        articuloERP.Porc_IVA,
+    ];
+    let porcentajeIva = 10;
+    for (const raw of ivaCandidates) {
+        const n = parseNumber(raw);
+        if (n > 0 && n <= 100) {
+            porcentajeIva = Math.round(n * 100) / 100;
+            break;
+        }
     }
 
     return {
@@ -83,9 +209,21 @@ export function mapearArticuloERPaLocal(articuloERP: any): Articulo {
         cantidad: stock,
         categoria: categoria,
         categoriaId,
+        porcentajeIva,
         precio: precio > 0 ? `${precio.toFixed(2).replace('.', ',')} €` : '0,00 €',
         stockMinimo: stockMinimo,
-        codigoCorto: codigo
+        codigoCorto: codigo,
+        imagen: normalizeArticuloImage(
+            articuloERP.Imagen ??
+            articuloERP.imagen ??
+            articuloERP.UrlImagen ??
+            articuloERP.URLImagen ??
+            articuloERP.Url ??
+            articuloERP.URL ??
+            articuloERP.Image ??
+            articuloERP.Base64 ??
+            articuloERP.ImagenBase64
+        )
     };
 }
 

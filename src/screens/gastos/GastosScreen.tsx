@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import * as ImagePicker from 'expo-image-picker';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
+import { getLiquidacionSesionCheckpointMs, entidadCuentaEnLiquidacionSesion } from '../../services/liquidacion-sesion.service';
 
 export default function GastosScreen() {
   const navigation = useNavigation<any>();
@@ -28,6 +29,12 @@ export default function GastosScreen() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState('Todas');
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  // Gastos ya liquidados no deben seguir apareciendo aquí: se filtran por el último cierre.
+  const [checkpointMs, setCheckpointMs] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    getLiquidacionSesionCheckpointMs(currentVendor?.id).then(setCheckpointMs);
+  }, [currentVendor?.id]);
   const [imagenGasto, setImagenGasto] = useState<string | null>(null);
 
   const tiposGasto = ['Comida', 'Combustible', 'Alojamiento', 'Transporte', 'Material', 'Otros'];
@@ -50,15 +57,16 @@ export default function GastosScreen() {
       Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de registrar un gasto.');
       return;
     }
-    if (!nombreGasto || !selectedType || !valorGasto) {
-      Alert.alert('Error', 'Completa todos los campos');
+    if (!selectedType || !valorGasto) {
+      Alert.alert('Error', 'Selecciona el tipo de gasto e indica el valor.');
       return;
     }
 
     // FIX: Generar ID único robusto y Fecha estándar manual
     const nuevoGasto = {
       id: `G${Date.now()}`, // Timestamp para evitar duplicados
-      nombre: nombreGasto,
+      // El comentario/nombre es opcional: el tipo de gasto ya identifica de qué se trata.
+      nombre: nombreGasto.trim() || selectedType,
       categoria: selectedType,
       precio: valorGasto.includes('€') ? valorGasto : `${valorGasto} €`,
       fecha: getFechaActualFormateada(), // Formato forzado DD/MM/YYYY
@@ -127,7 +135,8 @@ export default function GastosScreen() {
     const matchesSearch = gasto.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          gasto.categoria.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategoria = selectedCategoria === 'Todas' || gasto.categoria === selectedCategoria;
-    return matchesSearch && matchesCategoria;
+    const noLiquidadoAun = entidadCuentaEnLiquidacionSesion(gasto.liquidacionSesionTs, checkpointMs, true);
+    return matchesSearch && matchesCategoria && noLiquidadoAun;
   });
 
   const totalGastos = filteredGastos.reduce((sum, gasto) => {
@@ -177,7 +186,7 @@ export default function GastosScreen() {
 
               <TextInput
                 style={styles.input}
-                placeholder="Nombre del Gasto"
+                placeholder="Comentario (opcional)"
                 placeholderTextColor="#697b92"
                 value={nombreGasto}
                 onChangeText={setNombreGasto}

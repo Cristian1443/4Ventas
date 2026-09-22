@@ -4,7 +4,7 @@
  * - Solución Código: Badge más visible y lógica de respaldo.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -34,11 +34,17 @@ export default function ClientesScreen() {
   const { clientes, cobros, currentVendor } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [selectedCliente, setSelectedCliente] = useState<ClienteExtendido | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProvincia, setSelectedProvincia] = useState('Todas');
   const [filterConDeudas, setFilterConDeudas] = useState(false); // NUEVO: Filtro de deudas
   const [sortBy, setSortBy] = useState<'nombre' | 'ultimaVisita' | 'cobros'>('nombre');
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchTerm(searchTerm.trim().toLowerCase()), 180);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
 
   // 1. PREPARAR DATOS (Calculamos cobros y aseguramos el código)
   const clientesData: ClienteExtendido[] = useMemo(() => {
@@ -66,15 +72,18 @@ export default function ClientesScreen() {
 
   // 2. FILTRADO Y ORDENAMIENTO
   const filteredClientes = useMemo(() => {
-    const term = searchTerm.toLowerCase();
+    const term = debouncedSearchTerm;
 
     return clientesData
       .filter(cliente => {
         const matchesSearch =
           cliente.nombre.toLowerCase().includes(term) ||
           (cliente.empresa || '').toLowerCase().includes(term) ||
-          cliente.codigoVisual.toLowerCase().includes(term) || // Buscar por el código visual
+          cliente.codigoVisual.toLowerCase().includes(term) ||
+          (cliente.nif || '').toLowerCase().includes(term) ||
           (cliente.direccion || '').toLowerCase().includes(term) ||
+          (cliente.localidad || '').toLowerCase().includes(term) ||
+          (cliente.codigoPostal || '').toLowerCase().includes(term) ||
           (cliente.provincia || '').toLowerCase().includes(term);
 
         const matchesProvincia = selectedProvincia === 'Todas' || cliente.provincia === selectedProvincia;
@@ -88,7 +97,7 @@ export default function ClientesScreen() {
         // Lógica simple para visita (mejorar si es fecha real)
         return (a.ultimaVisita || '').localeCompare(b.ultimaVisita || '');
       });
-  }, [clientesData, searchTerm, selectedProvincia, sortBy]);
+  }, [clientesData, debouncedSearchTerm, selectedProvincia, sortBy, filterConDeudas]);
 
   // --- HANDLERS ---
   const handleVerDetalles = (cliente: ClienteExtendido) => {
@@ -107,7 +116,7 @@ export default function ClientesScreen() {
   };
 
   // --- RENDER ITEM (Tarjeta Cliente) ---
-  const renderClienteItem = ({ item }: { item: ClienteExtendido }) => {
+  const renderClienteItem = useCallback(({ item }: { item: ClienteExtendido }) => {
     // Inicial para el avatar
     const inicial = item.nombre.charAt(0).toUpperCase();
 
@@ -142,9 +151,12 @@ export default function ClientesScreen() {
               <Text style={styles.empresaText} numberOfLines={1}>{item.empresa}</Text>
             )}
 
-            {/* Dirección y NIF */}
+            {/* NIF + Dirección + Localidad */}
             <Text style={styles.addressText} numberOfLines={1}>
-              NIF: {item.nif || '-'} • {item.direccion || 'Sin dirección'}
+              NIF: {item.nif || '-'}
+            </Text>
+            <Text style={styles.addressText} numberOfLines={1}>
+              {[item.direccion, item.localidad].filter(Boolean).join(' · ') || 'Sin dirección'}
             </Text>
 
             {/* Badge de Cobros (si tiene) */}
@@ -165,7 +177,7 @@ export default function ClientesScreen() {
         </View>
       </TouchableOpacity>
     );
-  };
+  }, [navigation]);
 
   return (
     // IMPORTANTE: scrollable={false} porque usamos FlatList adentro
@@ -204,7 +216,7 @@ export default function ClientesScreen() {
             <Text style={styles.searchIcon}>🔍</Text>
             <TextInput
               style={styles.searchInput}
-              placeholder="Buscar cliente, código, NIF..."
+              placeholder="Buscar por nombre, NIF, localidad, dirección..."
               placeholderTextColor="#94a3b8"
               value={searchTerm}
               onChangeText={setSearchTerm}
@@ -249,10 +261,15 @@ export default function ClientesScreen() {
         {/* LISTA DE CLIENTES (FLEX: 1 ES CRÍTICO PARA EL SCROLL) */}
         <FlatList
           data={filteredClientes}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => String(item.id)}
           renderItem={renderClienteItem}
           contentContainerStyle={styles.listContent}
           style={styles.flatList} // Estilo crucial
+          initialNumToRender={14}
+          maxToRenderPerBatch={20}
+          windowSize={8}
+          removeClippedSubviews
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={true}
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -284,8 +301,17 @@ export default function ClientesScreen() {
                     </View>
                     <View style={styles.modalDivider} />
                     <View style={styles.modalRow}><Text style={styles.modalLabel}>Razón Social:</Text><Text style={styles.modalValue}>{selectedCliente.empresa || '-'}</Text></View>
-                    <View style={styles.modalRow}><Text style={styles.modalLabel}>NIF:</Text><Text style={styles.modalValue}>{selectedCliente.nif}</Text></View>
-                    <View style={styles.modalRow}><Text style={styles.modalLabel}>Dirección:</Text><Text style={styles.modalValue}>{selectedCliente.direccion}</Text></View>
+                    <View style={styles.modalRow}><Text style={styles.modalLabel}>NIF:</Text><Text style={styles.modalValue}>{selectedCliente.nif || '-'}</Text></View>
+                    <View style={styles.modalRow}><Text style={styles.modalLabel}>Localidad:</Text><Text style={[styles.modalValue, { color: '#092090', fontWeight: '700' }]}>{selectedCliente.localidad || '-'}</Text></View>
+                    <View style={styles.modalRow}><Text style={styles.modalLabel}>Dirección:</Text><Text style={styles.modalValue}>{selectedCliente.direccion || '-'}</Text></View>
+                    {(selectedCliente.codigoPostal || selectedCliente.provincia) ? (
+                      <View style={styles.modalRow}>
+                        <Text style={styles.modalLabel}>C.P. / Provincia:</Text>
+                        <Text style={styles.modalValue}>
+                          {[selectedCliente.codigoPostal, selectedCliente.provincia].filter(Boolean).join(' · ') || '-'}
+                        </Text>
+                      </View>
+                    ) : null}
                     <View style={styles.modalRow}><Text style={styles.modalLabel}>Teléfono:</Text><Text style={styles.modalValue}>{selectedCliente.telefono}</Text></View>
                     <View style={styles.modalRow}><Text style={styles.modalLabel}>Email:</Text><Text style={styles.modalValue}>{selectedCliente.email}</Text></View>
                     <View style={styles.modalRow}><Text style={styles.modalLabel}>Última Visita:</Text><Text style={styles.modalValue}>{selectedCliente.ultimaVisita || 'N/A'}</Text></View>

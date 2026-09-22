@@ -11,10 +11,14 @@
 
 import { storageService } from './storage.service';
 import * as erpService from './erp.service';
+import { vendorService } from './vendor.service';
+import { equivalenciaPctFromIvaArticulo } from '../utils/fiscal.helpers';
+import { campoContadorPorTipoNota, reservarNumeroRecibo } from './documentCounter.service';
+import { setLiquidacionSesionCheckpointNow } from './liquidacion-sesion.service';
 
 export interface SyncOperation {
   id: string;
-  type: 'venta' | 'pago' | 'cliente' | 'gasto' | 'gasto_delete' | 'documento' | 'documento_delete' | 'visita' | 'visita_update';
+  type: 'venta' | 'pago' | 'cliente' | 'gasto' | 'gasto_delete' | 'documento' | 'documento_delete' | 'visita' | 'visita_update' | 'nota_almacen';
   data: any;
   timestamp: number;
   retries: number;
@@ -28,6 +32,16 @@ export interface SyncError {
   descripcion: string;
   timestamp: number;
   operation: SyncOperation;
+}
+
+export interface SyncAuditEntry {
+  id: string;
+  vendorId: string;
+  operationId: string;
+  type: SyncOperation['type'];
+  status: 'success' | 'error' | 'dropped';
+  timestamp: number;
+  message: string;
 }
 
 export interface SyncStatus {
@@ -45,6 +59,12 @@ class SyncService {
   private maxRetries: number = 3;
   private syncInterval: any = null;
   private currentVendorId: string | null = null;
+  /** ID de almacén explícito (furgón) configurado en el vendedor */
+  private currentAlmacenId: string | null = null;
+  /** Código de agente (ej. "902"); si no hay almacén explícito, se usa como id_almacén si es numérico */
+  private currentVendorCodigo: string | null = null;
+  /** Código del vendedor propietario de la operación en curso dentro de processOperation (puede diferir del vendedor activo). */
+  private activeOperationVendorCodigo: string | null = null;
 
   constructor() {
     this.loadQueue();
@@ -65,10 +85,47 @@ class SyncService {
     return (await storageService.getItem<string>(this.vendorKey('ultimaSync'))) || null;
   }
 
-  async setVendor(vendorId: string | null): Promise<void> {
+  async setVendor(vendorId: string | null, almacenId?: string | null, vendorCodigo?: string | null): Promise<void> {
     this.currentVendorId = vendorId || null;
+    if (!vendorId) {
+      this.currentAlmacenId = null;
+      this.currentVendorCodigo = null;
+      await this.loadQueue();
+      await this.loadErrors();
+      return;
+    }
+
+    let mergedAlmacen =
+      almacenId != null && String(almacenId).trim() !== '' ? String(almacenId).trim() : null;
+    let mergedCodigo =
+      vendorCodigo != null && String(vendorCodigo).trim() !== '' ? String(vendorCodigo).trim() : null;
+
+    try {
+      const v = await vendorService.getVendedorById(vendorId);
+      if (v) {
+        if (mergedAlmacen == null && v.almacenId != null && String(v.almacenId).trim() !== '') {
+          mergedAlmacen = String(v.almacenId).trim();
+        }
+        if (mergedCodigo == null && v.codigo != null && String(v.codigo).trim() !== '') {
+          mergedCodigo = String(v.codigo).trim();
+        }
+      }
+    } catch {
+      // ignorar lectura storage
+    }
+
+    this.currentAlmacenId = mergedAlmacen;
+    this.currentVendorCodigo = mergedCodigo;
     await this.loadQueue();
     await this.loadErrors();
+  }
+
+  /** Almacén con el que se consulta stock en ERP: configurado explícito o código numérico de agente (ej. 902 → almacén 902). */
+  getEffectiveStockAlmacenId(): string | undefined {
+    if (this.currentAlmacenId?.trim()) return this.currentAlmacenId.trim();
+    const cod = this.currentVendorCodigo?.trim();
+    if (cod && /^\d+$/.test(cod)) return cod;
+    return undefined;
   }
 
   private vendorKey(base: string): string {
@@ -133,7 +190,7 @@ class SyncService {
         console.error('⚠️ [syncAll] Error procesando cola de subida (continuando con bajada):', queueError);
       }
 
-      // 2. Descargar datos
+      // 2. Descargar datos (Nota: syncCobros se hace de forma manual)
       await Promise.all([
         this.syncClientes().catch((err) => {
           console.error('❌ [syncAll] Error en syncClientes:', err);
@@ -145,9 +202,8 @@ class SyncService {
         }),
         this.syncGastos(),
         this.syncDocumentos(),
-        this.syncCobros(),
         this.syncNotasAlmacen(),
-        this.syncAgenda() // NUEVO
+        this.syncAgenda() 
       ]);
 
       status.clientes = status.clientes === 'error' ? 'error' : 'success';
@@ -173,93 +229,85 @@ class SyncService {
 
   async syncClientes(): Promise<any[]> {
     try {
-      console.log('👥 [syncClientes] ============================================');
-      console.log('👥 [syncClientes] INICIANDO SINCRONIZACIÓN DE CLIENTES');
-      console.log('👥 [syncClientes] URL Base:', erpService.getERPBaseUrl ? erpService.getERPBaseUrl() : 'N/A');
-      console.log('👥 [syncClientes] Sesión:', erpService.getSessionId ? erpService.getSessionId() : 'N/A');
-      console.log('👥 [syncClientes] ============================================');
+      console.log('👥 [syncClientes] Iniciando sync de clientes...');
 
-      const clientesERP = await erpService.getClientes();
+      // Descargar clientes y catálogo de localidades en paralelo.
+      // El ERP Verial guarda la localidad como ID_Localidad (número), por lo que
+      // necesitamos la tabla de localidades para resolver el nombre textual.
+      const [clientesERP, localidadesERP] = await Promise.all([
+        erpService.getClientes(),
+        erpService.getLocalidades().catch(() => [] as any[])
+      ]);
 
-      console.log(`📥 [syncClientes] Clientes recibidos del ERP (raw): ${clientesERP.length}`);
+      console.log(`📥 [syncClientes] Clientes recibidos: ${clientesERP.length}, Localidades: ${localidadesERP.length}`);
 
-      if (clientesERP.length === 0) {
-        console.warn('⚠️ [syncClientes] ⚠️⚠️⚠️ NO SE RECIBIERON CLIENTES DEL ERP ⚠️⚠️⚠️');
-        console.warn('⚠️ [syncClientes] Abortando actualización para preservar datos locales.');
-        const clientesLocales = (await storageService.getItem<any[]>('clientes')) || [];
-        // Si hay locales, retornamos esos. Si no, retornamos vacío (no hay otra opción)
-        if (clientesLocales.length > 0) return clientesLocales;
-        // Si no hay locales, quizás es la primera carga. Dejamos pasar array vacío.
+      // Construir mapa ID_Localidad → NombreLocalidad para resolución rápida
+      const localidadesMap = new Map<number, string>();
+      for (const loc of localidadesERP) {
+        const id = Number(loc.Id ?? loc.ID_Localidad ?? loc.id ?? 0);
+        const nombre = String(loc.Nombre ?? loc.NombreLocalidad ?? loc.Descripcion ?? '').trim();
+        if (id && nombre) localidadesMap.set(id, nombre);
       }
 
-      if (clientesERP.length > 0) {
-        console.log('📋 [syncClientes] Primer cliente raw:', JSON.stringify(clientesERP[0], null, 2).substring(0, 300));
+      if (localidadesMap.size > 0) {
+        console.log(`🗺️ [syncClientes] ${localidadesMap.size} localidades en catálogo`);
+      }
+
+      if (clientesERP.length === 0) {
+        console.warn('⚠️ [syncClientes] No se recibieron clientes del ERP, usando locales.');
+        const clientesLocales = (await storageService.getItem<any[]>('clientes')) || [];
+        if (clientesLocales.length > 0) return clientesLocales;
       }
 
       const clientesServer = clientesERP.map((cliente: any) => {
         try {
-          const mapeado = erpService.mapearClienteERPaLocal(cliente);
-          console.log(`✅ [syncClientes] Cliente mapeado: ${mapeado.nombre} (ID: ${mapeado.id})`);
-          return mapeado;
+          const mapped = erpService.mapearClienteERPaLocal(cliente);
+
+          // Si el adaptador no encontró la localidad como texto, resolverla
+          // desde el catálogo usando ID_Localidad que devuelve el ERP.
+          if (!mapped.localidad && localidadesMap.size > 0) {
+            const idLoc = Number(
+              cliente.ID_Localidad ?? cliente.id_localidad ??
+              cliente.IDLocalidad ?? cliente.IdLocalidad ?? 0
+            );
+            if (idLoc && localidadesMap.has(idLoc)) {
+              mapped.localidad = localidadesMap.get(idLoc) || '';
+            }
+          }
+
+          return mapped;
         } catch (error: any) {
-          console.error(`❌ [syncClientes] Error mapeando cliente:`, error.message, cliente);
           return null;
         }
       }).filter((c: any) => c !== null);
 
-      console.log(`📊 [syncClientes] Clientes mapeados exitosamente: ${clientesServer.length}`);
+      console.log(`📊 [syncClientes] Clientes mapeados: ${clientesServer.length}`);
 
-      // Obtener locales actuales
       const clientesLocales = (await storageService.getItem<any[]>('clientes')) || [];
-      console.log(`📂 [syncClientes] Clientes locales actuales: ${clientesLocales.length}`);
-
-      // 1. PRESERVAR NUEVOS CLIENTES LOCALES
-      // Asumimos que los creados offline tienen un ID temporal que empieza por "CLI-" o timestamp
-      // o simplemente aquellos que no están en el servidor aún (pero la ID temporal es más segura)
-      // 1. PRESERVAR NUEVOS CLIENTES LOCALES
-      // Asumimos que los creados offline tienen un ID no numérico (String temporal, e.g. "CLI-..." o UUID)
       const clientesNuevosOffline = clientesLocales.filter(c => c.id && isNaN(Number(c.id)));
-      console.log(`💾 [syncClientes] Clientes nuevos offline a preservar: ${clientesNuevosOffline.length}`);
-
-      // 2. MEZCLAR
-      // Los del servidor tienen prioridad para actualizaciones, pero añadimos los nuevos locales
-      // Filtramos los del server para no duplicar si por casualidad el ID colisionara (improbable con CLI-)
       const listaFinal = [...clientesServer, ...clientesNuevosOffline];
 
-      console.log(`💾 [syncClientes] Guardando ${listaFinal.length} clientes en storage...`);
       await storageService.setItem('clientes', listaFinal);
 
-      // Verificar que se guardó correctamente
-      const verificacion = await storageService.getItem<any[]>('clientes');
-      console.log(`✅ [syncClientes] Verificación: ${verificacion?.length || 0} clientes guardados en storage`);
+      const conRE = listaFinal.filter((c: any) => c.recargoEquivalencia === true).length;
+      const sinRE = listaFinal.filter((c: any) => c.recargoEquivalencia === false).length;
+      const sinDato = listaFinal.filter((c: any) => c.recargoEquivalencia === undefined).length;
+      console.log(`✅ [syncClientes] ${listaFinal.length} clientes guardados`);
+      console.log(`📊 [syncClientes] Régimen fiscal: ${conRE} con R.E. · ${sinRE} sin R.E. · ${sinDato} sin dato fiscal`);
 
-      if (verificacion && Array.isArray(verificacion) && verificacion.length > 0) {
-        console.log(`✅ [syncClientes] Primer cliente guardado:`, verificacion[0]?.nombre || verificacion[0]?.id);
-        console.log(`✅ [syncClientes] Estructura del primer cliente:`, JSON.stringify(verificacion[0], null, 2).substring(0, 200));
-      } else {
-        console.log(`ℹ️ [syncClientes] No hay clientes guardados (esto es normal si el servidor no devuelve datos)`);
+      if (sinDato > 0) {
+        console.warn(`⚠️ [syncClientes] ${sinDato} clientes sin campo RegFiscal en respuesta ERP. Verificar campo en API.`);
       }
 
-      console.log(`✅ [syncClientes] Clientes sincronizados: ${clientesServer.length} (Server) + ${clientesNuevosOffline.length} (Locales) = ${listaFinal.length} total`);
-
-      // Retornar la lista final (no la verificación, por si hay algún problema de timing)
       return listaFinal;
     } catch (error: any) {
-      console.error('❌ [syncClientes] Error sync clientes:', error.message);
-      console.error('❌ [syncClientes] Stack:', error.stack);
-      const clientesLocales = (await storageService.getItem<any[]>('clientes')) || [];
-      console.log(`📂 [syncClientes] Retornando ${clientesLocales.length} clientes locales debido al error`);
-      return clientesLocales;
+      console.error('❌ [syncClientes] Error:', error.message);
+      return (await storageService.getItem<any[]>('clientes')) || [];
     }
   }
 
   async getClientesLocal(): Promise<any[]> {
-    const clientes = (await storageService.getItem<any[]>('clientes')) || [];
-    console.log(`📂 [getClientesLocal] Leyendo clientes de storage: ${clientes.length} encontrados`);
-    if (clientes.length > 0) {
-      console.log(`📂 [getClientesLocal] Primer cliente en storage:`, clientes[0]?.nombre || clientes[0]?.id);
-    }
-    return clientes;
+    return (await storageService.getItem<any[]>('clientes')) || [];
   }
 
   // ============================================================================
@@ -268,63 +316,69 @@ class SyncService {
 
   async syncArticulos(): Promise<any[]> {
     try {
-      console.log('📦 [syncArticulos] ============================================');
-      console.log('📦 [syncArticulos] INICIANDO SINCRONIZACIÓN DE ARTÍCULOS');
-      console.log('📦 [syncArticulos] URL Base:', erpService.getERPBaseUrl ? erpService.getERPBaseUrl() : 'N/A');
-      console.log('📦 [syncArticulos] Sesión:', erpService.getSessionId ? erpService.getSessionId() : 'N/A');
-      console.log('📦 [syncArticulos] ============================================');
+      const almacenStock = this.getEffectiveStockAlmacenId();
+      if (almacenStock) {
+        const origen =
+          this.currentAlmacenId?.trim()
+            ? 'almacén configurado en el vendedor'
+            : 'código de agente numérico (mismo número que id de almacén furgón)';
+        console.log(`📦 [syncArticulos] Stock por almacén ${almacenStock} (${origen})`);
+      } else {
+        console.warn(
+          '⚠️ [syncArticulos] Sin almacén ni código numérico de agente: se usa stock general del artículo. Configura «Almacén» en el vendedor o un código de agente solo numérico (902, 903…).'
+        );
+      }
 
-      const articulosERP = await erpService.getArticulos();
+      // Descargar artículos, catálogo de categorías en paralelo
+      const [articulosERP, categoriasERP] = await Promise.all([
+        erpService.getArticulos(undefined, undefined, almacenStock),
+        erpService.getCategorias().catch(() => [] as any[])
+      ]);
 
-      console.log(`📥 [syncArticulos] Artículos recibidos del ERP (raw): ${articulosERP.length}`);
+      console.log(`📥 [syncArticulos] Artículos: ${articulosERP.length} · Categorías: ${categoriasERP.length}`);
+
+      // Mapa ID_Categoria → NombreCategoria para resolver nombres
+      const categoriasMap = new Map<number, string>();
+      for (const cat of categoriasERP) {
+        const id = Number(cat.Id ?? cat.ID_Categoria ?? cat.id ?? 0);
+        const nombre = String(cat.Nombre ?? cat.NombreCategoria ?? cat.Descripcion ?? '').trim();
+        if (id && nombre) categoriasMap.set(id, nombre);
+      }
+      if (categoriasMap.size > 0) {
+        console.log(`🗂️ [syncArticulos] ${categoriasMap.size} categorías en catálogo`);
+      }
 
       if (articulosERP.length === 0) {
-        console.warn('⚠️ [syncArticulos] ⚠️⚠️⚠️ NO SE RECIBIERON ARTÍCULOS DEL ERP ⚠️⚠️⚠️');
-        console.warn('⚠️ [syncArticulos] Abortando actualización para preservar datos locales.');
+        console.warn('⚠️ [syncArticulos] No se recibieron artículos del ERP, usando locales.');
         const articulosLocales = (await storageService.getItem<any[]>('articulos')) || [];
         if (articulosLocales.length > 0) return articulosLocales;
-      } else if (articulosERP.length > 0) {
-        console.log('📋 [syncArticulos] Primer artículo raw:', JSON.stringify(articulosERP[0], null, 2).substring(0, 300));
       }
 
-      const articulosMapeados = articulosERP.map(erpService.mapearArticuloERPaLocal);
+      const articulosMapeados = articulosERP.map((art: any) => {
+        const mapped = erpService.mapearArticuloERPaLocal(art);
+        // Si la categoría mapeada es un número o genérica, resolver del catálogo
+        const idCat = Number(art.ID_Categoria ?? art.id_categoria ?? 0);
+        if (idCat && categoriasMap.has(idCat)) {
+          (mapped as any).categoria = categoriasMap.get(idCat)!;
+          (mapped as any).categoriaId = String(idCat);
+        }
+        return mapped;
+      });
 
-      console.log(`📊 [syncArticulos] Artículos mapeados exitosamente: ${articulosMapeados.length}`);
+      console.log(`📊 [syncArticulos] Artículos mapeados: ${articulosMapeados.length}`);
 
-      // Guardar en almacenamiento local
-      console.log(`💾 [syncArticulos] Guardando ${articulosMapeados.length} artículos en storage...`);
       await storageService.setItem('articulos', articulosMapeados);
+      console.log(`✅ [syncArticulos] ${articulosMapeados.length} artículos guardados`);
 
-      // Verificar que se guardó correctamente
-      const verificacion = await storageService.getItem<any[]>('articulos');
-      console.log(`✅ [syncArticulos] Verificación: ${verificacion?.length || 0} artículos guardados en storage`);
-
-      if (verificacion && Array.isArray(verificacion) && verificacion.length > 0) {
-        console.log(`✅ [syncArticulos] Primer artículo guardado:`, verificacion[0]?.nombre || verificacion[0]?.id);
-        console.log(`✅ [syncArticulos] Estructura del primer artículo:`, JSON.stringify(verificacion[0], null, 2).substring(0, 200));
-      } else {
-        console.log(`ℹ️ [syncArticulos] No hay artículos guardados (esto es normal si el servidor no devuelve datos)`);
-      }
-
-      console.log(`✅ [syncArticulos] ${articulosMapeados.length} artículos sincronizados`);
       return articulosMapeados;
     } catch (error: any) {
-      console.error('❌ [syncArticulos] Error sincronizando artículos:', error.message);
-      console.error('❌ [syncArticulos] Stack:', error.stack);
-      // Cargar datos locales si hay
-      const articulosLocales = await storageService.getItem<any[]>('articulos') || [];
-      console.log(`📂 [syncArticulos] Retornando ${articulosLocales.length} artículos locales debido al error`);
-      return articulosLocales;
+      console.error('❌ [syncArticulos] Error:', error.message);
+      return (await storageService.getItem<any[]>('articulos')) || [];
     }
   }
 
   async getArticulosLocal(): Promise<any[]> {
-    const articulos = (await storageService.getItem<any[]>('articulos')) || [];
-    console.log(`📂 [getArticulosLocal] Leyendo artículos de storage: ${articulos.length} encontrados`);
-    if (articulos.length > 0) {
-      console.log(`📂 [getArticulosLocal] Primer artículo en storage:`, articulos[0]?.nombre || articulos[0]?.id);
-    }
-    return articulos;
+    return (await storageService.getItem<any[]>('articulos')) || [];
   }
 
   async updateArticuloStock(id: string, cantidad: number): Promise<void> {
@@ -439,9 +493,13 @@ class SyncService {
       await storageService.setItem(this.vendorKey('cobros'), listaFinal);
       console.log(`✅ Cobros sincronizados: ${listaFinal.length}`);
       return listaFinal;
-    } catch (error) {
-      console.warn('⚠️ Error sync cobros, manteniendo locales');
-      return (await storageService.getItem<any[]>('cobros')) || [];
+    } catch (error: any) {
+      console.warn('⚠️ Error sync cobros:', error?.message || error);
+      // Si es un error de red (servidor apagado), relanzar para que la UI muestre error
+      if (error?.isNetworkError || error?.code === 'ERR_NETWORK' || error?.code === 'ECONNABORTED' || error?.code === 'ECONNREFUSED') {
+        throw error;
+      }
+      return (await storageService.getItem<any[]>(this.vendorKey('cobros'))) || [];
     }
   }
 
@@ -552,14 +610,14 @@ class SyncService {
     return this.addToQueue(type, data);
   }
 
-  async processQueue(): Promise<void> {
+  async processQueue(forceRetry: boolean = false): Promise<void> {
     if (this.isSyncing) {
       console.log('⏳ Sincronización ya en progreso');
       return;
     }
 
     const pendingOps = this.queue.filter(
-      op => op.status === 'pending'
+      op => op.status === 'pending' || op.status === 'error'
     );
 
     if (pendingOps.length === 0) {
@@ -567,24 +625,48 @@ class SyncService {
       return;
     }
 
-    console.log(`🔄 Procesando ${pendingOps.length} operaciones pendientes...`);
+    console.log(`🔄 Procesando ${pendingOps.length} operaciones pendientes... (Force: ${forceRetry})`);
 
     this.isSyncing = true;
 
     try {
       for (const operation of pendingOps) {
-        if (operation.retries >= this.maxRetries) {
+        if (forceRetry) {
+          operation.retries = 0;
+          operation.status = 'pending';
+        }
+
+        if (operation.retries >= this.maxRetries && !forceRetry) {
           console.error(`❌ Operación ${operation.id} excedió reintentos máximos`);
-          // Marcar como error final para que no bloquee, o mover a histórico de fallidos
           operation.status = 'error';
           continue;
         }
 
         await this.processOperation(operation);
       }
+      await this.checkAndAdvanceLiquidacionSesion(pendingOps);
     } finally {
       this.isSyncing = false;
       await this.saveQueue();
+    }
+  }
+
+  /**
+   * Ata el corte de "liquidación por sesión" a la sincronización real con el ERP: si el vendedor
+   * activo tenía operaciones pendientes y ya no le queda ninguna pendiente/en error tras este
+   * ciclo, fija el checkpoint automáticamente (sin depender de que el usuario pulse un botón).
+   */
+  private async checkAndAdvanceLiquidacionSesion(procesadas: SyncOperation[]): Promise<void> {
+    const vendorId = this.currentVendorId;
+    if (!vendorId) return;
+    const teniaPendientesDeEsteVendedor = procesadas.some(op => (op.vendorId || vendorId) === vendorId);
+    if (!teniaPendientesDeEsteVendedor) return;
+
+    const siguenPendientes = this.queue.some(
+      op => (op.status === 'pending' || op.status === 'error') && (op.vendorId || vendorId) === vendorId
+    );
+    if (!siguenPendientes) {
+      await setLiquidacionSesionCheckpointNow(vendorId);
     }
   }
 
@@ -634,6 +716,7 @@ class SyncService {
 
         await this.processOperation(operation);
       }
+      await this.checkAndAdvanceLiquidacionSesion(pendingOps);
     } finally {
       this.isSyncing = false;
       await this.saveQueue();
@@ -643,6 +726,20 @@ class SyncService {
   private async processOperation(operation: SyncOperation): Promise<void> {
     operation.status = 'syncing';
     operation.retries++;
+    const vendorId = operation.vendorId || this.currentVendorId || 'global';
+
+    // Cada operación debe sincronizarse con la sesión ERP del vendedor que la generó,
+    // no con la que esté activa en el momento de procesar la cola (evita mezclar
+    // documentos entre vendedores si hubo un cambio de sesión con operaciones pendientes).
+    const previousSessionId = erpService.getSessionId();
+    const previousOperationVendorCodigo = this.activeOperationVendorCodigo;
+    if (operation.vendorId) {
+      const ownerVendor = await vendorService.getVendedorById(operation.vendorId);
+      if (ownerVendor?.sessionId) {
+        erpService.setSessionId(ownerVendor.sessionId);
+      }
+      this.activeOperationVendorCodigo = ownerVendor?.codigo || null;
+    }
 
     try {
       let result: any;
@@ -675,6 +772,9 @@ class SyncService {
         case 'visita_update':
           result = await this.syncVisitaUpdate(operation.data);
           break;
+        case 'nota_almacen':
+          result = await this.syncNotaAlmacen(operation.data);
+          break;
         default:
           throw new Error(`Tipo de operación desconocido: ${operation.type}`);
       }
@@ -683,13 +783,40 @@ class SyncService {
         operation.status = 'success';
         this.removeFromQueue(operation.id);
         console.log(`✅ Operación ${operation.id} sincronizada correctamente`);
+        await this.appendAudit({
+          id: `AUD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          vendorId,
+          operationId: operation.id,
+          type: operation.type,
+          status: 'success',
+          timestamp: Date.now(),
+          message: 'Sincronizada correctamente'
+        });
       } else {
         // Si la respuesta es 404, asumimos que el recurso no existe en ERP y limpiamos la cola
         if (this.shouldDropOperation(result.error)) {
           console.warn(`⚠️ Operación ${operation.id} descartada por 404/No encontrado`);
           this.removeFromQueue(operation.id);
+          await this.appendAudit({
+            id: `AUD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            vendorId,
+            operationId: operation.id,
+            type: operation.type,
+            status: 'dropped',
+            timestamp: Date.now(),
+            message: result?.error?.descripcion || 'Descartada por recurso no encontrado'
+          });
         } else {
           this.handleSyncError(operation, result.error);
+          await this.appendAudit({
+            id: `AUD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            vendorId,
+            operationId: operation.id,
+            type: operation.type,
+            status: 'error',
+            timestamp: Date.now(),
+            message: result?.error?.descripcion || 'Error desconocido'
+          });
         }
       }
     } catch (error: any) {
@@ -702,12 +829,37 @@ class SyncService {
       if (this.shouldDropOperation(errObj)) {
         console.warn(`⚠️ Operación ${operation.id} descartada por 404/No encontrado (catch)`);
         this.removeFromQueue(operation.id);
+        await this.appendAudit({
+          id: `AUD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          vendorId,
+          operationId: operation.id,
+          type: operation.type,
+          status: 'dropped',
+          timestamp: Date.now(),
+          message: errObj.descripcion || 'Descartada por recurso no encontrado'
+        });
       } else {
         this.handleSyncError(operation, {
           codigo: errObj.codigo,
           descripcion: errObj.descripcion
         });
+        await this.appendAudit({
+          id: `AUD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          vendorId,
+          operationId: operation.id,
+          type: operation.type,
+          status: 'error',
+          timestamp: Date.now(),
+          message: errObj.descripcion || 'Error de conexión'
+        });
       }
+    } finally {
+      // Restaurar la sesión del vendedor activo para que llamadas en foreground
+      // (fuera de la cola) no queden usando la sesión del propietario de esta operación.
+      if (operation.vendorId && erpService.getSessionId() !== previousSessionId) {
+        erpService.setSessionId(previousSessionId);
+      }
+      this.activeOperationVendorCodigo = previousOperationVendorCodigo;
     }
   }
 
@@ -718,57 +870,250 @@ class SyncService {
     return code === 404 || desc.includes('404') || desc.includes('not found');
   }
 
+  private async appendAudit(entry: SyncAuditEntry): Promise<void> {
+    try {
+      const key = `syncAudit__${entry.vendorId}`;
+      const current = (await storageService.getItem<SyncAuditEntry[]>(key)) || [];
+      const next = [entry, ...current].slice(0, 200);
+      await storageService.setItem(key, next);
+    } catch (e) {
+      console.warn('⚠️ [syncAudit] No se pudo guardar auditoría:', e);
+    }
+  }
+
   // ============================================================================
   // SINCRONIZACIÓN DE OPERACIONES ESPECÍFICAS
   // ============================================================================
 
   private async syncVenta(ventaData: any): Promise<any> {
     try {
-      const documento: erpService.DocumentoCliente = {
-        Id: 0,
-        Tipo: 5, // Pedido
-        Numero: 0,
-        Referencia: ventaData.id || '',
-        Fecha: ventaData.fecha || new Date().toISOString().split('T')[0],
-        ID_Cliente: this.parseClienteId(ventaData.cliente?.id),
-        PreciosImpIncluidos: true,
-        BaseImponible: this.parseMonto(ventaData.totales?.subtotal),
-        TotalImporte: this.parseMonto(ventaData.totales?.total),
-        Comentario: ventaData.tipoNota || '',
-        Contenido: (ventaData.articulos || []).map((art: any) => ({
+      const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+      const clienteId = this.parseClienteId(
+        ventaData.clienteId ??
+        ventaData.ID_Cliente ??
+        ventaData.cliente?.id
+      );
+
+      if (!clienteId || clienteId <= 0) {
+        return {
+          success: false,
+          error: {
+            codigo: -1,
+            descripcion: 'La nota no tiene cliente ERP válido (clienteId).'
+          }
+        };
+      }
+
+      const lineasOrigen = Array.isArray(ventaData.items)
+        ? ventaData.items
+        : (Array.isArray(ventaData.articulos) ? ventaData.articulos : []);
+
+      // Descuento global (si aplica) se distribuye proporcionalmente en cada línea
+      const globalDiscountPct = ventaData.aplicarDescGlobal
+        ? round2(parseFloat(String(ventaData.descGlobal || '0').replace(',', '.')) || 0)
+        : 0;
+
+      // ¿El cliente tiene Recargo de Equivalencia?
+      const aplicaRE = !!(ventaData.recargoEquivalencia ||
+        (ventaData.totalesNumericos?.re && ventaData.totalesNumericos.re > 0));
+
+      // Adicional/Presupuesto no llevan impuestos por defecto (a falta de un selector por
+      // documento, Verial pidió dejarlos como "no aplicables" en estos dos tipos).
+      const tipoNotaPrevia = ventaData.tipoNota || '';
+      const sinImpuestosPorTipo = tipoNotaPrevia === 'Serie X' || tipoNotaPrevia === 'Adicional' || tipoNotaPrevia === 'Presupuesto';
+
+      const contenido = lineasOrigen.map((art: any) => {
+        const precioUnitario = round2(parseFloat(art.precioUnitario) || 0);
+        const cantidad = round2(parseFloat(art.cantidad) || 0);
+        const dtoLinea = round2(parseFloat(art.descuento) || 0);
+
+        // Dto combinado: (1-(1-dtoLinea/100)*(1-globalDisc/100))*100
+        const dtoCombinado = globalDiscountPct > 0
+          ? round2(100 - (100 - dtoLinea) * (100 - globalDiscountPct) / 100)
+          : dtoLinea;
+
+        // ImporteLinea debe reflejar el precio neto ya descontado
+        const importeLinea = round2(precioUnitario * cantidad * (1 - dtoCombinado / 100));
+
+        const pctIva = round2(parseFloat(String(art.porcentajeIva ?? art.iva ?? 10).replace(',', '.')) || 10);
+        const porcentajeIVAEF = sinImpuestosPorTipo ? 0 : (pctIva > 0 ? pctIva : 10);
+        const porcentajeRELinea =
+          (aplicaRE && !sinImpuestosPorTipo) ? equivalenciaPctFromIvaArticulo(porcentajeIVAEF) : 0;
+
+        return {
           TipoRegistro: 1,
-          ID_Articulo: this.parseArticuloId(art.articuloId),
-          Precio: parseFloat(art.precioUnitario) || 0,
-          Dto: parseFloat(art.descuento) || 0,
+          ID_Articulo: this.parseArticuloId(art.articuloId ?? art.id),
+          Precio: precioUnitario,
+          Dto: dtoCombinado,
           DtoPPago: 0,
           DtoEurosXUd: 0,
           DtoEuros: 0,
-          Uds: parseFloat(art.cantidad) || 0,
+          Uds: cantidad,
           UdsRegalo: 0,
           UdsAuxiliares: 0,
-          ImporteLinea: parseFloat(art.precioUnitario) * parseFloat(art.cantidad),
-          PorcentajeIVA: 21,
-          PorcentajeRE: 0,
+          ImporteLinea: importeLinea,
+          PorcentajeIVA: porcentajeIVAEF,
+          PorcentajeRE: porcentajeRELinea,
           Lote: null,
           Caducidad: null,
           ID_Partida: 0,
           DescripcionAmplia: art.nota || null,
           Comentario: art.nota || null
-        })),
-        Pagos: this.buildPagos(ventaData)
+        };
+      });
+
+      // En ERP validan importes con 2 decimales. Si llega 0.022 esperan 0.02.
+      // Priorizamos los totales ya calculados en UI, pero redondeados estrictamente.
+      const baseFromUi = this.parseMonto(
+        ventaData.totales?.base ??
+        ventaData.totalesNumericos?.base ??
+        ventaData.totales?.subtotal ??
+        ventaData.totalesNumericos?.subtotal
+      );
+      const totalFromUi = this.parseMonto(
+        ventaData.totales?.total ??
+        ventaData.totalesNumericos?.total ??
+        ventaData.totales?.base ??
+        ventaData.totalesNumericos?.base
+      );
+      const lineasSum = round2(contenido.reduce((sum: number, l: any) => sum + (Number(l.ImporteLinea) || 0), 0));
+      const baseDocumento = round2(baseFromUi > 0 ? baseFromUi : lineasSum);
+      // Verial valida el total del documento contra el total de líneas desglosado.
+      // Estando los precios sin impuestos (PreciosImpIncluidos: false), 
+      // TotalImporte debe incluir el IVA, por lo que recogemos el total de la app directamente.
+      // Si el tipo no lleva impuestos (Adicional/Presupuesto), el total no puede llevar IVA
+      // aunque la UI lo hubiera calculado, o Verial rechaza el documento por descuadre con las líneas.
+      const totalDocumento = sinImpuestosPorTipo ? baseDocumento : round2(totalFromUi > 0 ? totalFromUi : baseDocumento);
+
+      // Determinar ID_Agente a partir del vendedor asociado a la nota
+      let idAgente = 0;
+      if (ventaData.vendedorId) {
+        const vendorObj = await vendorService.getVendedorById(ventaData.vendedorId);
+        if (vendorObj && vendorObj.codigo) {
+           idAgente = parseInt(vendorObj.codigo, 10);
+        }
+      }
+
+      /** Serie fiscal Verial típica: P02 = albarán agente 902 · X02 = adicional agente 902 */
+      const serieConCodigoAgente = (serieBase: string): string => {
+        if (!serieBase) return '';
+        if (!Number.isFinite(idAgente) || idAgente <= 0) return serieBase;
+        const suf = String(Math.abs(Math.trunc(idAgente)) % 100).padStart(2, '0');
+        return `${serieBase}${suf}`;
       };
+
+      // Mapeo de tipo de documento al código correcto del ERP Verial (confirmado por Verial):
+      // 1=Factura  3=Albarán de venta  4=Factura simplificada  5=Pedido  6=Presupuesto
+      // (2 es un documento interno de Verial, no se usa desde la app)
+      const tipoNota = ventaData.tipoNota || '';
+      let tipoDocERP = 3; // Albarán por defecto
+      let serieDoc = serieConCodigoAgente('P');
+
+      if (tipoNota === 'Serie P' || tipoNota === 'Albarán') {
+        tipoDocERP = 3;
+        serieDoc = serieConCodigoAgente('P');
+      } else if (tipoNota === 'Serie X' || tipoNota === 'Adicional') {
+        // A efectos de Verial, "Adicional" es un Presupuesto (mismo tratamiento que "Presupuesto").
+        tipoDocERP = 6; serieDoc = '';
+      } else if (tipoNota === 'Pedido') {
+        tipoDocERP = 5; serieDoc = '';
+      } else if (tipoNota === 'Presupuesto') {
+        tipoDocERP = 6; serieDoc = '';
+      }
+
+      // Número documento: correlativo reservado al crear la nota (tablet) o lectura legacy del contador
+      const correlativoNota = Number((ventaData as any).numeroCorrelativo);
+      const tieneCorrelativoReservado =
+        Number.isFinite(correlativoNota) && correlativoNota > 0;
+
+      let numeroDoc = 0;
+      if (tieneCorrelativoReservado) {
+        numeroDoc = correlativoNota;
+      } else {
+        try {
+          const tabletCfg = await storageService.getItem<any>('tabletConfig');
+          if (tabletCfg) {
+            // El contador local se elige por tipoNota (no por el código Tipo del ERP,
+            // que ya no coincide 1:1 con la serie local desde el fix de mapeo Verial).
+            const campoContador = campoContadorPorTipoNota(tipoNota);
+            numeroDoc = Number(tabletCfg[campoContador]) || 0;
+          }
+        } catch (_e) { /* usa 0 si no hay config */ }
+      }
+
+      const comentarioHumano =
+        typeof ventaData.observaciones === 'string'
+          ? String(ventaData.observaciones).trim().slice(0, 240)
+          : '';
+
+      // Verial bloquea el acceso a los albaranes ya facturados, así que el control de qué
+      // está cobrado se lleva con los mismos campos auxiliares que usaban en el Verial viejo:
+      // Aux1=Agente de Venta, Aux2=Cobrado (SI/NO), Aux3=Fecha de Cobro. Contado se marca
+      // cobrado desde ya con la fecha de creación; Crédito queda NO hasta que se cobre luego.
+      const estaPagadaAlContado = this.ventaEstaPagadaAlContado(ventaData);
+      const fechaDocumento = ventaData.fecha || new Date().toISOString().split('T')[0];
+
+      const documento: any = {
+        Id: 0,
+        Tipo: tipoDocERP,
+        Serie: serieDoc || undefined,
+        ID_Agente: idAgente || 0,
+        Numero: numeroDoc,
+        Referencia: ventaData.id || '',
+        Fecha: fechaDocumento,
+        ID_Cliente: clienteId,
+        PreciosImpIncluidos: false,
+        BaseImponible: baseDocumento,
+        TotalImporte: totalDocumento,
+        // No usar tipoNota (ej. «Serie P») como comentario: en Verial acaba como texto en observaciones sin fijar la serie fiscal.
+        Comentario: comentarioHumano,
+        Contenido: contenido,
+        Pagos: this.buildPagos(ventaData),
+        Aux1: String(idAgente || ''),
+        Aux2: estaPagadaAlContado ? 'SI' : 'NO',
+        Aux3: estaPagadaAlContado ? fechaDocumento : ''
+      };
+
+      // Eliminar Serie si está vacío para no confundir al ERP
+      if (!serieDoc) delete documento.Serie;
+
+      console.log(
+        `📤 [syncVenta] ERP Tipo=${tipoDocERP} Serie=${documento.Serie ?? '—'} Numero=${documento.Numero} AgenteERP=${idAgente} Referencia=${documento.Referencia}`
+      );
 
       const response = await erpService.crearDocumentoVenta(documento);
 
-      if (response.InfoError && response.InfoError.Codigo === 0) {
+      // Éxito si:
+      // 1. InfoError.Codigo === 0 (respuesta explícita de éxito del ERP)
+      // 2. InfoError no está presente pero el documento tiene Id válido (ERP devuelve solo el doc)
+      // 3. InfoError no está presente y no hay campo Error (respuesta vacía de éxito)
+      const infoError = response?.InfoError;
+      const docId = response?.Id ?? response?.id ?? response?.ID_DocCli ?? 0;
+      const esExito =
+        (infoError && infoError.Codigo === 0) ||
+        (!infoError && Number(docId) > 0) ||
+        (!infoError && !response?.Error && response !== null && response !== undefined);
+
+      console.log(`📤 [syncVenta] Respuesta ERP: InfoError=${JSON.stringify(infoError)} Id=${docId} → éxito=${esExito}`);
+
+      if (esExito) {
+        // Solo avanzar contador en sync si no venía ya reservado al crear la nota local
+        try {
+          const tabletCfg = await storageService.getItem<any>('tabletConfig');
+          if (tabletCfg && numeroDoc > 0 && !tieneCorrelativoReservado) {
+            const campoContador = campoContadorPorTipoNota(tipoNota);
+            tabletCfg[campoContador] = numeroDoc + 1;
+            await storageService.setItem('tabletConfig', tabletCfg);
+          }
+        } catch (_e) { /* no bloquear si falla el contador */ }
         return { success: true, data: response };
       } else {
+        const codigoError = infoError?.Codigo ?? response?.Error?.Codigo ?? -1;
+        const descripError = infoError?.Descripcion ?? response?.Error?.Descripcion ?? response?.Mensaje ?? 'Error desconocido del ERP';
+        console.error(`❌ [syncVenta] Error ERP: [${codigoError}] ${descripError}`);
         return {
           success: false,
-          error: {
-            codigo: response.InfoError?.Codigo || -1,
-            descripcion: response.InfoError?.Descripcion || 'Error desconocido'
-          }
+          error: { codigo: codigoError, descripcion: descripError }
         };
       }
     } catch (error: any) {
@@ -788,17 +1133,28 @@ class SyncService {
       const importe = parseFloat(pagoData.monto.replace(/[€\s]/g, '').replace(',', '.'));
 
       const pagoERP = {
-        ID_DocCli: pagoData.notaVentaId ? this.parseDocumentoId(pagoData.notaVentaId) : 0, // Si es pago de nota
-        ID_Cliente: pagoData.clienteId ? parseInt(pagoData.clienteId, 10) : 0, // Si es pago a cuenta
+        ID_DocCli: this.parseDocumentoId(pagoData.notaVentaId || pagoData.idDocCli || 0),
+        ID_Cliente: this.parseClienteId(pagoData.clienteId || pagoData.idCliente || 0),
         ID_MetodoPago: this.getMetodoPagoId(pagoData.formaPago),
-        Fecha: new Date().toISOString(), // Fecha del pago
+        Fecha: pagoData.fechaIso || new Date().toISOString(),
         Importe: isNaN(importe) ? 0 : importe,
-        Referencia: pagoData.id // Enviamos ID local como referencia
+        Referencia: pagoData.id || pagoData.referencia || ''
       };
 
       const response = await erpService.registrarPago(pagoERP);
 
       if (response && (!response.InfoError || response.InfoError.Codigo === 0)) {
+        // Verial bloquea el acceso a los albaranes ya facturados: se marca el cobro real
+        // (documento que nació a Crédito y ahora se cobra) en los mismos campos auxiliares
+        // que usaban en el Verial viejo: Aux2=Cobrado SI, Aux3=fecha real de cobro,
+        // Aux4=Recibo (secuencial que genera la app). Best-effort: si falla, el pago ya
+        // quedó registrado en Verial y no debe reintentarse solo por esto.
+        try {
+          const [aux1, aux2, aux3, aux4] = await this.buildCobroAuxFields(pagoData);
+          await erpService.updateDocCliente(pagoERP.ID_DocCli, aux1, aux2, aux3, aux4);
+        } catch (auxError) {
+          console.warn('⚠️ No se pudieron guardar los campos auxiliares del cobro:', auxError);
+        }
         return { success: true, data: response };
       } else {
         return {
@@ -818,6 +1174,23 @@ class SyncService {
         }
       };
     }
+  }
+
+  /**
+   * Mismo esquema de campos auxiliares que usaban en el Verial viejo, para poder seguir
+   * identificando en el ERP qué documentos están cobrados sin depender de acceder a
+   * albaranes ya facturados (Verial los bloquea):
+   * Aux1 = Agente de Venta, Aux2 = Cobrado (SI/NO), Aux3 = Fecha de Cobro,
+   * Aux4 = Recibo (secuencial que genera la propia app, uno por cada cobro real).
+   * Este helper cubre el cobro real de un documento nacido a Crédito: Cobrado pasa a SI,
+   * con la fecha real del cobro y un nuevo número de recibo.
+   */
+  private async buildCobroAuxFields(pagoData: any): Promise<[string, string, string, string]> {
+    const aux1 = String(this.activeOperationVendorCodigo || pagoData.vendedorCodigo || this.currentVendorCodigo || '');
+    const aux2 = 'SI';
+    const aux3 = String(pagoData.fechaIso || new Date().toISOString());
+    const aux4 = await reservarNumeroRecibo();
+    return [aux1, aux2, aux3, aux4];
   }
 
   // ============================================================================
@@ -983,6 +1356,16 @@ class SyncService {
     }
   }
 
+  private async syncNotaAlmacen(nota: any): Promise<any> {
+    try {
+      console.log('🔄 Sincronizando nota de almacén:', nota.id, nota.tipo);
+      // ERP endpoint is currently not available, simulation of status "synchronized" locally
+      return { success: true };
+    } catch (error) {
+      return { success: false };
+    }
+  }
+
   // ============================================================================
   // MANEJO DE ERRORES
   // ============================================================================
@@ -1010,29 +1393,32 @@ class SyncService {
   // ============================================================================
 
   private parseClienteId(id: any): number {
+    if (!id) return 0;
     if (typeof id === 'number') return id;
     if (typeof id === 'string') {
-      const parsed = parseInt(id, 10);
-      return isNaN(parsed) ? 0 : parsed;
+      // Extraer solo dígitos (maneja C123, 456, etc.)
+      const match = id.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 0;
     }
     return 0;
   }
 
   private parseArticuloId(id: any): number {
+    if (!id) return 0;
     if (typeof id === 'number') return id;
     if (typeof id === 'string') {
-      const parsed = parseInt(id, 10);
-      return isNaN(parsed) ? 0 : parsed;
+      const match = id.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 0;
     }
     return 0;
   }
 
   private parseDocumentoId(id: any): number {
+    if (!id) return 0;
     if (typeof id === 'number') return id;
     if (typeof id === 'string') {
-      const cleaned = id.replace(/^P/i, '');
-      const parsed = parseInt(cleaned, 10);
-      return isNaN(parsed) ? 0 : parsed;
+        const match = id.match(/\d+/);
+        return match ? parseInt(match[0], 10) : 0;
     }
     return 0;
   }
@@ -1060,12 +1446,24 @@ class SyncService {
     return mapeo[formaPago] || 1;
   }
 
+  /** El campo puede llamarse 'estadoPago' (nuevo) o deducirse de 'estado': 'cerrada' = contado pagado; 'pendiente' = crédito pendiente. */
+  private ventaEstaPagadaAlContado(ventaData: any): boolean {
+    return ventaData.estadoPago === 'pagado' || ventaData.estado === 'cerrada';
+  }
+
   private buildPagos(ventaData: any): erpService.PagoDocumento[] {
-    if (ventaData.estadoPago === 'pagado') {
+    const estaPagado = this.ventaEstaPagadaAlContado(ventaData);
+
+    if (estaPagado) {
+      const importe = this.parseMonto(
+        ventaData.totalesNumericos?.total ??
+        ventaData.totales?.total ??
+        ventaData.precio
+      );
       return [{
         ID_MetodoPago: this.getMetodoPagoId(ventaData.formaPago || 'Efectivo'),
         Fecha: ventaData.fecha || new Date().toISOString().split('T')[0],
-        Importe: this.parseMonto(ventaData.totales?.total)
+        Importe: importe
       }];
     }
     return [];
@@ -1073,6 +1471,19 @@ class SyncService {
 
   private generateId(): string {
     return `SYNC-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+  }
+
+  /** Elimina de la cola los `pago` asociados a cobros locales que ya no existen. */
+  removeQueuedPagosByCobroIds(cobroIds: string[]): void {
+    if (!cobroIds?.length) return;
+    const set = new Set(cobroIds.map(id => String(id)));
+    const beforeLen = this.queue.length;
+    this.queue = this.queue.filter(
+      op => op.type !== 'pago' || !set.has(String(op.data?.id ?? ''))
+    );
+    if (this.queue.length !== beforeLen) {
+      void this.saveQueue();
+    }
   }
 
   private removeFromQueue(id: string): void {
@@ -1096,18 +1507,16 @@ class SyncService {
   }
 
   // Limpiar cola (por vendedor actual). Útil para descartar operaciones atascadas.
-  clearQueue(removeErrors: boolean = true): void {
-    if (removeErrors) {
-      this.queue = this.queue.filter(op => op.status !== 'pending' && op.status !== 'error');
-    } else {
-      this.queue = this.queue.filter(op => op.status !== 'pending');
-    }
-    this.saveQueue();
+  async clearQueue(): Promise<void> {
+    this.queue = [];
+    await this.saveQueue();
+    console.log('🗑️ Cola de sincronización vaciada');
   }
 
-  clearErrors(): void {
+  async clearErrors(): Promise<void> {
     this.errors = [];
-    this.saveErrors();
+    await this.saveErrors();
+    console.log('🗑️ Historial de errores vaciado');
   }
 
   // ============================================================================

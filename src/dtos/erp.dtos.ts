@@ -35,6 +35,7 @@ export interface GastoERP {
     Tipo: string;
     Importe: number;
     Fecha: string;
+    MetodoPago?: string;
     Imagen?: string;
 }
 

@@ -29,8 +29,16 @@ import {
   NotaImpresion, 
   ComprobanteCobro 
 } from '../../services/printer.matricial.service';
+import {
+  entidadCuentaEnLiquidacionSesion,
+  getLiquidacionSesionCheckpointMs,
+  setLiquidacionSesionCheckpointNow,
+} from '../../services/liquidacion-sesion.service';
 
 const imgRectangle26 = require('../../../assets/blue-image-panel.png');
+
+/** Alineado con NuevaVenta: mismo método en nota y cobro “espejo” antiguo = duplica liquidación */
+const METODOS_FISCALES_CONTADO = new Set(['Efectivo', 'Talón', 'TPV – Tarjeta bancaria']);
 
 // --- HELPERS ---
 
@@ -94,7 +102,7 @@ const isDateInPeriod = (itemDateString: string, period: string, start: Date, end
     return true;
 };
 
-const LiquidacionCard = ({ label, value, color, icon, signOverride = false }: any) => {
+const LiquidacionCard = ({ label, value, color, icon, signOverride = false, hint }: any) => {
     const numericValue = parseFloat(value.replace(/[^\d,.-]/g, '').replace(',', '.'));
     const displayValue = signOverride ? `-${Math.abs(numericValue).toFixed(2).replace('.', ',')}` : numericValue.toFixed(2).replace('.', ',');
     const sign = numericValue > 0 && !signOverride ? '+' : '';
@@ -104,6 +112,7 @@ const LiquidacionCard = ({ label, value, color, icon, signOverride = false }: an
             <Text style={styles.liquidacionIcon}>{icon}</Text>
             <View style={{flex: 1}}>
                 <Text style={styles.liquidacionLabel}>{label}</Text>
+                {hint ? <Text style={styles.liquidacionHint}>{hint}</Text> : null}
                 <Text style={[styles.liquidacionValue, {color}]}>{sign}{displayValue} €</Text>
             </View>
         </View>
@@ -164,9 +173,19 @@ function ContentPanel({ title, children, onAdd }: any) {
 function NotaVentaItem({ nota, onPrint }: { nota: NotaVenta, onPrint: (n: NotaVenta) => void }) {
   return (
     <View style={styles.notaItem}>
-      <View style={{flex:1}}>
-        <Text style={styles.notaId}>{nota.id}</Text>
-        <Text style={styles.notaCliente} numberOfLines={1}>{nota.cliente}</Text>
+      <View style={{flex:1, gap: 4}}>
+        <View style={{flexDirection: 'row', alignItems: 'center', gap: 8}}>
+            <Text style={styles.notaId}>{nota.id}</Text>
+            <View style={{backgroundColor: '#e2e8f0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4}}>
+                <Text style={{fontSize: 12, fontWeight: '700', color: '#475569'}}>{nota.tipoNota || 'S/N'}</Text>
+            </View>
+            <View style={{backgroundColor: '#e0e7ff', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4}}>
+                <Text style={{fontSize: 12, fontWeight: '600', color: '#0C2ABF'}}>{nota.formaPago || 'Efectivo'}</Text>
+            </View>
+        </View>
+        <Text style={styles.notaCliente} numberOfLines={1}>
+           {nota.clienteId ? `[${nota.clienteId}] ` : ''}{nota.cliente}
+        </Text>
       </View>
       <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
         <Text style={styles.notaPrecio}>{nota.precio}</Text>
@@ -245,12 +264,24 @@ export default function ResumenDiaScreen() {
   const [startDate, setStartDate] = useState(new Date());
   const [endDate, setEndDate] = useState(new Date());
   const [vendedorActualId, setVendedorActualId] = useState<string | null>(null);
+  const [liquidacionCheckpointMs, setLiquidacionCheckpointMs] = useState<number | undefined>();
+  /** Solo afecta a la pestaña Efectivo — recorta movimientos anteriores al último «cierre» */
+  // Default a "sólo desde el último cierre": la liquidación se ata a la última sincronización
+  // real con el ERP en vez de sumar todo el histórico del período por defecto.
+  const [soloLiquidacionSesionActual, setSoloLiquidacionSesionActual] = useState(true);
 
   const layout = useResponsiveLayout();
 
-  // Mantener el vendedor actual sincronizado con el contexto (cambia al cambiar de cuenta)
   useEffect(() => {
     setVendedorActualId(currentVendor?.id || null);
+    let ok = true;
+    (async () => {
+      const ck = await getLiquidacionSesionCheckpointMs(currentVendor?.id ?? null);
+      if (!ok) return;
+      setLiquidacionCheckpointMs(ck);
+      setSoloLiquidacionSesionActual(!!(ck !== undefined && ck > 0));
+    })();
+    return () => { ok = false; };
   }, [currentVendor?.id]);
 
   // --- HANDLERS ---
@@ -345,7 +376,39 @@ export default function ResumenDiaScreen() {
     navigation.navigate('NuevaVenta', { ventaData: nota });
   };
 
+  const aplicarRegistrarCierreLiquidacion = async () => {
+    if (!currentVendor?.id) {
+      Alert.alert('Vendedor', 'Inicia sesión con el vendedor para guardar el cierre.');
+      return;
+    }
+    const ts = await setLiquidacionSesionCheckpointNow(currentVendor.id);
+    if (typeof ts === 'number' && ts > 0) {
+      setLiquidacionCheckpointMs(ts);
+      setSoloLiquidacionSesionActual(true);
+      Alert.alert(
+        'Cierre registrado',
+        'La liquidación en efectivo de esta cuenta empezará a contar sólo desde los movimientos guardados después de esta hora. Puedes ver el día completo desactivando «Sólo sesión actual».'
+      );
+    }
+  };
+
+  const onRegistrarCierreLiquidacionTap = () => {
+    Alert.alert(
+      '¿Efectivo ya entregado en empresa?',
+      'Marca este punto cuando hayas cerrado tu ruta entregando el efectivo. No borra datos ni la cola: solo reorganiza los totales de la pestaña Efectivo (sesión nueva). Las notas siguen apareciendo en el resto del resumen.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Registrar cierre', style: 'default', onPress: () => aplicarRegistrarCierreLiquidacion() },
+      ]
+    );
+  };
+
   // --- DATOS ---
+
+  const aplicarFiltroSesionLiq =
+    soloLiquidacionSesionActual &&
+    liquidacionCheckpointMs !== undefined &&
+    liquidacionCheckpointMs > 0;
 
   const { 
     totalVentas, totalGastos, numeroVentas, ventasPendientes, clientesVisitadosHoy,
@@ -397,10 +460,30 @@ export default function ResumenDiaScreen() {
         return matchesSearch && matchesPeriod;
     });
     
+    // Cobros pagados del período. Se excluye el “cobro espejo” que antes se creaba
+    // al finalizar ventas al contado (duplicaba efectivo con la propia venta).
     const filteredCobros = cobros.filter(c => {
         const matchesPeriod = isDateInPeriod(c.fecha || '', periodToFilter, startDate, endDate);
         return c.estado === 'pagado' && matchesPeriod;
     });
+
+    const notasPorIdLiquidacion = new Map(notasVenta.map(n => [String(n.id), n]));
+    /** No quitar cobros de notas a crédito (estadoPago pendiente aunque luego estado=cerrada). */
+    const esCobroDuplicadoVentaAlContado = (c: Cobro) => {
+      if (!c.notaVentaId) return false;
+      const nota = notasPorIdLiquidacion.get(String(c.notaVentaId));
+      if (!nota) return false;
+      if (nota.estadoPago === 'pagado') return true;
+      if (nota.estadoPago === 'pendiente') return false;
+      // Notas antiguas sin estadoPago: el bug copiaba la forma de pago del contado en el cobro pagado junto al cierre de la venta.
+      return (
+        nota.estado === 'cerrada' &&
+        !!nota.formaPago &&
+        nota.formaPago === c.formaPago &&
+        METODOS_FISCALES_CONTADO.has(nota.formaPago)
+      );
+    };
+    const cobrosLiquidaYLista = filteredCobros.filter(c => !esCobroDuplicadoVentaAlContado(c));
 
     const parsePrecio = (valor: string): number => {
         if (!valor) return 0;
@@ -416,41 +499,60 @@ export default function ResumenDiaScreen() {
 
     let ventasEfectivo = 0;
     let cobrosEfectivo = 0;
-    
+
     filteredVentas.forEach(n => {
+        if (!entidadCuentaEnLiquidacionSesion((n as any).liquidacionSesionTs, liquidacionCheckpointMs, aplicarFiltroSesionLiq)) return;
         const monto = parsePrecio(n.precio || '0');
         if (n.formaPago === 'Efectivo') ventasEfectivo += monto;
     });
 
-    filteredCobros.forEach(c => {
+    cobrosLiquidaYLista.forEach(c => {
+        if (!entidadCuentaEnLiquidacionSesion((c as any).liquidacionSesionTs, liquidacionCheckpointMs, aplicarFiltroSesionLiq)) return;
         const monto = parsePrecio(c.monto || '0');
-        if (c.formaPago === 'Efectivo') cobrosEfectivo += monto;
+        if (c.formaPago === 'Efectivo') {
+            cobrosEfectivo += monto;
+        }
     });
 
-    const totalGastosMonto = filteredGastosCalc.reduce((sum, g) => sum + parsePrecio(g.precio || '0'), 0);
-    const liquidacionEfectivo = ventasEfectivo + cobrosEfectivo - totalGastosMonto;
+    const gastosParaLiquidacion = filteredGastosCalc.filter(g =>
+      entidadCuentaEnLiquidacionSesion((g as any).liquidacionSesionTs, liquidacionCheckpointMs, aplicarFiltroSesionLiq));
+
+    const totalGastosLiquidacionMonto = gastosParaLiquidacion.reduce((sum, g) => sum + parsePrecio(g.precio || '0'), 0);
+    const liquidacionEfectivo = ventasEfectivo + cobrosEfectivo - totalGastosLiquidacionMonto;
     const totalVentasMonto = filteredVentas.reduce((sum, n) => sum + parsePrecio(n.precio || '0'), 0);
-    
+    const totalGastosResumenMonto = filteredGastosCalc.reduce((sum, g) => sum + parsePrecio(g.precio || '0'), 0);
+
     // Calcular totales del período seleccionado (no solo hoy)
     const ventasPeriodoMonto = ventasPeriodo.reduce((sum, n) => sum + parsePrecio(n.precio || '0'), 0);
     const gastosPeriodoMonto = gastosPeriodo.reduce((sum, g) => sum + parsePrecio(g.precio || '0'), 0);
 
     return {
         totalVentas: totalVentasMonto,
-        totalGastos: totalGastosMonto,
+        totalGastos: totalGastosResumenMonto,
         numeroVentas: filteredVentas.length,
         ventasPendientes: filteredVentas.filter(n => n.estado === 'pendiente').length,
         clientesVisitadosHoy: new Set(filteredVentas.map(n => n.clienteId || n.cliente)).size,
         filteredNotasVenta: filteredVentas,
         filteredGastos: filteredGastosCalc,
-        liquidacionData: { ventasEfectivo, cobrosEfectivo, totalGastos: totalGastosMonto, liquidacionEfectivo },
-        cobrosDelDia: filteredCobros,
+        liquidacionData: { ventasEfectivo, cobrosEfectivo, totalGastos: totalGastosLiquidacionMonto, liquidacionEfectivo },
+        cobrosDelDia: cobrosLiquidaYLista,
         notasAbiertas: filteredBorradores, // Usamos la lista filtrada
         historialCambios: [],
         ventasDelPeriodo: ventasPeriodoMonto,
         gastosDelPeriodo: gastosPeriodoMonto
     };
-  }, [notasVenta, gastos, cobros, searchTerm, selectedPeriod, startDate, endDate, vendedorActualId]);
+  }, [
+    notasVenta,
+    gastos,
+    cobros,
+    searchTerm,
+    selectedPeriod,
+    startDate,
+    endDate,
+    vendedorActualId,
+    liquidacionCheckpointMs,
+    soloLiquidacionSesionActual,
+  ]);
 
   // Función para imprimir el informe diario
   const handleImprimirInforme = async () => {
@@ -485,12 +587,14 @@ export default function ResumenDiaScreen() {
           </table>
 
           <h2>Liquidación Efectivo</h2>
+          <p style="font-size:12px;color:#475569">Suma el efectivo cobrado en ventas al contado y el cobrado de ventas a crédito; resta los gastos del periodo. Talón, TPV u otros medios no entran aquí. «Vaciar cola» no reinicia estos importes.</p>
+          <p style="font-size:12px;color:#475569">${soloLiquidacionSesionActual && liquidacionCheckpointMs ? `Filtrando desde el último cierre registrado (${new Date(liquidacionCheckpointMs).toLocaleString('es-ES')}).` : `Vista agrupando todo el período (${selectedPeriod}) sin filtrar por último cierre.`}</p>
           <table>
             <tr><th>Concepto</th><th>Importe</th></tr>
-            <tr><td>Ventas (Efectivo)</td><td>${liquidacionData.ventasEfectivo.toFixed(2).replace('.', ',')} €</td></tr>
-            <tr><td>Cobros Notas (Efectivo)</td><td>${liquidacionData.cobrosEfectivo.toFixed(2).replace('.', ',')} €</td></tr>
+            <tr><td>Ventas al contado (efectivo)</td><td>${liquidacionData.ventasEfectivo.toFixed(2).replace('.', ',')} €</td></tr>
+            <tr><td>Cobros de crédito (efectivo)</td><td>${liquidacionData.cobrosEfectivo.toFixed(2).replace('.', ',')} €</td></tr>
             <tr><td>Gastos del período</td><td>-${liquidacionData.totalGastos.toFixed(2).replace('.', ',')} €</td></tr>
-            <tr><td><strong>Total a liquidar</strong></td><td><strong>${liquidacionData.liquidacionEfectivo.toFixed(2).replace('.', ',')} €</strong></td></tr>
+            <tr><td><strong>Efectivo neto a entregar (orientativo)</strong></td><td><strong>${liquidacionData.liquidacionEfectivo.toFixed(2).replace('.', ',')} €</strong></td></tr>
           </table>
         </body>
         </html>
@@ -599,12 +703,92 @@ export default function ResumenDiaScreen() {
       {activeTab === 'Efectivo (Liquidación)' && (
         <View style={styles.fullWidthPanel}>
             <ContentPanel title="Resumen de Liquidación en Efectivo">
-                <LiquidacionCard label="Ventas (Efectivo)" value={liquidacionData.ventasEfectivo.toFixed(2)} color="#0C2ABF" icon="📈" />
-                <LiquidacionCard label="Cobros Notas (Efectivo)" value={liquidacionData.cobrosEfectivo.toFixed(2)} color="#10b981" icon="💰" />
-                <LiquidacionCard label="Gastos del Período" value={liquidacionData.totalGastos.toFixed(2)} color="#dc2626" icon="📉" signOverride={true} />
+                <View style={styles.liquidacionSesionTools}>
+                  <View style={styles.sesionChipsWrap}>
+                    <TouchableOpacity
+                      style={[styles.sesionChip, soloLiquidacionSesionActual && styles.sesionChipActive]}
+                      onPress={() => setSoloLiquidacionSesionActual(true)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.sesionChipText, soloLiquidacionSesionActual && styles.sesionChipTextActive]}>
+                        Sólo después del último cierre
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.sesionChip, !soloLiquidacionSesionActual && styles.sesionChipActive]}
+                      onPress={() => setSoloLiquidacionSesionActual(false)}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={[styles.sesionChipText, !soloLiquidacionSesionActual && styles.sesionChipTextActive]}>
+                        Todo el periodo seleccionado
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={styles.checkpointHint}>
+                    {liquidacionCheckpointMs !== undefined && liquidacionCheckpointMs > 0
+                      ? `Último registro de cierre de efectivo: ${new Date(liquidacionCheckpointMs).toLocaleString('es-ES')}` +
+                          (soloLiquidacionSesionActual ? ' · contando sólo nuevos cobros/notas desde entonces.' : ' · usando todo el período igualmente.')
+                      : `Todavía no hay ningún «cierre de sesión»: activa «Sólo después del último cierre» y pulsa el botón inferior tras entregar el efectivo; los movimientos sin hora de guardado no entran en ese modo.`}
+                  </Text>
+                  <TouchableOpacity style={styles.cierreLiqBtn} onPress={onRegistrarCierreLiquidacionTap} activeOpacity={0.9}>
+                    <Text style={styles.cierreLiqBtnText}>Efectivo entregado en empresa · nueva sesión</Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={styles.liquidacionInfoBox}>
+                  <Text style={styles.liquidacionInfoTitle}>¿Qué significa este resumen?</Text>
+                  <Text style={styles.liquidacionInfoText}>
+                    Es una <Text style={styles.liquidacionInfoBold}>estimación del efectivo</Text> que tendrías en la caja al cierre del periodo elegido (Hoy, Ayer…), según lo registrado en la app.
+                  </Text>
+                  <Text style={styles.liquidacionInfoBullet}>
+                    • <Text style={styles.liquidacionInfoBold}>Ventas al contado (efectivo):</Text> notas cerradas con forma de pago «Efectivo» (el cliente pagó al momento).
+                  </Text>
+                  <Text style={styles.liquidacionInfoBullet}>
+                    • <Text style={styles.liquidacionInfoBold}>Cobros de crédito (efectivo):</Text> dinero cobrado en efectivo por facturas que se hicieron a crédito (no debe solaparse con las ventas al contado).
+                  </Text>
+                  <Text style={styles.liquidacionInfoBullet}>
+                    • <Text style={styles.liquidacionInfoBold}>Gastos:</Text> importe de gastos del mismo periodo; se restan como salida de caja (no distingue si el gasto se pagó en efectivo u otro medio).
+                  </Text>
+                  <Text style={styles.liquidacionInfoBullet}>
+                    • <Text style={styles.liquidacionInfoBold}>Talón, TPV, transferencia…</Text> no suman en estas dos primeras filas; solo cuentan si la forma de pago de la venta o del cobro es «Efectivo».
+                  </Text>
+                  <Text style={[styles.liquidacionInfoText, { marginTop: 10, color: '#92400e' }]}>
+                    <Text style={styles.liquidacionInfoBold}>Cierre por ruta:</Text> cuando vuelvas a la empresa a entregar efectivo puedes usar el botón anterior. Solo cambia cómo calculamos estos importes en esta pestaña; no borra notas ni albaranes locales.
+                  </Text>
+                  <Text style={[styles.liquidacionInfoText, { marginTop: 8, color: '#92400e' }]}>
+                    <Text style={styles.liquidacionInfoBold}>Cola de sincronización:</Text> «Limpiar cola» no sustituye a un cierre de liquidación; sigue usando el botón o el opcional tras subir al ERP.
+                  </Text>
+                </View>
+                <Text style={styles.liquidacionFormula}>
+                  Efectivo ≈ Ventas efectivo contado + Cobros crédito en efectivo − Gastos
+                </Text>
+                <LiquidacionCard
+                  label="Ventas al contado (efectivo)"
+                  hint="Total de notas cerradas pagadas en efectivo al momento"
+                  value={liquidacionData.ventasEfectivo.toFixed(2)}
+                  color="#0C2ABF"
+                  icon="📈"
+                />
+                <LiquidacionCard
+                  label="Cobros de crédito (efectivo)"
+                  hint="Cobros ya registrados en efectivo sobre ventas a crédito"
+                  value={liquidacionData.cobrosEfectivo.toFixed(2)}
+                  color="#10b981"
+                  icon="💰"
+                />
+                <LiquidacionCard
+                  label="Gastos del período"
+                  hint="Salidas registradas en el mismo periodo (se restan del total)"
+                  value={liquidacionData.totalGastos.toFixed(2)}
+                  color="#dc2626"
+                  icon="📉"
+                  signOverride={true}
+                />
                 <View style={styles.liquidacionTotalCard}>
-                    <Text style={styles.liquidacionTotalLabel}>Total a Liquidar (Neto)</Text>
+                    <Text style={styles.liquidacionTotalLabel}>Efectivo neto a entregar (orientativo)</Text>
                     <Text style={styles.liquidacionTotalValue}>{liquidacionData.liquidacionEfectivo.toFixed(2).replace('.', ',')} €</Text>
+                    <Text style={styles.liquidacionTotalFoot}>
+                      Para cuadrar con oficina, usa el mismo periodo que el arqueo y revisa Cobros/Gastos en las pestañas inferiores.
+                    </Text>
                 </View>
             </ContentPanel>
         </View>
@@ -751,13 +935,51 @@ const styles = StyleSheet.create({
   gastoCategoria: { fontSize: 16, color: '#64748b' },
   gastoPrecio: { fontSize: 19, fontWeight: '700', color: '#f59e0b' },
   emptyText: { textAlign: 'center', color: '#94a3b8', marginVertical: 20, fontStyle: 'italic', fontSize: 18 },
-  liquidacionCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8fafc', padding: 16, borderRadius: 8, marginBottom: 8 },
-  liquidacionIcon: { fontSize: 26, marginRight: 10 },
-  liquidacionLabel: { fontSize: 16, color: '#697b92' },
+  liquidacionSesionTools: { marginBottom: 14 },
+  sesionChipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 10 },
+  sesionChip: { paddingVertical: 10, paddingHorizontal: 14, borderRadius: 20, borderWidth: 1, borderColor: '#cbd5e1', backgroundColor: '#ffffff' },
+  sesionChipActive: { borderColor: '#092090', backgroundColor: '#e0e7ff' },
+  sesionChipText: { fontSize: 15, fontWeight: '600', color: '#475569' },
+  sesionChipTextActive: { color: '#092090' },
+  checkpointHint: { fontSize: 13, color: '#64748b', lineHeight: 18, marginBottom: 10 },
+  cierreLiqBtn: { backgroundColor: '#092090', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, alignItems: 'center', marginBottom: 8 },
+  cierreLiqBtnText: { fontSize: 16, fontWeight: '700', color: '#ffffff' },
+  liquidacionInfoBox: {
+    backgroundColor: '#f1f5f9',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 14,
+  },
+  liquidacionInfoTitle: { fontSize: 17, fontWeight: '700', color: '#0f172a', marginBottom: 8 },
+  liquidacionInfoText: { fontSize: 14, color: '#475569', lineHeight: 20, marginBottom: 6 },
+  liquidacionInfoBold: { fontWeight: '700', color: '#334155' },
+  liquidacionInfoBullet: { fontSize: 14, color: '#475569', lineHeight: 20, marginTop: 4, paddingLeft: 2 },
+  liquidacionFormula: {
+    fontSize: 13,
+    color: '#0C2ABF',
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 8,
+  },
+  liquidacionCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#f8fafc',
+    padding: 16,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  liquidacionIcon: { fontSize: 26, marginRight: 10, marginTop: 2 },
+  liquidacionLabel: { fontSize: 17, fontWeight: '700', color: '#475569' },
+  liquidacionHint: { fontSize: 13, color: '#94a3b8', marginTop: 4, marginBottom: 6, lineHeight: 18 },
   liquidacionValue: { fontSize: 22, fontWeight: '700' },
   liquidacionTotalCard: { backgroundColor: '#e0e7ff', padding: 20, borderRadius: 10, marginTop: 10, borderWidth: 1, borderColor: '#0C2ABF' },
   liquidacionTotalLabel: { fontSize: 20, fontWeight: '600', color: '#092090' },
   liquidacionTotalValue: { fontSize: 32, fontWeight: '800', color: '#092090', marginTop: 5 },
+  liquidacionTotalFoot: { fontSize: 13, color: '#4338ca', marginTop: 10, lineHeight: 18 },
   cobroItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', padding: 12, borderRadius: 8, marginBottom: 8 },
   cobroItemIcon: { fontSize: 22, marginRight: 10 },
   cobroItemCliente: { fontSize: 18, fontWeight: '600', color: '#1a1a1a' },

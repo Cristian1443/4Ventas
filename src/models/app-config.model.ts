@@ -1,9 +1,19 @@
+export interface DocumentoDrive {
+    id: string;
+    nombre: string;
+    url: string;
+    categoria?: string;
+}
+
 export interface AppConfig {
     erpEnabled: boolean;
     autoSyncEnabled: boolean;
     syncInterval: number;
     modoOffline: boolean;
+    /** @deprecated usar documentosDrive */
     catalogoPdfUrl?: string;
+    /** Repositorio compartido de Google Drive: lista de carpetas/archivos visibles para los vendedores. */
+    documentosDrive?: DocumentoDrive[];
 }
 
 export interface UserSession {

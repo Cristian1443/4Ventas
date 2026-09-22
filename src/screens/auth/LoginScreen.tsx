@@ -11,13 +11,16 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
-  Platform
+  Platform,
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useResponsiveLayout } from '../../constants/layout';
+import { vendorService } from '../../services/vendor.service';
 
 // Importar assets (ruta correcta desde src/screens/auth/)
 const logoImage = require('../../../assets/logo-login.png');
@@ -27,12 +30,41 @@ export default function LoginScreen() {
   const navigation = useNavigation<any>();
   const layout = useResponsiveLayout();
   const insets = useSafeAreaInsets();
-  const { currentVendor } = useApp();
+  const { currentVendor, login } = useApp();
   const [isVendorHovered, setIsVendorHovered] = useState(false);
   const [isAdminHovered, setIsAdminHovered] = useState(false);
+  const [checkingVendor, setCheckingVendor] = useState(false);
 
-  const handleVendorLogin = () => {
-    navigation.navigate('VendorSelection');
+  const handleVendorLogin = async () => {
+    if (checkingVendor) return;
+
+    // Prioridad 1: ya cargado en el contexto (initializeApp completado)
+    if (currentVendor) {
+      navigation.replace('Main');
+      return;
+    }
+
+    // Prioridad 2: initializeApp puede no haber terminado aún → leer del storage directamente
+    setCheckingVendor(true);
+    try {
+      const vendorGuardado = await vendorService.getVendedorActual();
+      if (vendorGuardado) {
+        // Iniciar sesión correctamente a través del contexto
+        const ok = await login(vendorGuardado.id);
+        if (ok) {
+          navigation.replace('Main');
+          return;
+        }
+      }
+      // Sin vendedor configurado
+      Alert.alert(
+        'Sin agente asignado',
+        'Esta tablet no tiene ningún agente configurado.\n\nContacta con el administrador para que asigne el agente correspondiente.',
+        [{ text: 'Entendido', style: 'default' }]
+      );
+    } finally {
+      setCheckingVendor(false);
+    }
   };
 
   const handleAdminLogin = () => {
@@ -68,7 +100,7 @@ export default function LoginScreen() {
               onPressOut={() => setIsVendorHovered(false)}
               onPress={handleVendorLogin}
               style={[styles.button, isVendorHovered && styles.buttonElevated]}
-              disabled={false}
+              disabled={checkingVendor}
             >
               <LinearGradient
                 colors={isVendorHovered ? ['#a0e000', '#d4ff77'] : ['#8bd600', '#c4ff57']}
@@ -76,7 +108,10 @@ export default function LoginScreen() {
                 end={{ x: 1, y: 0 }}
                 style={styles.gradient}
               >
-                <Text style={styles.buttonText}>Entrar como Vendedor</Text>
+                {checkingVendor
+                  ? <ActivityIndicator size="small" color="#1a1a1a" />
+                  : <Text style={styles.buttonText}>Entrar como Vendedor</Text>
+                }
               </LinearGradient>
             </TouchableOpacity>
 
@@ -144,7 +179,10 @@ export default function LoginScreen() {
             end={{ x: 1, y: 0 }}
             style={styles.gradient}
           >
-            <Text style={styles.buttonText}>Entrar como Vendedor</Text>
+            {checkingVendor
+              ? <ActivityIndicator size="small" color="#1a1a1a" />
+              : <Text style={styles.buttonText}>Entrar como Vendedor</Text>
+            }
           </LinearGradient>
         </TouchableOpacity>
 

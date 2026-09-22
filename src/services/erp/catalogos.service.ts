@@ -37,6 +37,10 @@ export const catalogosService = {
     async getCategoriasWeb(): Promise<any[]> {
         try { const r = await erpClient.get(`/GetCategoriasWebWS?${getCommonParams()}`); return Array.isArray(r.data) ? r.data : (r.data?.CategoriasWeb || []); } catch { return []; }
     },
+    /** Almacenes reales de Verial (ej. furgón de cada agente) para asignar el almacenId correcto por vendedor. */
+    async getAlmacenes(): Promise<any[]> {
+        try { const r = await erpClient.get(`/GetAlmacenesWS?${getCommonParams()}`); return Array.isArray(r.data) ? r.data : (r.data?.Almacenes || []); } catch { return []; }
+    },
     async getCondicionesTarifa(id_articulo = 0, id_cliente = 0, fecha?: string): Promise<any[]> {
         try {
             let url = `/GetCondicionesTarifaWS?${getCommonParams()}&id_articulo=${id_articulo}&id_cliente=${id_cliente}`;

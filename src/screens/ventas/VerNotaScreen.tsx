@@ -93,6 +93,10 @@ export default function VerNotaScreen() {
     base: totalesNum ? `${totalesNum.base.toFixed(2)}` : (ventaData.totales?.base || '0,00'),
     porcentajeDescuento: ventaData.totales?.porcentajeDescuento || (ventaData.aplicarDescGlobal && ventaData.descGlobal ? ventaData.descGlobal : '0'),
     iva: totalesNum ? `${totalesNum.iva.toFixed(2)}` : (ventaData.totales?.iva || '0,00'),
+    re: totalesNum ? `${(totalesNum.re ?? 0).toFixed(2)}` : (ventaData.totales?.re || '0.00'),
+    reAplica: totalesNum
+      ? ((totalesNum.re ?? 0) > 0 || !!(totalesNum as any).reAplica)
+      : !!(ventaData.totalesNumericos as any)?.reAplica,
     total: totalesNum ? `${totalesNum.total.toFixed(2)}` : (ventaData.precio?.replace('€', '').trim() || '0,00')
   };
 
@@ -198,7 +202,11 @@ export default function VerNotaScreen() {
           onPress: async () => {
             await updateNotaVenta(ventaData.id, 'anulada');
             Alert.alert('Éxito', 'Venta anulada correctamente');
-            navigation.goBack();
+            navigation.navigate({
+              name: 'NuevaVenta',
+              params: { resetFlag: Date.now() },
+              merge: true
+            });
           }
         }
       ]
@@ -216,7 +224,11 @@ export default function VerNotaScreen() {
           onPress: async () => {
             await updateNotaVenta(ventaData.id, 'cerrada');
             Alert.alert('Éxito', 'Venta cerrada correctamente');
-            navigation.goBack();
+            navigation.navigate({
+              name: 'NuevaVenta',
+              params: { resetFlag: Date.now() },
+              merge: true
+            });
           }
         }
       ]
@@ -328,11 +340,20 @@ export default function VerNotaScreen() {
                     <View style={[styles.badgeAzul, ventaData.estado === 'pendiente' ? {backgroundColor: '#f59e0b'} : {}]}>
                       <Text style={styles.badgeText}>{estadoPagoLabel}</Text>
                     </View>
+                    {totales.reAplica && (
+                      <View style={[styles.badgeAzul, { backgroundColor: '#92400e' }]}>
+                        <Text style={styles.badgeText}>IVA + R.E.</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
 
                 {/* Lista de artículos */}
-                <ScrollView style={styles.articulosContainer} nestedScrollEnabled>
+                <ScrollView 
+                  style={styles.articulosContainer} 
+                  contentContainerStyle={{ paddingBottom: 60 }} 
+                  nestedScrollEnabled
+                >
                   {articulos.map((articulo: any, index: number) => (
                     <View key={articulo.id || index} style={styles.articuloRow}>
                       {/* Artículo */}
@@ -475,10 +496,29 @@ export default function VerNotaScreen() {
                   </View>
                 )}
 
-                {/* IVA o RE */}
-                <View style={styles.totalItem}>
-                  <Text style={styles.totalLabel}>IVA (10%):</Text>
-                  <Text style={styles.totalValue}>{totales.iva} €</Text>
+                {/* IVA — por tipo si la nota lo guardó */}
+                {totalesNum?.ivaPorTipo && totalesNum.ivaPorTipo.length > 0 ? (
+                  totalesNum.ivaPorTipo.map((row: { pct: number; cuota: number }, idx: number) => (
+                    <View style={styles.totalItem} key={`iva-${idx}-${row.pct}`}>
+                      <Text style={styles.totalLabel}>IVA ({row.pct}%):</Text>
+                      <Text style={styles.totalValue}>{row.cuota.toFixed(2)} €</Text>
+                    </View>
+                  ))
+                ) : (
+                  <View style={styles.totalItem}>
+                    <Text style={styles.totalLabel}>IVA:</Text>
+                    <Text style={styles.totalValue}>{totales.iva} €</Text>
+                  </View>
+                )}
+
+                {/* R.E. — siempre visible; resaltado si aplica */}
+                <View style={[styles.totalItem, totales.reAplica && { backgroundColor: '#fffbeb', borderRadius: 6, paddingHorizontal: 4 }]}>
+                  <Text style={[styles.totalLabel, totales.reAplica && { color: '#92400e', fontWeight: '700' }]}>
+                    R.E.:
+                  </Text>
+                  <Text style={[styles.totalValue, totales.reAplica && { color: '#92400e', fontWeight: '700' }]}>
+                    {totales.re} €
+                  </Text>
                 </View>
 
                 {/* Total */}

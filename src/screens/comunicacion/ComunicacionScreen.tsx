@@ -18,6 +18,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { syncService } from '../../services/sync.service';
+import { setLiquidacionSesionCheckpointNow } from '../../services/liquidacion-sesion.service';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 
 export default function ComunicacionScreen() {
@@ -38,10 +39,7 @@ export default function ComunicacionScreen() {
     currentVendor
   } = useApp();
 
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [showImportModal, setShowImportModal] = useState(false);
   const [showSyncModal, setShowSyncModal] = useState(false);
-  const [exportType, setExportType] = useState<'ventas' | 'gastos' | 'todo'>('ventas');
   const [internalSyncState, setInternalSyncState] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [queueCounts, setQueueCounts] = useState<Record<string, number>>({});
   const [lastSyncVendor, setLastSyncVendor] = useState<string>('Nunca');
@@ -81,15 +79,10 @@ export default function ComunicacionScreen() {
     }
 
     try {
-      await syncService.setVendor(currentVendor.id);
-
-      if (exportType === 'ventas') {
-        await syncService.processQueueByTypes(['venta']);
-      } else if (exportType === 'gastos') {
-        await syncService.processQueueByTypes(['gasto', 'gasto_delete']);
-      } else {
-        await syncService.processQueue();
-      }
+      if (currentVendor?.id) await syncService.setVendor(currentVendor.id, currentVendor.almacenId, currentVendor.codigo);
+      
+      // Enviamos siempre TODOS los datos generados al ERP
+      await syncService.processQueue();
 
       const pendientes = syncService.getPendingCount();
       updateSyncStatus({ ...syncStatus, operacionesPendientes: pendientes });
@@ -103,16 +96,58 @@ export default function ComunicacionScreen() {
       const ls = await syncService.getLastSync();
       setLastSyncVendor(ls ? new Date(ls).toLocaleString('es-ES') : 'Nunca');
 
-      Alert.alert('Listo', 'Los datos seleccionados se enviaron al ERP y se limpiaron de la cola.');
-      setShowExportModal(false);
+      Alert.alert(
+        'Listo',
+        'Los envíos pendientes se procesaron y la cola local se actualizó. Esto no borra notas ni cobros guardados en la tablet.',
+        [
+          {
+            text: 'Registrar cierre liquidación efectivo',
+            onPress: async () => {
+              if (currentVendor?.id) {
+                await setLiquidacionSesionCheckpointNow(currentVendor.id);
+                Alert.alert(
+                  'Liquidación por sesiones',
+                  'En Ventas · Resumen del día · pestaña Efectivo, activa «Sólo después del último cierre» para sumar sólo lo nuevo tras entregar efectivo.'
+                );
+              }
+            },
+          },
+          { text: 'Cerrar', style: 'cancel' },
+        ]
+      );
     } catch (error) {
       Alert.alert('Error', 'No se pudo subir al ERP. Revisa la conexión o credenciales.');
     }
   };
 
-  const handleImport = () => {
-    Alert.alert('Importar Datos', 'Importar backups no está habilitado en esta versión.');
-    setShowImportModal(false);
+  const handleImportCobros = () => {
+    Alert.alert(
+      'Importar Cobros Pendientes',
+      'Esto descargará manualmente del ERP los cobros pendientes actualizados. ¿Deseas continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Importar',
+          onPress: async () => {
+            setInternalSyncState('syncing');
+            setShowSyncModal(true);
+            try {
+              // 1. Descargar solo cobros (lanza error si el servidor no responde)
+              await syncService.syncCobros();
+              // 2. Refrescar estado en AppContext invocando el actualizador completo
+              await forzarSincronizacion();
+              setInternalSyncState('success');
+              setTimeout(() => { setShowSyncModal(false); setInternalSyncState('idle'); }, 2000);
+            } catch (error: any) {
+              setInternalSyncState('error');
+              setTimeout(() => { setShowSyncModal(false); setInternalSyncState('idle'); }, 2500);
+              const msg = error?.message || 'No se pudo conectar con el servidor ERP.';
+              setTimeout(() => Alert.alert('Sin conexión ERP', msg), 300);
+            }
+          }
+        }
+      ]
+    );
   };
 
   const handleSync = async () => {
@@ -154,7 +189,7 @@ export default function ComunicacionScreen() {
   useEffect(() => {
     const loadCounts = async () => {
       if (currentVendor?.id) {
-        await syncService.setVendor(currentVendor.id);
+        await syncService.setVendor(currentVendor.id, currentVendor.almacenId, currentVendor.codigo);
       }
       setQueueCounts(syncService.getPendingCountsByType());
       const ls = await syncService.getLastSync();
@@ -207,7 +242,16 @@ export default function ComunicacionScreen() {
           <View style={styles.actionsContainer}>
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => setShowExportModal(true)}
+              onPress={() => {
+                Alert.alert(
+                  'Exportar Todos los Datos',
+                  'Se enviarán todos los datos pendientes generados (ventas, gastos, etc.) al ERP. ¿Desea continuar?',
+                  [
+                    { text: 'Cancelar', style: 'cancel' },
+                    { text: 'Exportar al ERP', onPress: handleUpload }
+                  ]
+                );
+              }}
               activeOpacity={0.8}
             >
               <LinearGradient
@@ -223,7 +267,7 @@ export default function ComunicacionScreen() {
 
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => setShowImportModal(true)}
+              onPress={handleImportCobros}
               activeOpacity={0.8}
             >
               <LinearGradient
@@ -233,7 +277,7 @@ export default function ComunicacionScreen() {
                 style={styles.actionButtonGradient}
               >
                 <Text style={styles.actionIcon}>📥</Text>
-                <Text style={styles.actionText}>Importar{'\n'}Respaldo</Text>
+                <Text style={styles.actionText}>Importar{'\n'}C. Pendtes</Text>
               </LinearGradient>
             </TouchableOpacity>
 
@@ -257,16 +301,31 @@ export default function ComunicacionScreen() {
           {/* Acción rápida: limpiar cola */}
           <TouchableOpacity
             style={[styles.actionButton, { marginTop: 12 }]}
-            onPress={async () => {
-              if (!currentVendor?.id) {
-                Alert.alert('Vendedor', 'Inicia sesión con un vendedor antes de limpiar la cola.');
-                return;
-              }
-              await syncService.setVendor(currentVendor.id);
-              syncService.clearQueue(true); // elimina pendientes y errores del vendor actual
-              const pendientes = syncService.getPendingCount();
-              updateSyncStatus({ ...syncStatus, operacionesPendientes: pendientes });
-              Alert.alert('Cola limpiada', `Operaciones pendientes ahora: ${pendientes}`);
+            onPress={() => {
+              Alert.alert(
+                'Limpiar Cola',
+                'Solo se vacían las operaciones pendientes de envío al ERP (no se llegarán a subir). Las notas, cobros y gastos guardados en la tablet siguen igual; el resumen del día y la liquidación en efectivo no se reinician.',
+                [
+                  { text: 'Cancelar', style: 'cancel' },
+                  { 
+                    text: 'Sí, borrar', 
+                    style: 'destructive',
+                    onPress: async () => {
+                      if (currentVendor?.id) {
+                        await syncService.setVendor(currentVendor.id, currentVendor.almacenId, currentVendor.codigo);
+                      }
+                      await syncService.clearQueue();
+                      await syncService.clearErrors();
+                      const pendientes = syncService.getPendingCount();
+                      updateSyncStatus({ ...syncStatus, operacionesPendientes: pendientes });
+                      Alert.alert(
+                        'Cola limpiada',
+                        `Operaciones pendientes ahora: ${pendientes}. Tus datos locales (ventas, cobros, gastos) no se han borrado.`
+                      );
+                    }
+                  }
+                ]
+              );
             }}
             activeOpacity={0.8}
           >
@@ -321,123 +380,6 @@ export default function ComunicacionScreen() {
           </View>
         </ScrollView>
       </View>
-
-      {/* Modales (Export, Import, Sync) sin cambios visuales, solo lógica conectada */}
-      {/* Modal de exportación */}
-      <Modal
-        visible={showExportModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowExportModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowExportModal(false)}
-        >
-          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>Subir datos al ERP</Text>
-            <Text style={styles.modalDescription}>
-              Envía al ERP los registros pendientes en la cola. Se eliminan de la cola al completarse.
-            </Text>
-            
-            <View style={styles.modalOptions}>
-              {[
-                { value: 'ventas', label: `Subir Ventas (cola de ventas)` },
-                { value: 'gastos', label: `Subir Gastos (cola de gastos)` },
-                { value: 'todo', label: 'Subir Todo (todas las colas)' }
-              ].map((option) => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.modalOption,
-                    exportType === option.value && styles.modalOptionActive
-                  ]}
-                  onPress={() => setExportType(option.value as any)}
-                >
-                  <View style={[
-                    styles.radioButton,
-                    exportType === option.value && styles.radioButtonActive
-                  ]}>
-                    {exportType === option.value && <View style={styles.radioButtonInner} />}
-                  </View>
-                  <Text style={[
-                    styles.modalOptionText,
-                    exportType === option.value && styles.modalOptionTextActive
-                  ]}>
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => setShowExportModal(false)}
-              >
-                <Text style={styles.modalButtonCancelText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary]}
-                  onPress={handleUpload}
-              >
-                <LinearGradient
-                  colors={['#092090', '#0C2ABF']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.modalButtonGradient}
-                >
-                  <Text style={styles.modalButtonPrimaryText}>Subir al ERP</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Modal de importación */}  
-      <Modal
-        visible={showImportModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowImportModal(false)}
-      >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowImportModal(false)}
-        >
-          <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>Restaurar Datos</Text>
-            <Text style={styles.modalDescription}>
-              Esta función permite cargar datos desde un archivo de respaldo generado previamente.
-            </Text>
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => setShowImportModal(false)}
-              >
-                <Text style={styles.modalButtonCancelText}>Cerrar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonPrimary]}
-                onPress={handleImport}
-              >
-                <LinearGradient
-                  colors={['#092090', '#0C2ABF']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.modalButtonGradient}
-                >
-                  <Text style={styles.modalButtonPrimaryText}>Seleccionar Archivo</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Modal>
 
       {/* Modal de Sincronización */}
       <Modal

@@ -19,29 +19,41 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
-import SeleccionarClienteModal from '../../components/SeleccionarClienteModal';
+
+const parseAmount = (val: string | number) => {
+    if (typeof val === 'number') return val;
+    const str = String(val).trim();
+    let clean = str.replace(/[^\d,.-]/g, '');
+    const hasComma = clean.includes(',');
+    const hasDot = clean.includes('.');
+    
+    if (hasComma && hasDot) {
+        if (clean.lastIndexOf(',') > clean.lastIndexOf('.')) {
+            clean = clean.replace(/\./g, '').replace(',', '.');
+        } else {
+            clean = clean.replace(/,/g, '');
+        }
+    } else if (hasComma) {
+        clean = clean.replace(',', '.');
+    }
+    
+    return parseFloat(clean) || 0;
+};
 
 export default function CobrosListScreen() {
   const navigation = useNavigation<any>();
-  const { cobros, clientes, currentVendor } = useApp();
+  const { cobros, clientes } = useApp();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState<'nombre' | 'monto' | 'notas'>('nombre');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
-  const [showModal, setShowModal] = useState(false);
 
   // 1. Calcular totales globales
   const cobradoTotal = cobros
     .filter(c => c.estado === 'pagado')
-    .reduce((sum, cobro) => {
-      const monto = parseFloat(cobro.monto.replace(',', '.').replace('€', '').trim() || '0');
-      return sum + monto;
-    }, 0);
+    .reduce((sum, cobro) => sum + parseAmount(cobro.monto), 0);
 
-  const totalGeneral = cobros.reduce((sum, cobro) => {
-    const monto = parseFloat(cobro.monto.replace(',', '.').replace('€', '').trim() || '0');
-    return sum + monto;
-  }, 0);
+  const totalGeneral = cobros.reduce((sum, cobro) => sum + parseAmount(cobro.monto), 0);
 
   const porcentaje = totalGeneral > 0 ? Math.round((cobradoTotal / totalGeneral) * 100) : 0;
 
@@ -79,10 +91,7 @@ export default function CobrosListScreen() {
         if (susCobros.length === 0) return null;
 
         // Calcular total de deuda del cliente
-        const deudaTotal = susCobros.reduce((sum, cobro) => {
-           const monto = parseFloat(cobro.monto.replace(',', '.').replace('€', '').trim() || '0');
-           return sum + monto;
-        }, 0);
+        const deudaTotal = susCobros.reduce((sum, cobro) => sum + parseAmount(cobro.monto), 0);
 
         return {
           ...cliente,
@@ -131,13 +140,6 @@ export default function CobrosListScreen() {
             <View style={styles.headerActions}>
                 <TouchableOpacity style={styles.printButtonHeader} onPress={handlePrintOptions}>
                   <Text style={styles.printIcon}>🖨️</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.newCobranzaButton} onPress={() => setShowModal(true)} disabled={!currentVendor?.id}>
-                  <LinearGradient colors={['#092090', '#0C2ABF']} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.newCobranzaGradient}>
-                    <Text style={styles.newCobranzaIcon}>+</Text>
-                    <Text style={styles.newCobranzaText}>Nueva Cobranza</Text>
-                  </LinearGradient>
                 </TouchableOpacity>
             </View>
         </View>
@@ -240,16 +242,6 @@ export default function CobrosListScreen() {
         </ScrollView>
       </View>
 
-      {/* Modal Manual */}
-      <SeleccionarClienteModal
-        visible={showModal}
-        onClose={() => setShowModal(false)}
-        onSelect={(cliente) => {
-          setShowModal(false);
-          navigation.navigate('Cobros', { clienteSeleccionado: cliente });
-        }}
-        clientes={clientes}
-      />
     </ScreenWithSidebar>
   );
 }
@@ -266,10 +258,6 @@ const styles = StyleSheet.create({
   
   printButtonHeader: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#f1f5f9', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#e2e8f0' },
   printIcon: { fontSize: 22 },
-  newCobranzaButton: { borderRadius: 30, overflow: 'hidden' },
-  newCobranzaGradient: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, paddingHorizontal: 20 },
-  newCobranzaIcon: { fontSize: 20, color: '#ffffff' },
-  newCobranzaText: { fontSize: 18, fontWeight: '600', color: '#ffffff' },
   
   subtitle: { fontSize: 20, color: '#697b92', marginBottom: 24 },
   totalBar: { marginBottom: 32 },

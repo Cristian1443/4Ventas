@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
+  ActivityIndicator,
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   Modal,
   FlatList,
@@ -15,14 +15,17 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
-import SeleccionarArticuloModal from '../../components/SeleccionarArticuloModal';
 import SeleccionarClienteModal from '../../components/SeleccionarClienteModal';
 import { vendorService } from '../../services/vendor.service';
+import { ventasService } from '../../services/erp/ventas.service';
 import { colors } from '../../constants/colors';
+import { equivalenciaPctFromIvaArticulo } from '../../utils/fiscal.helpers';
+import { reservarCorrelativoNotaLocal } from '../../services/documentCounter.service';
 
 // New Components
 import VentaForm from '../../components/ventas/VentaForm';
 import VentaCartSummary from '../../components/ventas/VentaCartSummary';
+import SeleccionarArticuloSidebar from '../../components/ventas/SeleccionarArticuloSidebar';
 
 interface ArticuloVenta {
   id: string;
@@ -33,7 +36,17 @@ interface ArticuloVenta {
   descuento: number;
   tipoDescuento: 'porcentaje' | 'pesos';
   nota?: string;
+  /** % IVA aplicable a esta línea (desde ERP) */
+  porcentajeIva?: number;
 }
+
+type HistorialPedidoRow = {
+  id: string;
+  referencia: string;
+  fecha: string;
+  total: string;
+  estado: string;
+};
 
 const TIPOS_NOTA = [
   { label: 'Albarán', value: 'Serie P' },
@@ -56,11 +69,41 @@ const getFechaActualFormateada = () => {
   return `${day}/${month}/${year}, ${hours}:${minutes}:${seconds}`;
 };
 
+const formatDateISO = (date: Date): string => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
+const normalizeMoney = (value: any): string => {
+  const n = typeof value === 'number'
+    ? value
+    : parseFloat(String(value || '0').replace(/[^\d,.-]/g, '').replace(',', '.'));
+  if (!Number.isFinite(n)) return '0,00 €';
+  return `${n.toFixed(2).replace('.', ',')} €`;
+};
+
+const normalizeDate = (value: any): string => {
+  const raw = String(value || '').trim();
+  if (!raw) return '-';
+  const asDate = new Date(raw);
+  if (!Number.isNaN(asDate.getTime())) return asDate.toLocaleDateString('es-ES');
+  return raw;
+};
+
+const normalizeText = (value: any): string =>
+  String(value || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+    .trim();
+
 export default function NuevaVentaScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   
-  const { addNotaVenta, addCobro, clientes, articulos, deleteNotaVenta, currentVendor } = useApp();
+  const { addNotaVenta, addCobro, purgeCobrosDeNotaVenta, clientes, articulos, deleteNotaVenta, currentVendor } = useApp();
 
   const ventaDataInicial = route.params?.ventaData;
   const clientePreset = route.params?.clienteSeleccionado;
@@ -113,8 +156,28 @@ export default function NuevaVentaScreen() {
 
   const [isSaved, setIsSaved] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [historialLoading, setHistorialLoading] = useState(false);
+  const [historialError, setHistorialError] = useState('');
+  const [historialPedidos, setHistorialPedidos] = useState<HistorialPedidoRow[]>([]);
 
   // -- EFECTOS --
+  const resetFlag = route.params?.resetFlag;
+
+  useEffect(() => {
+    if (resetFlag) {
+      setClienteSeleccionado(null);
+      setCarrito([]);
+      setFormaPago('');
+      setEstadoPago('pendiente');
+      setTipoNota(TIPOS_NOTA[0]);
+      setEnableGlobalDiscount(false);
+      setGlobalDiscountValue('');
+      resetArticuloForm();
+      setIsSaved(false);
+      navigation.setParams({ resetFlag: undefined, ventaData: undefined, clienteSeleccionado: undefined });
+    }
+  }, [resetFlag, navigation]);
+
   useEffect(() => {
     // Preselección por navegación (clienteSeleccionado) o por venta existente
     if (clientePreset) {
@@ -130,14 +193,29 @@ export default function NuevaVentaScreen() {
       };
       setClienteSeleccionado(cli);
       
-      if (ventaDataInicial.items) setCarrito(ventaDataInicial.items);
+      if (ventaDataInicial.items) {
+        const enriched = ventaDataInicial.items.map((it: ArticuloVenta) => {
+          const pct =
+            typeof it.porcentajeIva === 'number' && it.porcentajeIva > 0
+              ? it.porcentajeIva
+              : articulos.find(a => a.id === it.articuloId)?.porcentajeIva;
+          const porcentajeIva = typeof pct === 'number' && pct > 0 ? pct : 10;
+          return { ...it, porcentajeIva };
+        });
+        setCarrito(enriched);
+      }
       if (ventaDataInicial.formaPago) setFormaPago(ventaDataInicial.formaPago);
       
       const tipoFound = TIPOS_NOTA.find(t => t.value === ventaDataInicial.tipoNota);
       if (tipoFound) setTipoNota(tipoFound);
       
-      if (ventaDataInicial.estado === 'pagado' || ventaDataInicial.estado === 'pendiente') {
-        setEstadoPago(ventaDataInicial.estado);
+      const esp = ventaDataInicial.estadoPago;
+      if (esp === 'pagado' || esp === 'pendiente') {
+        setEstadoPago(esp);
+      } else if (ventaDataInicial.estado === 'cerrada') {
+        setEstadoPago('pagado');
+      } else if (ventaDataInicial.estado === 'pendiente') {
+        setEstadoPago('pendiente');
       }
 
       if (ventaDataInicial.aplicarDescGlobal) {
@@ -145,7 +223,7 @@ export default function NuevaVentaScreen() {
         setGlobalDiscountValue(ventaDataInicial.descGlobal || '');
       }
     }
-  }, [ventaDataInicial, clientePreset, clientes]);
+  }, [ventaDataInicial, clientePreset, clientes, articulos]);
 
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
@@ -230,6 +308,75 @@ export default function NuevaVentaScreen() {
   const handleSelectCliente = (cliente: any) => {
     setClienteSeleccionado(cliente);
     setModalCliente(false);
+    setHistorialPedidos([]);
+    setHistorialError('');
+  };
+
+  const handleOpenHistorial = async () => {
+    if (!clienteSeleccionado) {
+      Alert.alert('Historial', 'Selecciona primero un cliente.');
+      return;
+    }
+
+    const idRaw = String(
+      clienteSeleccionado?.id ??
+      clienteSeleccionado?.clienteId ??
+      clienteSeleccionado?.codigo ??
+      ''
+    ).trim();
+    const idDigits = (idRaw.match(/\d+/)?.[0] || '').trim();
+    const idCliente = Number(idDigits || idRaw);
+    const hasNumericId = Number.isFinite(idCliente) && idCliente > 0;
+    const clienteNombreNorm = normalizeText(clienteSeleccionado?.nombre);
+    const clienteEmpresaNorm = normalizeText(clienteSeleccionado?.empresa);
+
+    setModalHistorial(true);
+    setHistorialLoading(true);
+    setHistorialError('');
+    try {
+      const today = new Date();
+      const from = new Date(today);
+      from.setMonth(today.getMonth() - 6);
+
+      // allareasventa=false: este cliente no tiene contratadas todas las áreas de venta de
+      // Verial (ej. Mascotas) y pedirlas todas hace que el ERP rechace la consulta entera.
+      const data = await ventasService.getHistorialPedidos(
+        hasNumericId ? idCliente : 0,
+        formatDateISO(from),
+        formatDateISO(today),
+        false
+      );
+      const infoErr = ventasService.getLastHistorialInfoError?.();
+      const filtered = (data || []).filter((p: any) => {
+        if (hasNumericId) return true;
+        const pIdRaw = String(p.ID_Cliente ?? p.IdCliente ?? p.id_cliente ?? p.clienteId ?? '').trim();
+        const pIdDigits = (pIdRaw.match(/\d+/)?.[0] || '').trim();
+        const pIdNum = Number(pIdDigits || pIdRaw);
+        const byId = idDigits && (pIdRaw === idRaw || pIdDigits === idDigits || (Number.isFinite(pIdNum) && String(pIdNum) === idDigits));
+        const pNameNorm = normalizeText(p.NombreCliente ?? p.Cliente ?? p.RazonSocial ?? '');
+        const byName = !!clienteNombreNorm && pNameNorm.includes(clienteNombreNorm);
+        const byEmpresa = !!clienteEmpresaNorm && pNameNorm.includes(clienteEmpresaNorm);
+        return Boolean(byId || byName || byEmpresa);
+      });
+
+      const rows: HistorialPedidoRow[] = filtered.map((p: any, idx: number) => ({
+        id: String(p.Id ?? p.ID ?? p.id ?? `hist-${idx}`),
+        referencia: String(p.Referencia ?? p.NumDocumento ?? p.Documento ?? p.Serie ?? '-'),
+        fecha: normalizeDate(p.Fecha ?? p.FechaDocumento ?? p.FEmision ?? p.FecPedido),
+        total: normalizeMoney(p.TotalImporte ?? p.Total ?? p.ImporteTotal ?? p.BaseImponible),
+        estado: String(p.Estado ?? p.EstadoTexto ?? p.Situacion ?? 'N/D'),
+      }));
+
+      setHistorialPedidos(rows);
+      if (rows.length === 0 && infoErr?.Descripcion) {
+        setHistorialError(`ERP respondió: ${infoErr.Descripcion}`);
+      }
+    } catch (error: any) {
+      setHistorialError(error?.message || 'No se pudo consultar el historial.');
+      setHistorialPedidos([]);
+    } finally {
+      setHistorialLoading(false);
+    }
   };
 
   const handleCodigoChange = (text: string) => {
@@ -264,17 +411,31 @@ export default function NuevaVentaScreen() {
     // Bloquear venta si el stock es 0 o menor
     const stockDisponible = typeof artFinal.cantidad === 'number' ? artFinal.cantidad : 0;
     if (stockDisponible <= 0) {
-      return Alert.alert('Sin stock', 'El artículo no tiene stock disponible.');
+      console.warn('Vendiendo artículo sin stock:', artFinal.nombre);
     }
 
     const c = parseFloat(cant.replace(',', '.')) || 0;
     const p = parseFloat(precio.replace(',', '.')) || 0;
     const d = enableDiscount ? (parseFloat(desc.replace(',', '.')) || 0) : 0;
 
-    if (c <= 0) return Alert.alert('Error', 'Ingresa una cantidad válida.');
-    if (c > stockDisponible) {
-      return Alert.alert('Stock insuficiente', `Stock disponible: ${stockDisponible}. Ajusta la cantidad.`);
+    /* REQUERIDO: Permitimos añadir el artículo incluso si la cantidad es cero
+       para dar flexibilidad en correcciones o abonos que puedan ser negativos 
+       o ajustados luego. Solo omitimos si cant no se puede parsear. */
+
+    const cantidadYaEnCarrito = carrito
+      .filter(i => i.articuloId === artFinal.id)
+      .reduce((sum, i) => sum + (Number(i.cantidad) || 0), 0);
+    const disponibleParaAgregar = Math.max(0, stockDisponible - cantidadYaEnCarrito);
+
+    if (c > disponibleParaAgregar) {
+      console.warn('Vendiendo más del stock disponible');
     }
+
+    const pctIvaRaw =
+      typeof artFinal.porcentajeIva === 'number' && artFinal.porcentajeIva > 0
+        ? artFinal.porcentajeIva
+        : 10;
+    const pctIva = Math.round(pctIvaRaw * 100) / 100;
 
     setCarrito([...carrito, {
       id: Date.now().toString(),
@@ -284,10 +445,36 @@ export default function NuevaVentaScreen() {
       precioUnitario: p,
       descuento: d,
       tipoDescuento: 'porcentaje',
-      nota: notaItem
+      nota: notaItem,
+      porcentajeIva: pctIva,
     }]);
 
     resetArticuloForm();
+  };
+
+  const handleEditItem = (item: ArticuloVenta) => {
+    const match = articulos.find((a: any) => a.id === item.articuloId);
+    if (match) {
+        setArticuloSeleccionado(match);
+        setCodigoInput(match.codigoCorto || match.nombre);
+    } else {
+        setCodigoInput(item.nombre);
+    }
+    
+    setCant(item.cantidad.toString());
+    setPrecio(item.precioUnitario.toString());
+    
+    if (item.descuento > 0) {
+      setEnableDiscount(true);
+      setDesc(item.descuento.toString());
+    } else {
+      setEnableDiscount(false);
+      setDesc('');
+    }
+    
+    setNotaItem(item.nota || '');
+    
+    eliminarDelCarrito(item.id);
   };
 
   const eliminarDelCarrito = (id: string) => {
@@ -295,34 +482,70 @@ export default function NuevaVentaScreen() {
   };
 
   const calcularTotales = () => {
-    let subtotalLineas = 0;
-    let descuentoLineas = 0;
+    const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
-    carrito.forEach(item => {
+    const lineMeta = carrito.map(item => {
       const bruto = item.precioUnitario * item.cantidad;
-      subtotalLineas += bruto;
-      if (item.descuento > 0) {
-        const descMonto = (bruto * item.descuento) / 100; 
-        descuentoLineas += descMonto;
+      const dtoLinea = item.descuento > 0 ? item.descuento : 0;
+      const netConDtoLinea = bruto * (1 - dtoLinea / 100);
+      const ivaPctRaw =
+        typeof item.porcentajeIva === 'number' && item.porcentajeIva > 0 ? item.porcentajeIva : 10;
+      const ivaPct = Math.round(ivaPctRaw * 100) / 100;
+      return { bruto, netConDtoLinea, ivaPct };
+    });
+
+    const subtotalLineas = round2(lineMeta.reduce((s, l) => s + l.bruto, 0));
+    const baseIntermedia = round2(lineMeta.reduce((s, l) => s + l.netConDtoLinea, 0));
+    const descuentoLineas = round2(subtotalLineas - baseIntermedia);
+
+    let globalPct = 0;
+    if (enableGlobalDiscount && globalDiscountValue) {
+      globalPct = parseFloat(globalDiscountValue.replace(',', '.')) || 0;
+    }
+
+    let descuentoGlobalMonto = 0;
+    let factorGlobal = 1;
+    if (globalPct > 0) {
+      descuentoGlobalMonto = round2((baseIntermedia * globalPct) / 100);
+      factorGlobal = 1 - globalPct / 100;
+    }
+
+    const totalDescuentos = round2(descuentoLineas + descuentoGlobalMonto);
+    const basesPorLinea = lineMeta.map(l => round2(l.netConDtoLinea * factorGlobal));
+    const baseImponible = round2(basesPorLinea.reduce((s, b) => s + b, 0));
+
+    const tieneRE = !!(clienteSeleccionado?.recargoEquivalencia);
+    const cuotaIvaPorPct = new Map<number, number>();
+
+    let iva = 0;
+    let re = 0;
+    basesPorLinea.forEach((baseLinea, idx) => {
+      const pctIva = lineMeta[idx].ivaPct;
+      const cuotaIva = round2(baseLinea * (pctIva / 100));
+      iva = round2(iva + cuotaIva);
+      cuotaIvaPorPct.set(pctIva, round2((cuotaIvaPorPct.get(pctIva) || 0) + cuotaIva));
+      if (tieneRE) {
+        const rePct = equivalenciaPctFromIvaArticulo(pctIva);
+        re = round2(re + baseLinea * (rePct / 100));
       }
     });
 
-    let baseIntermedia = subtotalLineas - descuentoLineas;
-    let descuentoGlobalMonto = 0;
+    const ivaPorTipo = Array.from(cuotaIvaPorPct.entries())
+      .sort((a, b) => b[0] - a[0])
+      .map(([pct, cuota]) => ({ pct, cuota }));
 
-    if (enableGlobalDiscount && globalDiscountValue) {
-      const porcentaje = parseFloat(globalDiscountValue.replace(',', '.')) || 0;
-      if (porcentaje > 0) {
-        descuentoGlobalMonto = (baseIntermedia * porcentaje) / 100;
-      }
-    }
+    const total = round2(baseImponible + iva + re);
 
-    const totalDescuentos = descuentoLineas + descuentoGlobalMonto;
-    const baseImponible = subtotalLineas - totalDescuentos;
-    const iva = baseImponible * 0.10; // IVA 10% según ERP
-    const total = baseImponible + iva;
-
-    return { subtotal: subtotalLineas, descuentos: totalDescuentos, base: baseImponible, iva, total };
+    return {
+      subtotal: subtotalLineas,
+      descuentos: totalDescuentos,
+      base: baseImponible,
+      iva,
+      re,
+      reAplica: tieneRE,
+      total,
+      ivaPorTipo,
+    };
   };
   
   const totales = calcularTotales();
@@ -362,43 +585,63 @@ export default function NuevaVentaScreen() {
           const fechaActual = getFechaActualFormateada();
           
           const esBorrador = ventaDataInicial?.id?.startsWith('TEMP') || ventaDataInicial?.estado === 'abierta';
-          const notaId = (ventaDataInicial && !esBorrador) ? ventaDataInicial.id : `N${Date.now().toString().slice(-6)}`; 
+          const reutilizarIdExist = !!(ventaDataInicial && !esBorrador);
+          let notaId: string;
+          let numeroCorrelativo: number | undefined;
+          if (reutilizarIdExist) {
+            notaId = ventaDataInicial.id;
+            numeroCorrelativo = (ventaDataInicial as any).numeroCorrelativo;
+          } else {
+            const res = await reservarCorrelativoNotaLocal(tipoNota.value);
+            notaId = res.idFormateado;
+            numeroCorrelativo = res.numero;
+          }
 
           const estadoNota = estadoPago === 'pagado' ? 'cerrada' : 'pendiente';
           
-          const venta = {
+          const venta: Record<string, unknown> = {
             id: notaId,
             cliente: clienteSeleccionado.nombre,
             clienteId: clienteSeleccionado.id,
             fecha: fechaActual,
             precio: `${totales.total.toFixed(2)} €`,
             estado: estadoNota,
+            // estadoPago se usa en sync.service.buildPagos para enviar el pago al ERP
+            estadoPago: estadoPago,
             tipoNota: tipoNota.value,
             formaPago, 
             items: carrito, 
             totalesNumericos: totales,
             aplicarDescGlobal: enableGlobalDiscount,
             descGlobal: globalDiscountValue,
-            vendedorId: vendedorActualId || undefined
+            recargoEquivalencia: !!(clienteSeleccionado as any).recargoEquivalencia,
+            vendedorId: vendedorActualId || undefined,
+            ...(typeof numeroCorrelativo === 'number' && numeroCorrelativo > 0
+              ? { numeroCorrelativo }
+              : {})
           };
           
           await addNotaVenta(venta as any);
 
           if (esBorrador && ventaDataInicial?.id) await deleteNotaVenta(ventaDataInicial.id);
 
-          const nuevoCobro = {
-            id: `C${Date.now().toString().slice(-6)}`, 
-            cliente: clienteSeleccionado.nombre,
-            clienteId: clienteSeleccionado.id,
-            monto: `${totales.total.toFixed(2)} €`,
-            fecha: fechaActual,
-            estado: estadoPago, 
-            notaVentaId: notaId, 
-            formaPago: formaPago
-          };
+          // Al editar y regrabar evita cobros duplicados (ej. estadoPago mal inferido antes).
+          await purgeCobrosDeNotaVenta(notaId, estadoPago === 'pendiente' ? { soloPendientes: true } : undefined);
 
-          await addCobro(nuevoCobro as any); 
-          
+          // Solo crédito: registro de cobro pendiente. Contado ya queda como venta (y cobro ERP va en la nota).
+          if (estadoPago === 'pendiente') {
+            await addCobro({
+              id: `C${Date.now().toString().slice(-6)}`,
+              cliente: clienteSeleccionado.nombre,
+              clienteId: clienteSeleccionado.id,
+              monto: `${totales.total.toFixed(2)} €`,
+              fecha: fechaActual,
+              estado: 'pendiente',
+              notaVentaId: notaId,
+              formaPago: formaPago
+            } as any);
+          }
+
           navigation.navigate('VerNota', { ventaData: venta });
         } catch (e) { 
           console.error(e);
@@ -411,11 +654,7 @@ export default function NuevaVentaScreen() {
 
   return (
     <ScreenWithSidebar currentScreen="NuevaVenta" scrollable={false}>
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
-        behavior="padding"
-        keyboardVerticalOffset={Platform.select({ ios: 64, android: 20, default: 0 })}
-      >
+      <View style={{ flex: 1 }}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Nueva Venta</Text>
         </View>
@@ -447,7 +686,7 @@ export default function NuevaVentaScreen() {
                notaItem={notaItem}
                setNotaItem={setNotaItem}
                onAddItem={agregarAlCarrito}
-               onOpenHistory={() => setModalHistorial(true)}
+               onOpenHistory={() => { void handleOpenHistorial(); }}
                onFinalize={finalizarVenta}
                keyboardPadding={keyboardHeight}
              />
@@ -459,6 +698,7 @@ export default function NuevaVentaScreen() {
                 carrito={carrito}
                 totales={totales}
                 onRemoveItem={eliminarDelCarrito}
+                onEditItem={handleEditItem}
                 enableGlobalDiscount={enableGlobalDiscount}
                 setEnableGlobalDiscount={setEnableGlobalDiscount}
                 globalDiscountValue={globalDiscountValue}
@@ -466,7 +706,17 @@ export default function NuevaVentaScreen() {
              />
           </View>
         </View>
-      </KeyboardAvoidingView>
+
+        {modalArticulo && (
+          <View style={[styles.floatingSidebar, keyboardHeight > 0 && { bottom: keyboardHeight + 10 }]}>
+            <SeleccionarArticuloSidebar 
+              articulos={articulos} 
+              onSelect={handleSelectArticulo} 
+              onClose={() => setModalArticulo(false)} 
+            />
+          </View>
+        )}
+      </View>
 
       {/* MODALES */}
       <Modal visible={modalSelectorVisible} transparent animationType="fade" onRequestClose={() => setModalSelectorVisible(false)}>
@@ -504,16 +754,49 @@ export default function NuevaVentaScreen() {
         onSelect={handleSelectCliente}
         clientes={clientes}
       />
-
-      <SeleccionarArticuloModal 
-        visible={modalArticulo} 
-        onClose={() => setModalArticulo(false)} 
-        articulos={articulos} 
-        onSelect={handleSelectArticulo} 
-      />
       
-      <Modal visible={modalHistorial} transparent animationType="fade">
-        <View style={styles.modalBg}><View style={styles.modalCard}><Text style={{textAlign:'center', margin: 20}}>Sin historial reciente.</Text><TouchableOpacity style={styles.closeBtn} onPress={() => setModalHistorial(false)}><Text>Cerrar</Text></TouchableOpacity></View></View>
+      <Modal visible={modalHistorial} transparent animationType="fade" onRequestClose={() => setModalHistorial(false)}>
+        <View style={styles.modalBg}>
+          <View style={[styles.modalCard, styles.historialModalCard]}>
+            <Text style={styles.selectorTitle}>
+              Historial ERP {clienteSeleccionado?.nombre ? `- ${clienteSeleccionado.nombre}` : ''}
+            </Text>
+            {historialLoading ? (
+              <View style={styles.historialState}>
+                <ActivityIndicator size="large" color="#0C2ABF" />
+                <Text style={styles.historialStateText}>Consultando historial del cliente...</Text>
+              </View>
+            ) : historialError ? (
+              <View style={styles.historialState}>
+                <Text style={styles.historialErrorText}>{historialError}</Text>
+              </View>
+            ) : historialPedidos.length === 0 ? (
+              <View style={styles.historialState}>
+                <Text style={styles.historialStateText}>No hay historial reciente para este cliente.</Text>
+              </View>
+            ) : (
+              <FlatList
+                data={historialPedidos}
+                keyExtractor={(item) => item.id}
+                style={styles.historialList}
+                keyboardShouldPersistTaps="handled"
+                initialNumToRender={15}
+                maxToRenderPerBatch={20}
+                windowSize={8}
+                renderItem={({ item }) => (
+                  <View style={styles.historialRow}>
+                    <Text style={styles.historialRef} numberOfLines={1}>{item.referencia}</Text>
+                    <Text style={styles.historialMeta}>{item.fecha} · {item.estado}</Text>
+                    <Text style={styles.historialTotal}>{item.total}</Text>
+                  </View>
+                )}
+              />
+            )}
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setModalHistorial(false)}>
+              <Text>Cerrar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
 
     </ScreenWithSidebar>
@@ -524,9 +807,9 @@ const styles = StyleSheet.create({
   header: { height: 60, justifyContent: 'center', paddingHorizontal: 20, borderBottomWidth: 1, borderColor: colors.border, backgroundColor: colors.card, flexShrink: 0 },
   headerTitle: { fontSize: 22, fontWeight: '700', color: colors.text },
   
-  mainContent: { flex: 1, flexDirection: 'row', height: '100%', overflow: 'hidden' },
-  leftPanel: { width: 600, flexShrink: 0, height: '100%', display: 'flex' },
-  rightPanel: { flex: 1, padding: 20, backgroundColor: colors.card, flexDirection: 'column', height: '100%', minWidth: 0 },
+  mainContent: { flex: 1, flexDirection: 'row', overflow: 'hidden' },
+  leftPanel: { width: 600, flexShrink: 0 },
+  rightPanel: { flex: 1, padding: 20, backgroundColor: colors.card, flexDirection: 'column', minWidth: 0 },
 
   modalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   selectorModalCard: { width: 400, backgroundColor: colors.card, borderRadius: 12, padding: 20, maxHeight: 500 },
@@ -536,4 +819,40 @@ const styles = StyleSheet.create({
   closeBtn: { marginTop: 15, padding: 10, alignItems: 'center' },
   
   modalCard: { width: 300, backgroundColor: colors.card, borderRadius: 12, padding: 20 },
+  historialModalCard: { width: 720, maxWidth: '94%', maxHeight: '82%' },
+  historialList: { width: '100%', marginTop: 8 },
+  historialRow: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+    backgroundColor: '#fff',
+  },
+  historialRef: { fontSize: 15, fontWeight: '700', color: colors.text },
+  historialMeta: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  historialTotal: { fontSize: 14, fontWeight: '700', color: '#0C2ABF', marginTop: 4 },
+  historialState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 24,
+    paddingHorizontal: 10,
+  },
+  historialStateText: { marginTop: 10, color: colors.textSecondary, textAlign: 'center' },
+  historialErrorText: { color: '#b91c1c', textAlign: 'center', fontWeight: '600' },
+  floatingSidebar: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    bottom: 20,
+    width: 420,
+    zIndex: 100,
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    borderRadius: 12
+  }
 });

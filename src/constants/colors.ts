@@ -34,6 +34,6 @@ export const colors = {
   error: '#ef4444',
 
   // Gradients
-  gradientPrimary: ['#092090', '#0C2ABF'],
-  gradientSuccess: ['#91e600', '#65a30d'],
+  gradientPrimary: ['#092090', '#0C2ABF'] as const,
+  gradientSuccess: ['#91e600', '#65a30d'] as const,
 };

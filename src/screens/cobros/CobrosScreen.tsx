@@ -20,6 +20,26 @@ import { useApp } from '../../context/AppContext';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 import { imprimirComprobanteCobro, ComprobanteCobro } from '../../services/printer.matricial.service';
 
+const parseAmount = (val: string | number) => {
+    if (typeof val === 'number') return val;
+    const str = String(val).trim();
+    let clean = str.replace(/[^\d,.-]/g, '');
+    const hasComma = clean.includes(',');
+    const hasDot = clean.includes('.');
+    
+    if (hasComma && hasDot) {
+        if (clean.lastIndexOf(',') > clean.lastIndexOf('.')) {
+            clean = clean.replace(/\./g, '').replace(',', '.');
+        } else {
+            clean = clean.replace(/,/g, '');
+        }
+    } else if (hasComma) {
+        clean = clean.replace(',', '.');
+    }
+    
+    return parseFloat(clean) || 0;
+};
+
 export default function CobrosScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
@@ -63,7 +83,7 @@ export default function CobrosScreen() {
         notaId: cobro.notaVentaId || 'S/N',
         client: cobro.cliente,
         date: cobro.fecha,
-        amount: parseFloat(cobro.monto.toString().replace(/[^\d,]/g, '').replace(',', '.') || '0'),
+        amount: parseAmount(cobro.monto),
         originalNota: notaOriginal,
       };
     });

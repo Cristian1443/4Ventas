@@ -125,6 +125,10 @@ export default function DashboardScreen() {
   const totalVentasDia = ventasHoy.reduce((sum, nota) => sum + parsePrecio(nota.precio), 0);
   const numeroVentasHoy = ventasHoy.length;
 
+  const notasPorCerrarTotal = ventasActivas.filter(
+    n => n.estado === 'pendiente' || n.estado === 'abierta'
+  ).length;
+
   // 2. Gastos (filtrados por vendedor)
   const gastosHoy = gastos.filter(g => {
     if (!g.fecha) return false;
@@ -323,13 +327,13 @@ export default function DashboardScreen() {
           {/* Notas Pendientes (Total Cartera, incluye abiertas/borradores) */}
           <TouchableOpacity
             style={[styles.statCard, { width: cardWidth }]}
-            onPress={() => navigation.navigate('Ventas')}
+            onPress={() =>
+              navigation.navigate('Ventas', { filtroLista: 'pendientes' })
+            }
             activeOpacity={0.7}
           >
             <Text style={styles.statLabel}>Notas Pendientes</Text>
-            <Text style={styles.statValue}>
-              {notasVenta.filter(n => n.estado === 'pendiente' || n.estado === 'abierta').length}
-            </Text>
+            <Text style={styles.statValue}>{notasPorCerrarTotal}</Text>
             <Text style={[styles.statChange, { color: '#f59e0b' }]}>
               Por cobrar / sin cerrar
             </Text>

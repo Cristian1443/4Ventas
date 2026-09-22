@@ -4,10 +4,12 @@ import { colors } from '../../constants/colors';
 
 interface CartItem {
     id: string;
+    articuloId: string;
     nombre: string;
     cantidad: number;
     precioUnitario: number;
     descuento: number;
+    tipoDescuento: "porcentaje" | "pesos";
     nota?: string;
 }
 
@@ -16,13 +18,18 @@ interface Totals {
     descuentos: number;
     base: number;
     iva: number;
+    re: number;
     total: number;
+    /** Si hay más de un tipo de IVA, desglose por tipo */
+    ivaPorTipo?: { pct: number; cuota: number }[];
+    reAplica?: boolean;
 }
 
 interface VentaCartSummaryProps {
     carrito: CartItem[];
     totales: Totals;
     onRemoveItem: (id: string) => void;
+    onEditItem: (item: CartItem) => void;
     enableGlobalDiscount: boolean;
     setEnableGlobalDiscount: (val: boolean) => void;
     globalDiscountValue: string;
@@ -33,6 +40,7 @@ export default function VentaCartSummary({
     carrito,
     totales,
     onRemoveItem,
+    onEditItem,
     enableGlobalDiscount,
     setEnableGlobalDiscount,
     globalDiscountValue,
@@ -56,13 +64,18 @@ export default function VentaCartSummary({
                             <View key={i.id} style={styles.rowItem}>
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.itemName}>{i.nombre}</Text>
-                                    <Text style={styles.itemDetails}>x{i.cantidad}  {i.descuento > 0 ? `(-${i.descuento}%)` : ''}</Text>
+                                    <Text style={styles.itemDetails}>x{i.cantidad} ({i.precioUnitario.toFixed(2)} €/ud) {i.descuento > 0 ? `(-${i.descuento}%)` : ''}</Text>
                                     {i.nota ? <Text style={styles.itemNote}>{i.nota}</Text> : null}
                                 </View>
                                 <Text style={styles.itemPrice}>{(i.precioUnitario * i.cantidad).toFixed(2)} €</Text>
-                                <TouchableOpacity onPress={() => onRemoveItem(i.id)} style={styles.removeBtn}>
-                                    <Text style={styles.removeIcon}>×</Text>
-                                </TouchableOpacity>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 10 }}>
+                                    <TouchableOpacity onPress={() => onEditItem(i)} style={styles.actionBtn}>
+                                        <Text style={styles.editIcon}>✎</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => onRemoveItem(i.id)} style={styles.actionBtn}>
+                                        <Text style={styles.removeIcon}>×</Text>
+                                    </TouchableOpacity>
+                                </View>
                             </View>
                         ))}
                     </ScrollView>
@@ -114,9 +127,25 @@ export default function VentaCartSummary({
                 <View style={styles.totalRow}>
                     <Text style={styles.totalLabel}>Base Imponible</Text><Text style={styles.totalValue}>{totales.base.toFixed(2)} €</Text>
                 </View>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>IVA (10%)</Text><Text style={styles.totalValue}>{totales.iva.toFixed(2)} €</Text>
-            </View>
+                {totales.ivaPorTipo && totales.ivaPorTipo.length > 0 ? (
+                  totales.ivaPorTipo.map((row, idx) => (
+                    <View style={styles.totalRow} key={`iva-${idx}-${row.pct}`}>
+                      <Text style={styles.totalLabel}>IVA ({row.pct}%)</Text>
+                      <Text style={styles.totalValue}>{row.cuota.toFixed(2)} €</Text>
+                    </View>
+                  ))
+                ) : (
+                  <View style={styles.totalRow}>
+                    <Text style={styles.totalLabel}>IVA</Text>
+                    <Text style={styles.totalValue}>{totales.iva.toFixed(2)} €</Text>
+                  </View>
+                )}
+                {totales.re > 0 && (
+                    <View style={styles.totalRow}>
+                        <Text style={styles.totalLabel}>R.E.</Text>
+                        <Text style={styles.totalValue}>{totales.re.toFixed(2)} €</Text>
+                    </View>
+                )}
                 <View style={styles.divider} />
                 <View style={[styles.totalRow, { alignItems: 'center' }]}>
                     <Text style={styles.grandTotalLabel}>TOTAL</Text>
@@ -155,8 +184,9 @@ const styles = StyleSheet.create({
     itemDetails: { fontSize: 16, color: colors.textSecondary },
     itemNote: { fontSize: 15, color: colors.textLight, fontStyle: 'italic' },
     itemPrice: { fontSize: 16, fontWeight: 'bold', color: colors.text },
-    removeBtn: { marginLeft: 12, padding: 4 },
-    removeIcon: { color: colors.danger, fontSize: 22 },
+    actionBtn: { marginLeft: 8, padding: 4 },
+    editIcon: { color: colors.primary, fontSize: 22 },
+    removeIcon: { color: colors.danger, fontSize: 26 },
 
     globalDiscountBox: {
         backgroundColor: colors.surface,

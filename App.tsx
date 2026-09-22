@@ -11,6 +11,8 @@ import { StatusBar } from 'expo-status-bar';
 import { AppProvider } from './src/context/AppContext';
 import AppNavigator from './src/navigation/AppNavigator';
 
+console.log('🚀 [App] JavaScript ejecutándose correctamente');
+
 export default function App() {
   return (
     <SafeAreaProvider>

@@ -1,25 +1,17 @@
 {
-  "timestamp": "2025-12-24T23:42:55.157Z",
+  "timestamp": "2026-02-18T20:34:23.162Z",
   "baseUrl": "http://80.58.154.71:8000/WcfServiceLibraryVerial",
   "sessionId": "39",
   "tests": {
     "clientes": {
-      "exito": true,
-      "total": 0,
-      "muestra": [],
-      "error": {
-        "Codigo": 1,
-        "Descripcion": "No existe el fichero INI del servicio"
-      }
+      "exito": false,
+      "error": "Request failed with status code 403",
+      "code": "ERR_BAD_REQUEST"
     },
     "articulos": {
-      "exito": true,
-      "total": 0,
-      "muestra": [],
-      "error": {
-        "Codigo": 1,
-        "Descripcion": "No existe el fichero INI del servicio"
-      }
+      "exito": false,
+      "error": "Request failed with status code 403",
+      "code": "ERR_BAD_REQUEST"
     }
   }
 }

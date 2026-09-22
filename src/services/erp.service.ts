@@ -32,7 +32,7 @@ export const crearCliente = clientesService.crearCliente;
 export const crearDireccionEnvio = clientesService.crearDireccionEnvio;
 
 // Exponer funciones del servicio de Artículos
-export const getArticulos = articulosService.getArticulos;
+export const getArticulos = articulosService.getArticulos.bind(articulosService);
 export const getStockArticulos = articulosService.getStockArticulos;
 export const getImagenesArticulos = articulosService.getImagenesArticulos;
 export const getCamposConfigurablesArticulos = articulosService.getCamposConfigurables;

@@ -13,6 +13,8 @@ import { useResponsiveLayout } from '../constants/layout';
 import LoginScreen from '../screens/auth/LoginScreen';
 import LoginWithEmailScreen from '../screens/auth/LoginWithEmailScreen';
 import VendorSelectionScreen from '../screens/auth/VendorSelectionScreen';
+import AdminPanelScreen from '../screens/admin/AdminPanelScreen';
+import NumeradoresScreen from '../screens/admin/NumeradoresScreen';
 
 // Dashboard
 import DashboardScreen from '../screens/dashboard/DashboardScreen';
@@ -32,6 +34,7 @@ import CobrosConfirmacionScreen from '../screens/cobros/CobrosConfirmacionScreen
 // Almacén
 import AlmacenScreen from '../screens/almacen/AlmacenScreen';
 import NotasAlmacenScreen from '../screens/almacen/NotasAlmacenScreen';
+import NuevaNotaAlmacenScreen from '../screens/almacen/NuevaNotaAlmacenScreen';
 import ResumenStockScreen from '../screens/almacen/ResumenStockScreen';
 import ArticulosScreen from '../screens/almacen/ArticulosScreen';
 
@@ -133,6 +136,8 @@ export default function AppNavigator() {
       {/* Auth */}
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="LoginEmail" component={LoginWithEmailScreen} />
+      <Stack.Screen name="AdminPanel" component={AdminPanelScreen} />
+      <Stack.Screen name="Numeradores" component={NumeradoresScreen} />
       <Stack.Screen name="VendorSelection" component={VendorSelectionScreen} />
 
       {/* Main App */}
@@ -156,6 +161,7 @@ export default function AppNavigator() {
       <Stack.Screen name="Clientes" component={ClientesScreen} />
       <Stack.Screen name="Articulos" component={ArticulosScreen} />
       <Stack.Screen name="NotasAlmacen" component={NotasAlmacenScreen} />
+      <Stack.Screen name="NuevaNotaAlmacen" component={NuevaNotaAlmacenScreen} />
       <Stack.Screen name="ResumenStock" component={ResumenStockScreen} />
       <Stack.Screen name="Agenda" component={AgendaScreen} />
     </Stack.Navigator>

@@ -23,14 +23,25 @@ export type ScreenType =
     | 'configuracion'
     | 'agenda';
 
+export type VentasListaParams =
+  | undefined
+  | {
+      /** Desde KPI “Notas pendientes”: lista solo esas notas */
+      filtroLista?: 'pendientes';
+    };
+
 export type RootStackParamList = {
     Login: undefined;
     LoginEmail: undefined;
+    VendorSelection: undefined;
+    AdminPanel: undefined;
+    Numeradores: undefined;
     Main: undefined;
     Dashboard: undefined;
     VentasMenu: undefined;
-    Ventas: undefined;
-    NuevaVenta: { clienteSeleccionado?: Cliente; ventaData?: any };
+    Ventas: VentasListaParams;
+    VentasList: VentasListaParams;
+    NuevaVenta: { clienteSeleccionado?: Cliente; ventaData?: any; vendorId?: string };
     VerNota: { ventaData: any; notaId?: string };
     ResumenDia: undefined;
     CobrosList: undefined;
@@ -43,6 +54,7 @@ export type RootStackParamList = {
     Comunicacion: undefined;
     Almacen: undefined;
     NotasAlmacen: undefined;
+    NuevaNotaAlmacen: undefined;
     ResumenStock: undefined;
     Configuracion: undefined;
     Agenda: undefined;

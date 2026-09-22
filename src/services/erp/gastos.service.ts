@@ -10,7 +10,14 @@ export const gastosService = {
     async crearGasto(gasto: Partial<GastoERP>): Promise<any> {
         const body = {
             sesionwcf: parseInt(erpConfig.getSessionId(), 10),
-            Gasto: gasto
+            Gasto: {
+                Concepto: gasto.Concepto || '',
+                Tipo: gasto.Tipo || '',
+                Importe: gasto.Importe || 0,
+                Fecha: gasto.Fecha || new Date().toISOString(),
+                MetodoPago: gasto.MetodoPago || 'Efectivo',
+                Imagen: gasto.Imagen || null
+            }
         };
         const response = await erpClient.post('/NuevoGastoWS', body);
         return response.data;

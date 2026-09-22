@@ -58,6 +58,9 @@ web-build/
 *.tmp
 *.temp
 
+# EAS build logs (locales)
+.eas-logs/
+
 
 
 

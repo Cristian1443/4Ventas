@@ -5,19 +5,31 @@
  */
 
 import { storageService } from './storage.service';
+import { erpConfig } from './erp/api.client';
 
 export interface Vendedor {
     id: string;
     nombre: string;
     codigo: string;
     sessionId: string; // ID de sesión del ERP (ej: "18", "39")
+    almacenId?: string; // ID del almacén del vehículo del vendedor (para stock del vehículo)
     activo: boolean;
     fechaCreacion: string;
+    /** Tipo de impresora asignada a este vendedor. Por defecto matricial (vía diálogo del sistema). */
+    printerType?: 'matricial' | 'termica_bt';
+    printerHost?: string; // Matricial: IP de red
+    printerPort?: string; // Matricial: puerto (ej. "9100")
+    printerBtAddress?: string; // Térmica Bluetooth: dirección MAC del dispositivo emparejado
+    printerBtName?: string; // Térmica Bluetooth: nombre visible del dispositivo (solo informativo)
 }
 
 class VendorService {
     private readonly STORAGE_KEY = 'vendedores';
     private readonly CURRENT_VENDOR_KEY = 'vendedor_actual';
+    private makeVendorId(seed?: string): string {
+        const random = Math.random().toString(36).slice(2, 8);
+        return `VEN-${seed || 'ID'}-${Date.now()}-${random}`;
+    }
 
     // ============================================================================
     // GESTIÓN DE VENDEDORES
@@ -46,7 +58,7 @@ class VendorService {
             // Generar ID único
             const nuevoVendedor: Vendedor = {
                 ...vendedor,
-                id: `VEN-${Date.now()}`,
+                id: this.makeVendorId(vendedor.codigo),
                 fechaCreacion: new Date().toISOString()
             };
 
@@ -139,6 +151,7 @@ class VendorService {
             }
 
             await storageService.setItem(this.CURRENT_VENDOR_KEY, vendedorId);
+            erpConfig.setSessionId(vendedor.sessionId);
             console.log(`✅ [VendorService] Sesión iniciada: ${vendedor.nombre} (Session ERP: ${vendedor.sessionId})`);
 
             return vendedor;
@@ -168,11 +181,25 @@ class VendorService {
 
             // Si ya hay vendedores, asegurar que todos usen la sesión válida del ERP (39)
             if (vendedores.length > 0) {
+                const usedIds = new Set<string>();
                 const fixed = vendedores.map(v => {
-                    if (v.sessionId === '39') return v;
-                    return { ...v, sessionId: '39' };
+                    let safeId = v.id;
+                    if (!safeId || usedIds.has(safeId)) {
+                        safeId = this.makeVendorId(v.codigo);
+                    }
+                    usedIds.add(safeId);
+
+                    return { ...v, id: safeId };
                 });
-                await storageService.setItem(this.STORAGE_KEY, fixed);
+                const seenCodigo = new Set<string>();
+                const sinDuplicadosCodigo = fixed.filter(v => {
+                    const c = String(v.codigo ?? '').trim();
+                    if (!c) return true;
+                    if (seenCodigo.has(c)) return false;
+                    seenCodigo.add(c);
+                    return true;
+                });
+                await storageService.setItem(this.STORAGE_KEY, sinDuplicadosCodigo);
                 return;
             }
 
@@ -180,16 +207,19 @@ class VendorService {
             // Estos son los agentes mencionados por el usuario:
             // Teixido Flor: Agente 902, 903, 904, 905, 908, 909
             // Xosé María Teixido Núñez: Agente 906, 912, 913
+            // sessionId queda vacío a propósito: cada vendedor debe usar una sesión
+            // independiente de Verial y ese identificador lo asigna el administrador
+            // desde el Admin Panel (no puede inventarse aquí).
             const vendedoresPorDefecto: Omit<Vendedor, 'id' | 'fechaCreacion'>[] = [
-                { nombre: 'Agente 902', codigo: '902', sessionId: '39', activo: true },
-                { nombre: 'Agente 903', codigo: '903', sessionId: '39', activo: true },
-                { nombre: 'Agente 904', codigo: '904', sessionId: '39', activo: true },
-                { nombre: 'Agente 905', codigo: '905', sessionId: '39', activo: true },
-                { nombre: 'Agente 906', codigo: '906', sessionId: '39', activo: true },
-                { nombre: 'Agente 908', codigo: '908', sessionId: '39', activo: true },
-                { nombre: 'Agente 909', codigo: '909', sessionId: '39', activo: true },
-                { nombre: 'Agente 912', codigo: '912', sessionId: '39', activo: true },
-                { nombre: 'Agente 913', codigo: '913', sessionId: '39', activo: true },
+                { nombre: 'Agente 902', codigo: '902', sessionId: '', activo: true },
+                { nombre: 'Agente 903', codigo: '903', sessionId: '', activo: true },
+                { nombre: 'Agente 904', codigo: '904', sessionId: '', activo: true },
+                { nombre: 'Agente 905', codigo: '905', sessionId: '', activo: true },
+                { nombre: 'Agente 906', codigo: '906', sessionId: '', activo: true },
+                { nombre: 'Agente 908', codigo: '908', sessionId: '', activo: true },
+                { nombre: 'Agente 909', codigo: '909', sessionId: '', activo: true },
+                { nombre: 'Agente 912', codigo: '912', sessionId: '', activo: true },
+                { nombre: 'Agente 913', codigo: '913', sessionId: '', activo: true },
             ];
 
             for (const vendedor of vendedoresPorDefecto) {

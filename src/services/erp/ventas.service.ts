@@ -1,5 +1,8 @@
 import { erpClient, getCommonParams, erpConfig } from './api.client';
 
+type HistorialInfoError = { Codigo?: number; Descripcion?: string } | null;
+let lastHistorialInfoError: HistorialInfoError = null;
+
 export const ventasService = {
     async crearDocumentoVenta(documento: any): Promise<any> {
         const body = {
@@ -19,11 +22,12 @@ export const ventasService = {
         } catch { return false; }
     },
 
-    async updateDocCliente(id: number, aux1?: string, aux2?: string, aux3?: string): Promise<any> {
+    async updateDocCliente(id: number, aux1?: string, aux2?: string, aux3?: string, aux4?: string): Promise<any> {
         const body: any = { sesionwcf: parseInt(erpConfig.getSessionId(), 10), Id: id };
         if (aux1 !== undefined) body.Aux1 = aux1;
         if (aux2 !== undefined) body.Aux2 = aux2;
         if (aux3 !== undefined) body.Aux3 = aux3;
+        if (aux4 !== undefined) body.Aux4 = aux4;
         const response = await erpClient.post('/UpdateDocClienteWS', body);
         return response.data;
     },
@@ -48,7 +52,20 @@ export const ventasService = {
             let url = `/GetHistorialPedidosWS?${getCommonParams()}&id_cliente=${id_cliente}&fechadesde=${fechaDesde}&fechahasta=${fechaHasta}`;
             if (allareasventa) url += `&allareasventa=true`;
             const response = await erpClient.get(url);
-            return Array.isArray(response.data) ? response.data : (response.data?.Pedidos || []);
-        } catch { return []; }
+            lastHistorialInfoError = response.data?.InfoError || null;
+
+            if (Array.isArray(response.data)) return response.data;
+            if (Array.isArray(response.data?.Pedidos)) return response.data.Pedidos;
+            if (Array.isArray(response.data?.Documentos)) return response.data.Documentos;
+
+            return [];
+        } catch {
+            lastHistorialInfoError = { Codigo: -1, Descripcion: 'Error consultando historial de pedidos' };
+            return [];
+        }
+    },
+
+    getLastHistorialInfoError(): HistorialInfoError {
+        return lastHistorialInfoError;
     }
 };

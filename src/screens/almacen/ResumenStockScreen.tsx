@@ -1,6 +1,8 @@
 /**
- * Resumen Stock Screen - EXACTAMENTE IGUAL A LA WEB
- * Tabla de stock con filtros por categoría, stats y resaltado de stock bajo
+ * Resumen Stock Screen - VERSIÓN CORREGIDA
+ * - Resuelve nombres de categoría reales del ERP
+ * - Filtro "Con Stock" para mostrar solo artículos con stock > 0
+ * - Filtrado por categoría usando categoriaId del artículo
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
@@ -9,20 +11,59 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView
+  ScrollView,
+  Alert
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useApp } from '../../context/AppContext';
 import { catalogosService } from '../../services/erp/catalogos.service';
+import { getStockLocalCheckpointMs, resetStockLocalAhora, calcularStockLocalPorArticulo } from '../../services/stock-local.service';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 
 export default function ResumenStockScreen() {
   const navigation = useNavigation<any>();
-  const { articulos } = useApp();
+  const { articulos, notasAlmacen, notasVenta, currentVendor } = useApp();
 
   const [filtroCategoria, setFiltroCategoria] = useState('todos');
+  const [soloConStock, setSoloConStock] = useState(true);
   const [categoriasErp, setCategoriasErp] = useState<{ id: string; nombre: string }[]>([]);
+  const [visibleRows, setVisibleRows] = useState(120);
+  const [checkpointMs, setCheckpointMs] = useState<number | undefined>(undefined);
+  const [resetting, setResetting] = useState(false);
+
+  useEffect(() => {
+    getStockLocalCheckpointMs(currentVendor?.id).then(setCheckpointMs);
+  }, [currentVendor?.id]);
+
+  const stockLocalPorArticulo = useMemo(
+    () => calcularStockLocalPorArticulo(notasAlmacen, notasVenta, checkpointMs),
+    [notasAlmacen, notasVenta, checkpointMs]
+  );
+
+  const handleResetStock = () => {
+    if (!currentVendor?.id) return;
+    Alert.alert(
+      'Borrar existencias y poner stock a cero',
+      'Esto pone a cero el stock local del furgón de este vendedor (no afecta al ERP). Las próximas cargas empiezan desde cero. ¿Continuar?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Poner a cero',
+          style: 'destructive',
+          onPress: async () => {
+            setResetting(true);
+            try {
+              const ts = await resetStockLocalAhora(currentVendor.id);
+              setCheckpointMs(ts);
+            } finally {
+              setResetting(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const normalizar = (v: string) =>
     (v || '')
@@ -54,27 +95,47 @@ export default function ResumenStockScreen() {
     loadCategorias();
   }, []);
 
-  // Datos stock con id de categoría si existe
-  const stockData = useMemo(() => {
-    return articulos.map(art => {
-      const fallbackCode = art.nombre
-        ? `${art.nombre.substring(0, 3).toUpperCase()}-${art.id.slice(-3)}`
-        : art.id || 'N/D';
-      return {
-        id: art.id,
-        codigoCorto: art.codigoCorto || fallbackCode,
-        nombre: art.nombre,
-        categoria: art.categoria,
-        categoriaId: art.categoriaId ? art.categoriaId.toString() : undefined,
-        stock: art.cantidad,
-        stockMinimo: art.stockMinimo || 0,
-        ultimaEntrada: '-',
-        ultimaSalida: '-'
-      };
+  // Mapa de categoriaId -> nombre real del ERP
+  const categoriasById = useMemo(() => {
+    const map: Record<string, string> = {};
+    categoriasErp.forEach(c => {
+      if (c.id) map[c.id] = c.nombre;
     });
-  }, [articulos]);
+    return map;
+  }, [categoriasErp]);
 
-  // Categorías a mostrar: Todos + Stock Bajo + ERP (fallback si no hay)
+  // Datos stock con resolución de nombre de categoría — solo artículos con stock local
+  // registrado en esta tablet (cargas/descargas/ventas), no el stock general del ERP.
+  const stockData = useMemo(() => {
+    return Object.entries(stockLocalPorArticulo)
+      .filter(([, cantidad]) => cantidad !== 0)
+      .map(([articuloId, cantidad]) => {
+        const art = articulos.find(a => a.id === articuloId);
+        const fallbackCode = art?.nombre
+          ? `${art.nombre.substring(0, 3).toUpperCase()}-${articuloId.slice(-3)}`
+          : articuloId || 'N/D';
+
+        // Resolver nombre real de categoría desde el catálogo ERP
+        let categoriaResuelta = art?.categoria || '';
+        if (art?.categoriaId && categoriasById[art.categoriaId]) {
+          categoriaResuelta = categoriasById[art.categoriaId];
+        }
+
+        return {
+          id: articuloId,
+          codigoCorto: art?.codigoCorto || fallbackCode,
+          nombre: art?.nombre || articuloId,
+          categoria: categoriaResuelta,
+          categoriaId: art?.categoriaId ? art.categoriaId.toString() : undefined,
+          stock: Math.max(0, cantidad),
+          stockMinimo: art?.stockMinimo || 0,
+          ultimaEntrada: '-',
+          ultimaSalida: '-'
+        };
+      });
+  }, [stockLocalPorArticulo, articulos, categoriasById]);
+
+  // Categorías: Todos + Con Stock + Stock Bajo + ERP
   const categorias = useMemo(() => {
     const base = [
       { id: 'todos', nombre: 'Todos' },
@@ -82,7 +143,27 @@ export default function ResumenStockScreen() {
     ];
 
     if (categoriasErp.length > 0) {
-      return [...base, ...categoriasErp];
+      // Filtrar categorías que no tienen ningún artículo local, para "quitar las que no hay"
+      const catActivas = categoriasErp.filter(cat => {
+        const catNorm = normalizar(cat.id);
+        const nameNorm = normalizar(cat.nombre);
+        
+        // Omitir categorías que empiezan por WEB según petición del usuario
+        if (nameNorm.startsWith('web')) return false;
+
+        // Dejar también por si acaso una categoría que explícitamente se llame "más vendidos"
+        // aunque no tenga cruce directo, por si el backend lo inyecta luego, a petición del usuario
+        if (nameNorm.includes('mas vendidos')) return true;
+
+        return stockData.some(art => 
+          (art.categoriaId && normalizar(art.categoriaId) === catNorm) ||
+          normalizar(art.categoria || '') === catNorm ||
+          normalizar(art.categoria || '') === nameNorm ||
+          normalizar(art.categoria || '').includes(nameNorm)
+        );
+      });
+
+      return [...base, ...catActivas];
     }
 
     const fallback = Array.from(
@@ -100,22 +181,58 @@ export default function ResumenStockScreen() {
   }, [categoriasErp, stockData]);
 
   const filteredData = useMemo(() => {
-    if (filtroCategoria === 'todos') return stockData;
-    if (filtroCategoria === 'stock') return stockData.filter(a => a.stock <= (a.stockMinimo || 0));
+    let data = stockData;
+    if (soloConStock) {
+      data = data.filter(a => a.stock > 0);
+    }
 
-    return stockData.filter(a => {
+    if (filtroCategoria === 'todos') return data;
+    if (filtroCategoria === 'stock') return data.filter(a => a.stock <= (a.stockMinimo || 0));
+
+    return data.filter(a => {
       const artId = a.categoriaId;
       const artNameNorm = normalizar(a.categoria || '');
       const filtroNorm = normalizar(filtroCategoria);
+      
+      const isMasVendidos = filtroNorm.includes('vendido') || 
+         categorias.find(c => c.id === filtroCategoria && normalizar(c.nombre).includes('vendido'));
+         
+      if (isMasVendidos) {
+         // Si es un filtro tipo 'Más vendidos' pero los artículos no tienen esta categoría
+         // explícitamente asignada del ERP, entonces traemos los de mayor stock como top ventas
+         return true; // Todos pasan y luego los ordenamos y trunco
+      }
+
       return (artId && artId === filtroCategoria) ||
         normalizar(artId || '') === filtroNorm ||
         artNameNorm === filtroNorm ||
         artNameNorm.includes(filtroNorm);
     });
-  }, [filtroCategoria, stockData]);
+  }, [filtroCategoria, stockData, soloConStock, categorias]);
 
-  const stockBajo = filteredData.filter(a => a.stock <= (a.stockMinimo || 0));
-  const totalStock = filteredData.reduce((acc, a) => acc + a.stock, 0);
+  // Aplicar límite y sort para el caso de "Más Vendidos"
+  const finalSortedData = useMemo(() => {
+     const filtroNorm = normalizar(filtroCategoria);
+     const isMasVendidos = filtroNorm.includes('vendido') || 
+         categorias.find(c => c.id === filtroCategoria && normalizar(c.nombre).includes('vendido'));
+         
+     if (isMasVendidos) {
+        return [...filteredData].sort((a, b) => b.stock - a.stock).slice(0, 40);
+     }
+     return filteredData;
+  }, [filteredData, filtroCategoria, categorias]);
+
+  useEffect(() => {
+    setVisibleRows(120);
+  }, [filtroCategoria, stockData.length, soloConStock]);
+
+  const visibleData = useMemo(
+    () => finalSortedData.slice(0, visibleRows),
+    [finalSortedData, visibleRows]
+  );
+
+  const stockBajo = finalSortedData.filter(a => a.stock <= (a.stockMinimo || 0));
+  const totalStock = finalSortedData.reduce((acc, a) => acc + a.stock, 0);
 
   return (
     <ScreenWithSidebar currentScreen="ResumenStock" scrollable={false}>
@@ -132,8 +249,22 @@ export default function ResumenStockScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={styles.almacenHintRow}>
+          <Text style={styles.almacenHint}>
+            Stock del furgón (local, calculado en esta tablet desde las Notas de Almacén y las ventas
+            {checkpointMs ? ' — desde el último reinicio' : ''})
+          </Text>
+          <TouchableOpacity
+            style={[styles.resetStockBtn, resetting && { opacity: 0.6 }]}
+            onPress={handleResetStock}
+            disabled={resetting}
+          >
+            <Text style={styles.resetStockBtnText}>Borrar existencias y poner stock a cero</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Content */}
-        <ScrollView 
+        <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -147,7 +278,7 @@ export default function ResumenStockScreen() {
               style={styles.statCardGradient}
             >
               <Text style={styles.statLabelGradient}>Total Artículos</Text>
-              <Text style={styles.statValueGradient}>{filteredData.length}</Text>
+              <Text style={styles.statValueGradient}>{finalSortedData.length}</Text>
             </LinearGradient>
 
             <View style={styles.statCard}>
@@ -168,7 +299,8 @@ export default function ResumenStockScreen() {
                 key={cat.id}
                 style={[
                   styles.filterButton,
-                  filtroCategoria === cat.id && styles.filterButtonActive
+                  filtroCategoria === cat.id && styles.filterButtonActive,
+                  cat.id === 'constock' && filtroCategoria === 'constock' && { backgroundColor: '#059669', borderColor: '#059669' }
                 ]}
                 onPress={() => setFiltroCategoria(cat.id)}
               >
@@ -181,6 +313,22 @@ export default function ResumenStockScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
+
+          {/* Toggle dedicado para "Con Stock" encima de la tabla */}
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 12, paddingHorizontal: 4 }}>
+            <TouchableOpacity 
+              style={[
+                styles.filterButton, 
+                soloConStock ? { backgroundColor: '#10b981', borderColor: '#10b981' } : { backgroundColor: '#f1f5f9', borderColor: '#e2e8f0' },
+                { borderRadius: 20, paddingHorizontal: 16 }
+              ]} 
+              onPress={() => setSoloConStock(!soloConStock)}
+            >
+              <Text style={{ fontWeight: 'bold', fontSize: 13, color: soloConStock ? '#fff' : '#64748b' }}>
+                {soloConStock ? '📦 Mostrando: Sólo con stock' : '📦 Mostrando: Todos (incluye agotados)'}
+              </Text>
+            </TouchableOpacity>
+          </View>
 
           {/* Tabla de stock */}
           <View style={styles.tableContainer}>
@@ -195,7 +343,7 @@ export default function ResumenStockScreen() {
             </View>
 
             {/* Rows */}
-            {filteredData.map((articulo, index) => {
+            {visibleData.map((articulo, index) => {
               const isBajoStock = articulo.stock < articulo.stockMinimo;
               return (
                 <View
@@ -203,7 +351,7 @@ export default function ResumenStockScreen() {
                   style={[
                     styles.tableRow,
                     isBajoStock && styles.tableRowBajo,
-                    index < filteredData.length - 1 && styles.tableRowBorder
+                    index < visibleData.length - 1 && styles.tableRowBorder
                   ]}
                 >
                   <Text style={[styles.tableCell, { width: 60 }]}>{articulo.id}</Text>
@@ -225,6 +373,17 @@ export default function ResumenStockScreen() {
               );
             })}
           </View>
+          {filteredData.length > visibleData.length && (
+            <TouchableOpacity
+              style={styles.loadMoreBtn}
+              onPress={() => setVisibleRows((prev) => prev + 120)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.loadMoreBtnText}>
+                Cargar más ({filteredData.length - visibleData.length} restantes)
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </View>
     </ScreenWithSidebar>
@@ -255,6 +414,33 @@ const styles = StyleSheet.create({
     color: '#1a1a1a',
     textAlign: 'center',
     flex: 1
+  },
+  almacenHintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+  },
+  almacenHint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    flex: 1,
+  },
+  resetStockBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: '#fef2f2',
+    borderWidth: 1,
+    borderColor: '#fecaca',
+  },
+  resetStockBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#dc2626',
   },
   backButtonHeader: {
     width: 28,
@@ -416,5 +602,20 @@ const styles = StyleSheet.create({
   },
   tableCellBold: {
     fontWeight: '600'
-  }
+  },
+  loadMoreBtn: {
+    alignSelf: 'center',
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  loadMoreBtnText: {
+    color: '#1d4ed8',
+    fontWeight: '700',
+    fontSize: 15,
+  },
 });

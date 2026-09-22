@@ -2,13 +2,14 @@
  * Modal de Selección de Artículos - React Native
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
+  Pressable,
+  FlatList,
   TextInput,
   Modal
 } from 'react-native';
@@ -37,26 +38,46 @@ export default function SeleccionarArticuloModal({
   onSelect,
   articulos
 }: SeleccionarArticuloModalProps) {
+  const normalizeText = (value: any): string =>
+    String(value || '')
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+      .trim();
+
   const [searchText, setSearchText] = useState('');
+  const [searchDebounced, setSearchDebounced] = useState('');
   const searchInputRef = useRef<TextInput>(null);
 
   // Limpiar búsqueda cuando se cierra el modal
   useEffect(() => {
     if (!visible) {
       setSearchText('');
+      setSearchDebounced('');
       searchInputRef.current?.blur();
     }
   }, [visible]);
 
-  const articulosFiltrados = articulos.filter(art => {
-    const searchLower = searchText.toLowerCase();
-    return (
-      art.nombre.toLowerCase().includes(searchLower) ||
-      art.categoria.toLowerCase().includes(searchLower) ||
-      (art.codigoCorto && art.codigoCorto.toLowerCase().includes(searchLower)) ||
-      art.id.toLowerCase().includes(searchLower)
-    );
-  });
+  useEffect(() => {
+    const t = setTimeout(() => setSearchDebounced(searchText.trim().toLowerCase()), 180);
+    return () => clearTimeout(t);
+  }, [searchText]);
+
+  const articulosFiltrados = useMemo(() => {
+    if (!visible) return [];
+    if (!searchDebounced) return articulos.slice(0, 220);
+    const query = normalizeText(searchDebounced);
+    return articulos.filter((art) => {
+      const searchable = [
+        art.nombre,
+        art.categoria,
+        art.codigoCorto,
+        art.id,
+        art.proveedor,
+      ].map(normalizeText).join(' ');
+      return searchable.includes(query);
+    });
+  }, [articulos, searchDebounced, visible]);
 
   return (
     <Modal
@@ -66,6 +87,7 @@ export default function SeleccionarArticuloModal({
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={styles.modalContent}>
           {/* Header */}
           <View style={styles.header}>
@@ -95,9 +117,17 @@ export default function SeleccionarArticuloModal({
               blurOnSubmit={false}
             />
           </TouchableOpacity>
+          <View style={styles.searchMetaRow}>
+            <Text style={styles.searchMetaText}>{articulosFiltrados.length} resultado(s)</Text>
+            {searchText.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchText('')} style={styles.clearSearchChip}>
+                <Text style={styles.clearSearchChipText}>Limpiar</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* Lista de artículos */}
-          <ScrollView style={styles.listContainer}>
+          <View style={styles.listContainer}>
             {articulosFiltrados.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyText}>
@@ -107,44 +137,59 @@ export default function SeleccionarArticuloModal({
                 </Text>
               </View>
             ) : (
-              articulosFiltrados.map((articulo) => (
-                <TouchableOpacity
-                  key={articulo.id}
-                  style={styles.articuloCard}
-                  onPress={() => {
-                    onSelect(articulo);
-                    setSearchText('');
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.articuloInfo}>
-                    <Text style={styles.articuloNombre}>{articulo.nombre}</Text>
-                    <Text style={styles.articuloCodigo}>
-                      Código: {articulo.codigoCorto || 'Sin código'}
-                    </Text>
-                    <Text style={styles.articuloCategoria}>{articulo.categoria}</Text>
-                    <View style={styles.articuloMeta}>
-                      <Text style={styles.articuloStock}>
-                        Stock: {articulo.cantidad}
+              <FlatList
+                data={articulosFiltrados}
+                keyExtractor={(item) => String(item.id)}
+                style={{ flex: 1 }}
+                contentContainerStyle={styles.listContent}
+                keyboardShouldPersistTaps="handled"
+                initialNumToRender={20}
+                maxToRenderPerBatch={24}
+                windowSize={8}
+                removeClippedSubviews
+                keyboardDismissMode="on-drag"
+                renderItem={({ item: articulo }) => (
+                  <TouchableOpacity
+                    style={styles.articuloCard}
+                    onPress={() => {
+                      onSelect(articulo);
+                      setSearchText('');
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.articuloInfo}>
+                      <Text style={styles.articuloNombre}>{articulo.nombre}</Text>
+                      <Text style={styles.articuloCodigo}>
+                        Código: {articulo.codigoCorto || 'Sin código'}
                       </Text>
-                      {articulo.precio && (
-                        <Text style={styles.articuloPrecio}>
-                          {articulo.precio}
+                      <Text style={styles.articuloCategoria}>{articulo.categoria}</Text>
+                      <View style={styles.articuloMeta}>
+                        <Text style={styles.articuloStock}>
+                          Stock: {articulo.cantidad}
                         </Text>
-                      )}
+                        {articulo.precio && (
+                          <Text style={styles.articuloPrecio}>
+                            {articulo.precio}
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                  </View>
-                  
-                  {/* Stock indicator */}
-                  {articulo.cantidad <= (articulo.stockMinimo || 0) && (
-                    <View style={styles.stockBadge}>
-                      <Text style={styles.stockBadgeText}>⚠️ Bajo</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))
+
+                    {articulo.cantidad <= (articulo.stockMinimo || 0) && (
+                      <View style={styles.stockBadge}>
+                        <Text style={styles.stockBadgeText}>⚠️ Bajo</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+              />
             )}
-          </ScrollView>
+          </View>
+          <View style={styles.footerActions}>
+            <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
+              <Text style={styles.cancelBtnText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -161,6 +206,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    height: '88%',
     maxHeight: '90%',
     paddingTop: 24
   },
@@ -203,7 +249,37 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#1a1a1a'
   },
+  searchMetaRow: {
+    marginTop: -8,
+    marginBottom: 10,
+    marginHorizontal: 24,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  searchMetaText: {
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  clearSearchChip: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: '#fff',
+  },
+  clearSearchChipText: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '700',
+  },
   listContainer: {
+    flex: 1,
+    minHeight: 220
+  },
+  listContent: {
     paddingHorizontal: 24,
     paddingBottom: 24
   },
@@ -272,6 +348,22 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#697b92',
     textAlign: 'center'
-  }
+  },
+  footerActions: {
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    padding: 12,
+    alignItems: 'flex-end',
+  },
+  cancelBtn: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  cancelBtnText: {
+    color: '#334155',
+    fontWeight: '700',
+  },
 });
 

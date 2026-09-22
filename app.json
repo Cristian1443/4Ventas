@@ -4,7 +4,7 @@
     "slug": "4ventas",
     "version": "1.0.1",
     "runtimeVersion": {
-      "policy": "appVersion"
+      "policy": "sdkVersion"
     },
     "sdkVersion": "54.0.0",
     "orientation": "default",
@@ -30,13 +30,16 @@
         "backgroundColor": "#0C2ABF"
       },
       "package": "com.fourventas.app",
+      "softwareKeyboardLayoutMode": "pan",
       "permissions": [
         "INTERNET",
         "ACCESS_NETWORK_STATE",
         "ACCESS_WIFI_STATE",
-        "INTERNET",
-        "ACCESS_NETWORK_STATE",
-        "ACCESS_WIFI_STATE"
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN",
+        "ACCESS_FINE_LOCATION"
       ]
     },
     "plugins": [

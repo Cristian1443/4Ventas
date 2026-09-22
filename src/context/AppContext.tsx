@@ -2,7 +2,7 @@
  * Contexto Global de la Aplicación
  */
 
-import React, { createContext, useState, useContext, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useState, useContext, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import {
   Gasto,
   NotaVenta,
@@ -55,6 +55,8 @@ interface AppContextType {
 
   addCobro: (cobro: Cobro) => Promise<void>;
   updateCobro: (id: string, estado: 'pendiente' | 'pagado', metadata?: { formaPago: string, fecha: Date }) => Promise<void>;
+  /** Quita cobros ligados a una nota al regravar venta (evita duplicados al editar contado/crédito). */
+  purgeCobrosDeNotaVenta: (notaId: string, opts?: { soloPendientes?: boolean }) => Promise<void>;
 
   addDocumento: (doc: Documento) => Promise<void>;
   deleteDocumento: (id: string) => Promise<void>;
@@ -111,7 +113,15 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     autoSyncEnabled: true,
     syncInterval: 3600000,
     modoOffline: false,
-    catalogoPdfUrl: 'https://docs.google.com/spreadsheets/d/1KEeYssoGwAa_oEvHjfINP24cjTEZsHng8jik4Qs8hf8/edit?usp=sharing'
+    catalogoPdfUrl: 'https://docs.google.com/spreadsheets/d/1KEeYssoGwAa_oEvHjfINP24cjTEZsHng8jik4Qs8hf8/edit?usp=sharing',
+    documentosDrive: [
+      {
+        id: 'CATALOGO-PDF',
+        nombre: 'Catálogo de Productos',
+        url: 'https://docs.google.com/spreadsheets/d/1KEeYssoGwAa_oEvHjfINP24cjTEZsHng8jik4Qs8hf8/edit?usp=sharing',
+        categoria: 'Catálogos'
+      }
+    ]
   });
 
 
@@ -133,7 +143,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     const applyVendorChange = async () => {
       if (currentVendor) {
         setSessionId(currentVendor.sessionId);
-        await syncService.setVendor(currentVendor.id);
+        await syncService.setVendor(currentVendor.id, currentVendor.almacenId, currentVendor.codigo);
         await loadLocalData(config.erpEnabled, currentVendor);
         updatePendingFromQueue();
       } else {
@@ -147,9 +157,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const initializeApp = async () => {
     const savedConfig = await storageService.getItem<AppConfig>('appConfig');
-    const finalConfig = { ...(savedConfig || config), erpEnabled: true }; // Forzar ERP habilitado
+    // Mezclar sobre los defaults (no solo reemplazar) para que instalaciones antiguas
+    // reciban campos nuevos (ej. documentosDrive) que no existían cuando guardaron su config.
+    const finalConfig = { ...config, ...(savedConfig || {}), erpEnabled: true }; // Forzar ERP habilitado
     setConfig(finalConfig);
-    try { setERPEnabled(true); } catch {}
 
     // 0. Cargar Vendedor Actual
     const vendor = await vendorService.getVendedorActual();
@@ -157,7 +168,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setCurrentVendor(vendor);
       setUserSession({ isLoggedIn: true, username: vendor.nombre });
       setSessionId(vendor.sessionId);
-      await syncService.setVendor(vendor.id);
+      await syncService.setVendor(vendor.id, vendor.almacenId, vendor.codigo);
     } else {
       await syncService.setVendor(null);
     }
@@ -379,9 +390,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         setVisitas(visitasSync);
       }
 
-      // Re-aplicar filtro solo para notasVenta si llegaran vía sync (gas/cob ya están namespaced)
-      if (currentVendor?.id && sNotas) {
-        setNotasVenta(sNotas => (sNotas || []).filter(n => n.vendedorId === currentVendor.id));
+      // Re-aplicar filtro de notas por vendedor sobre el estado actual.
+      if (currentVendor?.id) {
+        setNotasVenta(prevNotas => (prevNotas || []).filter(n => n.vendedorId === currentVendor.id));
       }
 
       setSyncStatus(status);
@@ -440,7 +451,11 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       return;
     }
 
-    const gastoConVendor = { ...gasto, vendedorId: vId };
+    const gastoConVendor: Gasto = {
+      ...gasto,
+      vendedorId: vId,
+      liquidacionSesionTs: gasto.liquidacionSesionTs ?? Date.now()
+    };
     const storageKey = withVendorKey('gastos', vId);
 
     const allGastos = await storageService.getItem<Gasto[]>(storageKey) || [];
@@ -497,7 +512,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   };
 
   const addNotaVenta = async (nota: NotaVenta) => {
-    if (nota.items && nota.items.length > 0) {
+    const estadoNota = nota.estado || 'abierta';
+    const notaConfirmaStock = estadoNota !== 'abierta' && estadoNota !== 'anulada';
+    const yaDescontada = notasVenta.some(n =>
+      n.id === nota.id && n.estado && n.estado !== 'abierta' && n.estado !== 'anulada'
+    );
+
+    // Descontar stock solo en notas confirmadas y una sola vez por ID.
+    if (notaConfirmaStock && !yaDescontada && nota.items && nota.items.length > 0) {
       setArticulos(prevArticulos => {
         const updatedArticulos = prevArticulos.map(art => {
           const itemVendido = nota.items?.find((i: any) => i.articuloId === art.id || i.id === art.id);
@@ -514,13 +536,16 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
 
     const vId = await resolveVendorId();
-    const notaConVendor = { ...nota, vendedorId: vId };
     const storageKey = withVendorKey('notasVenta', vId);
 
     const allNotas = await storageService.getItem<NotaVenta[]>(storageKey) || [];
+    const existsIndexStorage = allNotas.findIndex(n => n.id === nota.id);
+    const existeEnStorage = existsIndexStorage > -1 ? allNotas[existsIndexStorage] : undefined;
+    const liquidacionSesionTs =
+      existeEnStorage?.liquidacionSesionTs ?? nota.liquidacionSesionTs ?? Date.now();
+    const notaConVendor: NotaVenta = { ...nota, vendedorId: vId ?? undefined, liquidacionSesionTs };
 
     // 2. Actualizar o Agregar en Storage
-    const existsIndexStorage = allNotas.findIndex(n => n.id === nota.id);
     let updatedAll;
     if (existsIndexStorage > -1) {
       updatedAll = [...allNotas];
@@ -545,6 +570,43 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     if (config.erpEnabled) {
       syncService.addOrReplaceInQueue('venta', notaConVendor, 'id');
       updatePendingFromQueue();
+    }
+
+    // 4. Si la venta está confirmada, generar nota automática de almacén para descontar del camión
+    const esNuevaVentaConfirmada = notaConfirmaStock && !yaDescontada && nota.items && nota.items.length > 0;
+    if (esNuevaVentaConfirmada) {
+      try {
+        const now = new Date();
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const fechaFmt = `${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}, ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+        const notaAlmacenVenta: any = {
+          id: `VENTA-${nota.id}`,
+          tipo: 'Intercambio Salida' as const,
+          fecha: fechaFmt,
+          usuario: nota.vendedorId ? `VEN-${nota.vendedorId}` : 'Sistema',
+          articulos: nota.items!.length,
+          observaciones: `Venta automática: ${nota.id} · Cliente: ${(nota as any).cliente || ''}`,
+          estado: 'sincronizado',
+          items: nota.items!.map((i: any) => ({
+            articuloId: i.articuloId ?? i.id,
+            nombre: i.nombre ?? '',
+            codigoCorto: i.codigoCorto ?? '',
+            cantidad: parseFloat(i.cantidad) || 0
+          }))
+        };
+
+        // Guardar en storage namespaced por vendor (sin encolar al ERP — ya lo hace la venta)
+        const almacenKey = withVendorKey('notasAlmacen', vId);
+        const allAlm = await storageService.getItem<any[]>(almacenKey) || [];
+        // Evitar duplicado si la venta se guarda dos veces
+        if (!allAlm.find((n: any) => n.id === notaAlmacenVenta.id)) {
+          await storageService.setItem(almacenKey, [notaAlmacenVenta, ...allAlm]);
+          setNotasAlmacen(prev => [notaAlmacenVenta, ...prev.filter((n: any) => n.id !== notaAlmacenVenta.id)]);
+        }
+      } catch (almErr) {
+        console.warn('⚠️ [addNotaVenta] No se pudo crear nota automática de almacén:', almErr);
+      }
     }
   };
 
@@ -574,9 +636,50 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     });
   };
 
+  const purgeCobrosDeNotaVenta = async (
+    notaId: string,
+    opts?: { soloPendientes?: boolean }
+  ): Promise<void> => {
+    const nid = String(notaId || '').trim();
+    if (!nid) return;
+
+    const vId = await resolveVendorId();
+    const storageKey = withVendorKey('cobros', vId);
+
+    let removedIds: string[] = [];
+
+    setCobros(prev => {
+      removedIds = prev
+        .filter(c => {
+          const linked = String(c.notaVentaId || '').trim() === nid;
+          if (!linked) return false;
+          if (opts?.soloPendientes && c.estado !== 'pendiente') return false;
+          return true;
+        })
+        .map(c => String(c.id));
+
+      const next = prev.filter(c => !removedIds.includes(String(c.id)));
+      storageService.setItem(storageKey, next).catch(err => {
+        console.error('Error guardando cobros tras purga:', err);
+      });
+      return next;
+    });
+
+    if (removedIds.length > 0 && config.erpEnabled) {
+      syncService.removeQueuedPagosByCobroIds(removedIds);
+      updatePendingFromQueue();
+    }
+  };
+
   const addCobro = async (cobro: Cobro) => {
     const vId = await resolveVendorId();
-    const cobroConVendor = { ...cobro, vendedorId: vId };
+    const cobroConVendor: Cobro = {
+      ...cobro,
+      vendedorId: vId ?? undefined,
+      ...(cobro.estado === 'pagado'
+        ? { liquidacionSesionTs: cobro.liquidacionSesionTs ?? Date.now() }
+        : {})
+    };
     const storageKey = withVendorKey('cobros', vId);
 
     const allCobros = await storageService.getItem<Cobro[]>(storageKey) || [];
@@ -617,7 +720,10 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
             estado,
             // Si nos pasan metadatos (al pagar), actualizamos el cobro local
             formaPago: metadata?.formaPago || c.formaPago,
-            fecha: metadata?.fecha ? formatFechaConsistente(metadata.fecha) : c.fecha
+            fecha: metadata?.fecha ? formatFechaConsistente(metadata.fecha) : c.fecha,
+            ...(estado === 'pagado'
+              ? { liquidacionSesionTs: Date.now() }
+              : {})
           };
         }
         return c;
@@ -697,12 +803,18 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   const addNotaAlmacen = async (nota: NotaAlmacen) => {
     const vId = await resolveVendorId();
     const storageKey = withVendorKey('notasAlmacen', vId);
+    const notaConTs: NotaAlmacen = { ...nota, liquidacionSesionTs: nota.liquidacionSesionTs ?? Date.now() };
 
     setNotasAlmacen(prev => {
-      const updated = [nota, ...prev];
+      const updated = [notaConTs, ...prev];
       storageService.setItem(storageKey, updated);
       return updated;
     });
+
+    if (config.erpEnabled) {
+      syncService.addToQueue('nota_almacen', notaConTs);
+      updatePendingFromQueue();
+    }
   };
 
   const addVisita = async (visita: Visita) => {
@@ -750,20 +862,20 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
   const updateAppConfig = updateConfig;
 
-  const value: AppContextType = {
+  const value: AppContextType = useMemo(() => ({
     userSession, setUserSession,
     gastos, notasVenta, cobros, documentos, articulos, clientes, notasAlmacen, visitas,
     syncStatus, modoOffline,
     addArticulo, addCliente,
     addGasto, deleteGasto,
     addNotaVenta, updateNotaVenta, deleteNotaVenta,
-    addCobro, updateCobro,
+    addCobro, updateCobro, purgeCobrosDeNotaVenta,
     addDocumento, deleteDocumento,
     updateArticulo, addNotaAlmacen,
     addVisita, toggleVisita,
     sincronizar, forzarSincronizacion,
     config, updateConfig, updateAppConfig,
-    updateSyncStatus: (status) => setSyncStatus(prev => ({ ...prev, ...status })),
+    updateSyncStatus: (status: Partial<SyncStatus>) => setSyncStatus(prev => ({ ...prev, ...status })),
 
     login: async (vendorId: string) => {
       const vendor = await vendorService.iniciarSesion(vendorId);
@@ -772,7 +884,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
 
         setUserSession({ isLoggedIn: true, username: vendor.nombre });
         setSessionId(vendor.sessionId);
-        await syncService.setVendor(vendor.id);
+        await syncService.setVendor(vendor.id, vendor.almacenId, vendor.codigo);
         await loadLocalData(config.erpEnabled, vendor); // Recargar datos para este vendedor
         return true;
       }
@@ -780,7 +892,9 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     },
     logout: async () => {
       console.log('🚪 Cerrando sesión...');
-      await vendorService.cerrarSesion();
+      // No llamar cerrarSesion(): `vendedor_actual` define el agente asignado a
+      // la tablet y debe sobrevivir al cierre de sesión; solo puede cambiarlo
+      // el administrador (panel / guardado de configuración tablet).
       await syncService.setVendor(null);
       setSessionId('');
       setCurrentVendor(null);
@@ -792,7 +906,14 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
     },
     currentVendor,
     setCurrentVendor,
-  };
+  }), [
+    userSession, gastos, notasVenta, cobros, documentos, articulos, clientes,
+    notasAlmacen, visitas, syncStatus, modoOffline, config, currentVendor,
+    addArticulo, addCliente, addGasto, deleteGasto, addNotaVenta, updateNotaVenta,
+    deleteNotaVenta, addCobro, updateCobro, purgeCobrosDeNotaVenta, addDocumento, deleteDocumento,
+    updateArticulo, addNotaAlmacen, addVisita, toggleVisita, sincronizar, forzarSincronizacion
+  ]);
+
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };

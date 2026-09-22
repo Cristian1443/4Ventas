@@ -35,6 +35,7 @@ export interface AppContextType {
 
     addCobro: (cobro: Cobro) => Promise<void>;
     updateCobro: (id: string, estado: 'pendiente' | 'pagado', metadata?: { formaPago: string; fecha: Date }) => Promise<void>;
+    purgeCobrosDeNotaVenta: (notaId: string, opts?: { soloPendientes?: boolean }) => Promise<void>;
 
     addDocumento: (doc: Documento) => Promise<void>;
     deleteDocumento: (id: string) => Promise<void>;

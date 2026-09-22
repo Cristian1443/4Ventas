@@ -8,6 +8,8 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
+  ActivityIndicator,
+  InteractionManager,
   View,
   Text,
   StyleSheet,
@@ -27,13 +29,30 @@ import { useResponsiveLayout } from '../../constants/layout';
 import { Articulo } from '../../types';
 import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 import { catalogosService } from '../../services/erp/catalogos.service';
+import { getStockLocalCheckpointMs, calcularStockLocalPorArticulo } from '../../services/stock-local.service';
 
 const imgPlaceholder = require('../../../assets/blue-image-panel.png');
 
 export default function ArticulosScreen() {
   const navigation = useNavigation<any>();
-  const { articulos, config } = useApp();
+  const { articulos: articulosCtx, notasAlmacen, notasVenta, currentVendor, config } = useApp();
   const { isTablet, isSmallDevice } = useResponsiveLayout();
+  const [isScreenReady, setIsScreenReady] = useState(false);
+  const [stockCheckpointMs, setStockCheckpointMs] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    getStockLocalCheckpointMs(currentVendor?.id).then(setStockCheckpointMs);
+  }, [currentVendor?.id]);
+
+  // Cantidad = stock local del furgón (Notas de Almacén - ventas), no el stock general del ERP.
+  const stockLocalPorArticulo = useMemo(
+    () => calcularStockLocalPorArticulo(notasAlmacen, notasVenta, stockCheckpointMs),
+    [notasAlmacen, notasVenta, stockCheckpointMs]
+  );
+  const articulos = useMemo(
+    () => articulosCtx.map(a => ({ ...a, cantidad: Math.max(0, stockLocalPorArticulo[a.id] || 0) })),
+    [articulosCtx, stockLocalPorArticulo]
+  );
 
   const handleAbrirCatalogo = async () => {
     // URL del Google Sheet del catálogo (configurable en Configuración)
@@ -52,19 +71,36 @@ export default function ArticulosScreen() {
   };
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('todos'); // usar IDs ('todos', 'stock', o id_categoria)
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [categoriaSeleccionada, setCategoriaSeleccionada] = useState<string>('todos');
+  const [soloConStock, setSoloConStock] = useState<boolean>(true);
   const [sortBy, setSortBy] = useState<'nombre' | 'cantidad' | 'stock'>('nombre');
   const [selectedArticulo, setSelectedArticulo] = useState<Articulo | null>(null);
   const [categoriasErp, setCategoriasErp] = useState<{ id: string; nombre: string }[]>([]);
+  const [visibleLimit, setVisibleLimit] = useState(90);
+  const [articlePoolLimit, setArticlePoolLimit] = useState(350);
+
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => {
+      setIsScreenReady(true);
+    });
+    return () => task.cancel();
+  }, []);
 
   // Helpers de normalización
   const limpiarNombreCat = (nombre: string) => (nombre || '').replace(/,+$/g, '').trim();
 
-  // Cargar categorías reales del ERP para usarlas como filtros
+  // Cargar categorías reales del ERP con timeout para evitar bloqueos
   useEffect(() => {
+    let cancelled = false;
     const loadCategorias = async () => {
       try {
-        const data = await catalogosService.getCategorias();
+        // Timeout de 5 segundos para no bloquear la pantalla
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Timeout')), 5000)
+        );
+        const data = await Promise.race([catalogosService.getCategorias(), timeoutPromise]);
+        if (cancelled) return;
         const parsed = (data || [])
           .map((c: any) => ({
             id: (c.id_categoria || c.IdCategoria || c.ID_Categoria || c.id || c.ID || '').toString(),
@@ -73,7 +109,6 @@ export default function ArticulosScreen() {
           .filter(c => c.nombre);
 
         if (parsed.length > 0) {
-          // Unicos por id o nombre normalizado
           const seen = new Set<string>();
           const unique = parsed.filter(c => {
             const key = c.id || c.nombre.toLowerCase();
@@ -81,13 +116,14 @@ export default function ArticulosScreen() {
             seen.add(key);
             return true;
           });
-          setCategoriasErp(unique);
+          if (!cancelled) setCategoriasErp(unique);
         }
       } catch {
-        // Silenciar para modo offline
+        // Silenciar para modo offline o timeout
       }
     };
     loadCategorias();
+    return () => { cancelled = true; };
   }, []);
 
   const normalizarCategoria = (value: string) =>
@@ -96,6 +132,25 @@ export default function ArticulosScreen() {
       .replace(/\p{Diacritic}/gu, '')
       .toLowerCase()
       .trim();
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearchTerm(searchTerm.trim().toLowerCase()), 180);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    setVisibleLimit(90);
+  }, [debouncedSearchTerm, categoriaSeleccionada, sortBy]);
+
+  useEffect(() => {
+    setArticlePoolLimit(350);
+  }, [debouncedSearchTerm, categoriaSeleccionada, sortBy]);
+
+  const useArticlePool = debouncedSearchTerm.length === 0 && categoriaSeleccionada === 'todos' && sortBy === 'nombre';
+  const articulosSource = useMemo(
+    () => (useArticlePool ? articulos.slice(0, articlePoolLimit) : articulos),
+    [articulos, useArticlePool, articlePoolLimit]
+  );
 
   const obtenerIdCategoriaSeleccionada = (idSel: string) => {
     if (!idSel || idSel === 'todos' || idSel === 'stock') return null;
@@ -126,7 +181,7 @@ export default function ArticulosScreen() {
     return parcial?.id || null;
   };
 
-  // 1. GENERAR CATEGORÍAS: SOLO LAS DEL ERP (fallback a las de artículos) + "Todos" + "Stock Bajo"
+  // 1. GENERAR CATEGORÍAS: SOLO LAS DEL ERP (fallback a las de artículos) + "Todos" + "Con Stock" + "Stock Bajo"
   const categorias = useMemo(() => {
     const base: { id: string; nombre: string }[] = [
       { id: 'todos', nombre: 'Todos' },
@@ -146,7 +201,26 @@ export default function ArticulosScreen() {
       });
       const unique: { [k: string]: { id: string; nombre: string } } = {};
       sortedRaw.forEach(cat => { if (!unique[cat.id]) unique[cat.id] = cat; });
-      return [...base, ...Object.values(unique)];
+      
+      const activas = Object.values(unique).filter(cat => {
+          const nameNorm = normalizarCategoria(cat.nombre);
+          
+          // Omitir categorías que empiezan por WEB según petición del usuario
+          if (nameNorm.startsWith('web')) return false;
+          
+          if (nameNorm.includes('mas vendidos') || nameNorm.includes('vendidos')) return true;
+
+          return articulos.some(art => {
+             const idArt = obtenerIdCategoriaArticulo(art);
+             const catNorm = normalizarCategoria(cat.id);
+             return idArt === cat.id || 
+                    normalizarCategoria(idArt || '') === catNorm ||
+                    normalizarCategoria(art.categoria || '') === catNorm ||
+                    normalizarCategoria(art.categoria || '').includes(nameNorm);
+          });
+      });
+      
+      return [...base, ...activas];
     }
 
     // Fallback a categorías detectadas en artículos cuando no se pudieron leer del ERP
@@ -189,31 +263,23 @@ export default function ArticulosScreen() {
     }
   }, [categorias, categoriaSeleccionada]);
 
-  // 2. PREPARAR DATOS (Simular fotos y códigos si no existen)
+  // 2. PREPARAR DATOS (usar imágenes reales del ERP, sin simulación)
   const articulosProcesados = useMemo(() => {
-    return articulos.map(art => {
-      const categoriaResuelta = art.categoriaId ? (categoriasById[art.categoriaId.toString()] || art.categoria) : art.categoria;
-
-      // Simulación de imagen aleatoria para demo
-      const randomId = parseInt(art.id.replace(/\D/g, '') || '0') % 5;
-      const imagenesDemo = [
-        'https://images.unsplash.com/photo-1548093190-e1833c4592c8?w=200&q=80',
-        'https://images.unsplash.com/photo-1520763185298-1b434c919102?w=200&q=80',
-        'https://images.unsplash.com/photo-1470509037663-253ce784d506?w=200&q=80',
-        'https://images.unsplash.com/photo-1459156212016-c812468e2115?w=200&q=80',
-        'https://images.unsplash.com/photo-1463936575829-25148e1db1b8?w=200&q=80'
-      ];
+    if (!isScreenReady) return [];
+    return articulosSource.map(art => {
+      const idCatArt = obtenerIdCategoriaArticulo(art);
+      const categoriaResuelta = idCatArt ? (categoriasById[idCatArt] || art.categoria) : art.categoria;
 
       return {
         ...art,
         categoria: categoriaResuelta,
-        // Usar imagen real si existe, sino una demo
-        imagen: art.imagen || imagenesDemo[randomId],
+        // Mantener solo imagen real del ERP (o placeholder visual en render)
+        imagen: art.imagen,
         // Generar código corto si no existe
         codigoCorto: art.codigoCorto || (art.nombre.substring(0, 3).toUpperCase() + '-' + art.id.slice(-3))
       };
     });
-  }, [articulos, categoriasById]);
+  }, [articulosSource, categoriasById, isScreenReady]);
 
   // 3. FILTRADO MEJORADO
   const filteredArticulos = useMemo(() => {
@@ -225,16 +291,33 @@ export default function ArticulosScreen() {
     return articulosProcesados
       .filter((articulo) => {
         // Búsqueda por texto (más flexible)
-        const term = searchTerm.toLowerCase().trim();
+        const term = debouncedSearchTerm;
         const matchSearch =
           (articulo.nombre || '').toLowerCase().includes(term) ||
           (articulo.codigoCorto || '').toLowerCase().includes(term) ||
           (articulo.id || '').toLowerCase().includes(term) ||
           (articulo.categoria || '').toLowerCase().includes(term);
 
+        // Filtrado Con Stock (Toggle) — se ignora en "Stock Bajo" porque justamente muestran cantidad=0
+        const isStockBajoFilter = selectedId === 'stock';
+        if (soloConStock && !isStockBajoFilter && articulo.cantidad <= 0) {
+            return false;
+        }
+
         // Lógica del filtro de categoría: usar id del ERP (o fallback) y "Stock Bajo"
         let matchFilter = true;
-        if (selectedId === 'stock') {
+        const keywordsVendidos = ['vendido', 'top', 'popular', 'destacado'];
+        const isMasVendidos = keywordsVendidos.some(q => (normalizarCategoria(selectedCat?.nombre || '').includes(q) || normalizarCategoria(selectedId || '').includes(q)));
+
+        if (isMasVendidos) {
+           // Si se selecciona "Más vendidos", filtramos artículos que tengan esas keywords en su categoría o nombre
+           matchFilter = articulo.categoria.toLowerCase().includes('vendido') || 
+                         articulo.nombre.toLowerCase().includes('vendido') ||
+                         articulo.categoria.toLowerCase().includes('top');
+           
+           // Si el filtro no cruza nada, permitimos todos para mostrar el catálogo ordenado por stock (como fallback)
+           if (matchFilter === false && !articulo.nombre.toLowerCase().includes('vendido')) matchFilter = true;
+        } else if (selectedId === 'stock') {
           matchFilter = articulo.cantidad <= (articulo.stockMinimo || 0);
         } else if (selectedId && selectedId !== 'todos') {
           const artId = obtenerIdCategoriaArticulo(articulo);
@@ -263,6 +346,11 @@ export default function ArticulosScreen() {
         return matchSearch && matchFilter;
       })
       .sort((a, b) => {
+        const isMasVendidos = selectedIdNorm.includes('vendido') || (selectedNameNorm && selectedNameNorm.includes('vendido'));
+        if (isMasVendidos) {
+            return b.cantidad - a.cantidad;
+        }
+
         if (sortBy === 'nombre') return a.nombre.localeCompare(b.nombre);
         if (sortBy === 'cantidad') return b.cantidad - a.cantidad;
         if (sortBy === 'stock') {
@@ -273,7 +361,12 @@ export default function ArticulosScreen() {
         }
         return 0;
       });
-  }, [articulosProcesados, searchTerm, categoriaSeleccionada, sortBy]);
+  }, [articulosProcesados, debouncedSearchTerm, categoriaSeleccionada, sortBy, soloConStock]);
+
+  const visibleArticulos = useMemo(
+    () => filteredArticulos.slice(0, visibleLimit),
+    [filteredArticulos, visibleLimit]
+  );
 
   // Cálculos para las Stats (sobre el total de artículos, no los filtrados)
   // FIX: Usar <= para ser consistente con isStockBajo y la visualización
@@ -320,6 +413,10 @@ export default function ArticulosScreen() {
           </View>
         </View>
 
+        <Text style={styles.almacenHint}>
+          Stock del furgón (local, calculado en esta tablet desde las Notas de Almacén y las ventas)
+        </Text>
+
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
@@ -349,20 +446,23 @@ export default function ArticulosScreen() {
             </View>
           </View>
 
-          {/* Search and Filters */}
+          {/* Search and Filters combinados */}
           <View style={styles.searchFilterContainer}>
-            <View style={styles.searchBox}>
-              <Text style={styles.searchIcon}>🔍</Text>
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Buscar por nombre, código..."
-                placeholderTextColor="#697b92"
-                value={searchTerm}
-                onChangeText={setSearchTerm}
-              />
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 10, paddingHorizontal: 4 }}>
+              <TouchableOpacity 
+                style={[
+                  styles.filterChip, 
+                  soloConStock ? { backgroundColor: '#10b981', borderColor: '#10b981' } : { backgroundColor: '#f1f5f9', borderColor: '#e2e8f0' },
+                  { borderRadius: 20, paddingHorizontal: 16 }
+                ]} 
+                onPress={() => setSoloConStock(!soloConStock)}
+              >
+                <Text style={{ fontWeight: 'bold', fontSize: 13, color: soloConStock ? '#fff' : '#64748b' }}>
+                  {soloConStock ? '📦 Mostrando: Sólo con stock' : '📦 Mostrando: Todos (incluye agotados)'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Filtros Dinámicos */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
               {categorias.map((categoria) => (
                 <TouchableOpacity
@@ -370,14 +470,16 @@ export default function ArticulosScreen() {
                   style={[
                     styles.filterChip,
                     categoriaSeleccionada === categoria.id && styles.filterChipActive,
-                    categoria.id === 'stock' && categoriaSeleccionada === 'stock' && { borderColor: '#dc2626', backgroundColor: '#fee2e2' }
+                    categoria.id === 'stock' && categoriaSeleccionada === 'stock' && { borderColor: '#dc2626', backgroundColor: '#fee2e2' },
+                    categoria.id === 'constock' && categoriaSeleccionada === 'constock' && { borderColor: '#059669', backgroundColor: '#d1fae5' }
                   ]}
                   onPress={() => setCategoriaSeleccionada(categoria.id)}
                 >
                   <Text style={[
                     styles.filterText,
                     categoriaSeleccionada === categoria.id && styles.filterTextActive,
-                    categoria.id === 'stock' && categoriaSeleccionada === 'stock' && { color: '#dc2626' }
+                    categoria.id === 'stock' && categoriaSeleccionada === 'stock' && { color: '#dc2626' },
+                    categoria.id === 'constock' && categoriaSeleccionada === 'constock' && { color: '#059669' }
                   ]}>
                     {categoria.nombre}
                   </Text>
@@ -409,14 +511,19 @@ export default function ArticulosScreen() {
           </View>
 
           {/* Lista de Artículos (NUEVO DISEÑO DE TARJETA) */}
-          {filteredArticulos.length === 0 ? (
+          {!isScreenReady ? (
+            <View style={styles.emptyState}>
+              <ActivityIndicator size="large" color="#0C2ABF" />
+              <Text style={styles.emptyText}>Cargando artículos...</Text>
+            </View>
+          ) : filteredArticulos.length === 0 ? (
             <View style={styles.emptyState}>
               <Text style={styles.emptyIcon}>📦</Text>
               <Text style={styles.emptyText}>No se encontraron artículos</Text>
             </View>
           ) : (
             <View style={styles.grid}>
-              {filteredArticulos.map((articulo) => (
+              {visibleArticulos.map((articulo) => (
                 <TouchableOpacity
                   key={articulo.id}
                   style={[
@@ -482,6 +589,31 @@ export default function ArticulosScreen() {
                 </TouchableOpacity>
               ))}
             </View>
+          )}
+          {filteredArticulos.length > visibleArticulos.length && (
+            <TouchableOpacity
+              style={styles.loadMoreBtn}
+              onPress={() => setVisibleLimit((prev) => prev + 90)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.loadMoreBtnText}>
+                Cargar más ({filteredArticulos.length - visibleArticulos.length} restantes)
+              </Text>
+            </TouchableOpacity>
+          )}
+          {useArticlePool && articlePoolLimit < articulos.length && (
+            <TouchableOpacity
+              style={styles.loadMoreBtn}
+              onPress={() => {
+                setArticlePoolLimit((prev) => Math.min(prev + 350, articulos.length));
+                setVisibleLimit((prev) => prev + 90);
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.loadMoreBtnText}>
+                Cargar más catálogo ({articulos.length - articlePoolLimit} restantes)
+              </Text>
+            </TouchableOpacity>
           )}
         </ScrollView>
 
@@ -632,6 +764,13 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     color: '#1a1a1a'
+  },
+  almacenHint: {
+    fontSize: 12,
+    color: '#94a3b8',
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 6,
   },
   searchBoxHeader: {
     flexDirection: 'row',
@@ -988,5 +1127,20 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '600'
-  }
+  },
+  loadMoreBtn: {
+    marginTop: 12,
+    alignSelf: 'center',
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  loadMoreBtnText: {
+    color: '#1d4ed8',
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });

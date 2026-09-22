@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, Switch } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../constants/colors';
@@ -72,17 +72,52 @@ export default function VentaForm({
     onFinalize,
     keyboardPadding
 }: VentaFormProps) {
+    const cantidadRef = useRef<TextInput>(null);
+    const precioRef = useRef<TextInput>(null);
+    const scrollViewRef = useRef<ScrollView>(null);
+    const addRowRef = useRef<View>(null);
+
+    // Con softwareKeyboardLayoutMode="pan" en Android, el OS desplaza
+    // toda la pantalla. Solo necesitamos un pequeño scroll extra para
+    // asegurar que el botón AÑADIR (junto a Nota) sea visible.
+    const scrollToAddRow = useCallback(() => {
+        setTimeout(() => {
+            addRowRef.current?.measureLayout(
+                scrollViewRef.current as any,
+                (_x: number, y: number) => {
+                    scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 10), animated: true });
+                },
+                () => {}
+            );
+        }, 150);
+    }, []);
+
+    const isPrecioCeroOVacio = useCallback((raw: string): boolean => {
+        const trimmed = String(raw ?? '').trim();
+        if (!trimmed) return true;
+        const normalized = trimmed.replace(/[€\s]/g, '').replace(',', '.');
+        if (normalized === '' || normalized === '-' || normalized === '.') return true;
+        const n = parseFloat(normalized);
+        return Number.isFinite(n) && n === 0;
+    }, []);
+
+    const handlePrecioFocus = useCallback(() => {
+        if (isPrecioCeroOVacio(precio)) setPrecio('');
+        scrollToAddRow();
+    }, [precio, setPrecio, isPrecioCeroOVacio, scrollToAddRow]);
 
     return (
         <View style={styles.container}>
             <View style={styles.scrollWrapper}>
                 <ScrollView
+                    ref={scrollViewRef}
                     style={styles.scrollView}
                     contentContainerStyle={[
                         styles.scrollInner,
-                        { paddingBottom: Math.max(40, keyboardPadding + 40) }
+                        { paddingBottom: keyboardPadding > 0 ? keyboardPadding : 40 }
                     ]}
                     keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="on-drag"
                     showsVerticalScrollIndicator={true}
                 >
                     {/* SECCIÓN CLIENTE Y CABECERA */}
@@ -150,6 +185,7 @@ export default function VentaForm({
                                         onChangeText={setCodigoInput}
                                         placeholder="Escanear o buscar..."
                                         placeholderTextColor={colors.textLight}
+                                        onFocus={scrollToAddRow}
                                     />
                                     <TouchableOpacity onPress={onScanOrSearch} style={styles.iconContainer}>
                                         <Text style={{ fontSize: 20 }}>🔍</Text>
@@ -169,17 +205,20 @@ export default function VentaForm({
                                     value={cant}
                                     onChangeText={setCant}
                                     keyboardType="numeric"
+                                    onFocus={scrollToAddRow}
                                 />
                             </View>
 
                             <View style={{ flex: 1, marginRight: 8 }}>
                                 <Text style={styles.label}>Precio</Text>
                                 <TextInput
+                                    ref={precioRef}
                                     style={styles.inputGrid}
                                     value={precio}
                                     onChangeText={setPrecio}
                                     keyboardType="numeric"
                                     placeholder="0.00"
+                                    onFocus={handlePrecioFocus}
                                 />
                             </View>
 
@@ -199,13 +238,17 @@ export default function VentaForm({
                                     value={desc}
                                     onChangeText={setDesc}
                                     keyboardType="numeric"
+                                    onFocus={scrollToAddRow}
                                     placeholder="0"
                                     editable={enableDiscount}
                                 />
                             </View>
                         </View>
 
-                        <View style={[styles.gridRow, { marginTop: 12, alignItems: 'flex-end' }]}>
+                        <View
+                            ref={addRowRef}
+                            style={[styles.gridRow, { marginTop: 12, alignItems: 'flex-end' }]}
+                        >
                             <View style={{ flex: 3, marginRight: 12 }}>
                                 <Text style={styles.label}>Nota (Opcional)</Text>
                                 <TextInput
@@ -213,6 +256,7 @@ export default function VentaForm({
                                     value={notaItem}
                                     onChangeText={setNotaItem}
                                     placeholder="Detalle..."
+                                    onFocus={scrollToAddRow}
                                 />
                             </View>
                             <View style={{ flex: 1 }}>
@@ -225,22 +269,24 @@ export default function VentaForm({
                         </View>
                     </View>
 
-                    <View style={{ height: 40 }} />
+                    <View style={{ height: 60 }} />
                 </ScrollView>
             </View>
 
-            <View style={styles.panelFooter}>
-                <TouchableOpacity style={styles.btnSec} onPress={onOpenHistory}><Text style={{ fontSize: 16, color: colors.textSecondary, fontWeight: '600' }}>Historial</Text></TouchableOpacity>
-                <TouchableOpacity style={styles.btnPri} onPress={onFinalize}>
-                    <LinearGradient colors={colors.gradientSuccess} style={styles.gradBtn}><Text style={styles.txtBtnBlack}>✅ FINALIZAR VENTA</Text></LinearGradient>
-                </TouchableOpacity>
-            </View>
+            {keyboardPadding === 0 && (
+                <View style={styles.panelFooter}>
+                    <TouchableOpacity style={styles.btnSec} onPress={onOpenHistory}><Text style={{ fontSize: 16, color: colors.textSecondary, fontWeight: '600' }}>Historial</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.btnPri} onPress={onFinalize}>
+                        <LinearGradient colors={colors.gradientSuccess} style={styles.gradBtn}><Text style={styles.txtBtnBlack}>✅ FINALIZAR VENTA</Text></LinearGradient>
+                    </TouchableOpacity>
+                </View>
+            )}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, borderRightWidth: 1, borderColor: colors.border, backgroundColor: colors.background, flexDirection: 'column', height: '100%' },
+    container: { flex: 1, borderRightWidth: 1, borderColor: colors.border, backgroundColor: colors.background, flexDirection: 'column' },
     scrollWrapper: { flex: 1, minHeight: 0 },
     scrollView: { flex: 1 },
     scrollInner: { padding: 20, paddingBottom: 40 },

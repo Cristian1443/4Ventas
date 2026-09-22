@@ -48,7 +48,7 @@ class StorageService {
   // Obtener todas las claves
   async getAllKeys(): Promise<string[]> {
     try {
-      return await AsyncStorage.getAllKeys();
+      return (await AsyncStorage.getAllKeys()) as string[];
     } catch (error) {
       console.error('Error getting keys:', error);
       return [];
@@ -60,7 +60,7 @@ class StorageService {
     try {
       const result = await AsyncStorage.multiGet(keys);
       const data: Record<string, any> = {};
-      
+
       result.forEach(([key, value]) => {
         if (value) {
           try {
@@ -70,7 +70,7 @@ class StorageService {
           }
         }
       });
-      
+
       return data;
     } catch (error) {
       console.error('Error multiGet:', error);

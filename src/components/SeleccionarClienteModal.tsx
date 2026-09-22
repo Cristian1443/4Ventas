@@ -3,13 +3,14 @@
  * IGUAL a la versión web
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
+  Pressable,
+  FlatList,
   TextInput,
   Modal
 } from 'react-native';
@@ -19,9 +20,14 @@ interface Cliente {
   nombre: string;
   empresa: string;
   direccion: string;
+  codigo?: string;
+  nif?: string;
   telefono?: string;
   email?: string;
   ultimaVisita?: string;
+  localidad?: string;
+  provincia?: string;
+  codigoPostal?: string;
 }
 
 interface SeleccionarClienteModalProps {
@@ -38,22 +44,52 @@ export default function SeleccionarClienteModal({
   clientes
 }: SeleccionarClienteModalProps) {
   const [busqueda, setBusqueda] = useState('');
+  const [busquedaDebounced, setBusquedaDebounced] = useState('');
   const searchInputRef = useRef<TextInput>(null);
 
   // Limpiar búsqueda cuando se cierra el modal
   useEffect(() => {
     if (!visible) {
       setBusqueda('');
+      setBusquedaDebounced('');
       searchInputRef.current?.blur();
     }
   }, [visible]);
 
-  const clientesFiltrados = clientes.filter(c => 
-    c.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.empresa.toLowerCase().includes(busqueda.toLowerCase()) ||
-    c.id.includes(busqueda) ||
-    (c.direccion && c.direccion.toLowerCase().includes(busqueda.toLowerCase()))
-  );
+  const normalizeText = (value: any): string =>
+    String(value || '')
+      .normalize('NFD')
+      .replace(/\p{Diacritic}/gu, '')
+      .toLowerCase()
+      .trim();
+
+  useEffect(() => {
+    const t = setTimeout(() => setBusquedaDebounced(busqueda.trim().toLowerCase()), 180);
+    return () => clearTimeout(t);
+  }, [busqueda]);
+
+  const clientesFiltrados = useMemo(() => {
+    if (!visible) return [];
+    if (!busquedaDebounced) return clientes.slice(0, 220);
+    const query = normalizeText(busquedaDebounced);
+    return clientes.filter((c) => {
+      const searchable = [
+        c.id,
+        c.codigo,
+        c.nombre,
+        c.empresa,
+        c.direccion,
+        c.localidad,
+        c.provincia,
+        c.codigoPostal,
+        c.nif,
+        c.telefono,
+        c.email,
+      ].map(normalizeText).join(' ');
+
+      return searchable.includes(query);
+    });
+  }, [clientes, busquedaDebounced, visible]);
 
   return (
     <Modal
@@ -63,6 +99,7 @@ export default function SeleccionarClienteModal({
       onRequestClose={onClose}
     >
       <View style={styles.modalOverlay}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
         <View style={styles.modalContent}>
           {/* Header */}
           <View style={styles.header}>
@@ -89,7 +126,7 @@ export default function SeleccionarClienteModal({
             <TextInput
               ref={searchInputRef}
               style={styles.searchInput}
-              placeholder="Buscar por código, nombre o empresa..."
+              placeholder="Buscar por código, nombre, localidad, dirección..."
               placeholderTextColor="#94a3b8"
               value={busqueda}
               onChangeText={setBusqueda}
@@ -99,9 +136,19 @@ export default function SeleccionarClienteModal({
               blurOnSubmit={false}
             />
           </TouchableOpacity>
+          <View style={styles.searchMetaRow}>
+            <Text style={styles.searchMetaText}>
+              {clientesFiltrados.length} resultado(s)
+            </Text>
+            {busqueda.length > 0 && (
+              <TouchableOpacity onPress={() => setBusqueda('')} style={styles.clearSearchChip}>
+                <Text style={styles.clearSearchChipText}>Limpiar</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* Lista de clientes */}
-          <ScrollView style={styles.listContainer}>
+          <View style={styles.listContainer}>
             {clientesFiltrados.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyIcon}>🔍</Text>
@@ -113,45 +160,69 @@ export default function SeleccionarClienteModal({
                 </Text>
               </View>
             ) : (
-              clientesFiltrados.map((cliente) => (
-                <TouchableOpacity
-                  key={cliente.id}
-                  style={styles.clienteCard}
-                  onPress={() => {
-                    onSelect(cliente);
-                    setBusqueda('');
-                    onClose();
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.clienteInfo}>
-                    <View style={styles.clienteHeader}>
-                      <View style={styles.clienteIdBadge}>
-                        <Text style={styles.clienteIdText}>{cliente.id}</Text>
+              <FlatList
+                data={clientesFiltrados}
+                keyExtractor={(item) => String(item.id)}
+                contentContainerStyle={styles.listContent}
+                keyboardShouldPersistTaps="handled"
+                initialNumToRender={18}
+                maxToRenderPerBatch={24}
+                windowSize={8}
+                removeClippedSubviews
+                keyboardDismissMode="on-drag"
+                renderItem={({ item: cliente }) => {
+                  const ubicacionLinea = [cliente.localidad, cliente.provincia, cliente.codigoPostal]
+                    .map((s) => String(s || '').trim())
+                    .filter(Boolean)
+                    .join(' · ');
+                  return (
+                  <TouchableOpacity
+                    style={styles.clienteCard}
+                    onPress={() => {
+                      onSelect(cliente);
+                      setBusqueda('');
+                      onClose();
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.clienteInfo}>
+                      <View style={styles.clienteHeader}>
+                        <View style={styles.clienteIdBadge}>
+                          <Text style={styles.clienteIdText}>{cliente.codigo || cliente.id}</Text>
+                        </View>
+                        <Text style={styles.clienteEmpresa}>{cliente.empresa}</Text>
                       </View>
-                      <Text style={styles.clienteEmpresa}>{cliente.empresa}</Text>
+                      <Text style={styles.clienteNombre}>{cliente.nombre}</Text>
+                      {cliente.direccion ? (
+                        <Text style={styles.clienteDireccion}>📍 {cliente.direccion}</Text>
+                      ) : null}
+                      {ubicacionLinea ? (
+                        <Text style={styles.clienteLocalidad}>🏘 {ubicacionLinea}</Text>
+                      ) : null}
+                      {cliente.telefono && (
+                        <Text style={styles.clienteTelefono}>📞 {cliente.telefono}</Text>
+                      )}
+                      {cliente.ultimaVisita && (
+                        <Text style={styles.clienteUltimaVisita}>
+                          Última visita: {cliente.ultimaVisita}
+                        </Text>
+                      )}
                     </View>
-                    <Text style={styles.clienteNombre}>{cliente.nombre}</Text>
-                    {cliente.direccion && (
-                      <Text style={styles.clienteDireccion}>📍 {cliente.direccion}</Text>
-                    )}
-                    {cliente.telefono && (
-                      <Text style={styles.clienteTelefono}>📞 {cliente.telefono}</Text>
-                    )}
-                    {cliente.ultimaVisita && (
-                      <Text style={styles.clienteUltimaVisita}>
-                        Última visita: {cliente.ultimaVisita}
-                      </Text>
-                    )}
-                  </View>
-                  
-                  <View style={styles.arrowContainer}>
-                    <Text style={styles.arrowIcon}>›</Text>
-                  </View>
-                </TouchableOpacity>
-              ))
+
+                    <View style={styles.arrowContainer}>
+                      <Text style={styles.arrowIcon}>›</Text>
+                    </View>
+                  </TouchableOpacity>
+                  );
+                }}
+              />
             )}
-          </ScrollView>
+          </View>
+          <View style={styles.footerActions}>
+            <TouchableOpacity onPress={onClose} style={styles.cancelBtn}>
+              <Text style={styles.cancelBtnText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </Modal>
@@ -170,6 +241,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     width: '90%',
     maxWidth: 800,
+    height: '88%',
     maxHeight: '90%',
     overflow: 'hidden'
   },
@@ -225,7 +297,37 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#1a1a1a'
   },
+  searchMetaRow: {
+    marginTop: -8,
+    marginBottom: 10,
+    marginHorizontal: 28,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  searchMetaText: {
+    fontSize: 13,
+    color: '#64748b',
+    fontWeight: '600',
+  },
+  clearSearchChip: {
+    borderWidth: 1,
+    borderColor: '#cbd5e1',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    backgroundColor: '#fff',
+  },
+  clearSearchChipText: {
+    fontSize: 12,
+    color: '#334155',
+    fontWeight: '700',
+  },
   listContainer: {
+    flex: 1,
+    minHeight: 220
+  },
+  listContent: {
     paddingHorizontal: 28,
     paddingBottom: 24
   },
@@ -276,6 +378,13 @@ const styles = StyleSheet.create({
     color: '#697b92',
     marginBottom: 2
   },
+  clienteLocalidad: {
+    fontSize: 14,
+    color: '#334155',
+    fontWeight: '600',
+    marginBottom: 2,
+    marginTop: 2
+  },
   clienteTelefono: {
     fontSize: 14,
     color: '#697b92',
@@ -318,7 +427,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#697b92',
     textAlign: 'center'
-  }
+  },
+  footerActions: {
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    padding: 12,
+    alignItems: 'flex-end',
+  },
+  cancelBtn: {
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  cancelBtnText: {
+    color: '#334155',
+    fontWeight: '700',
+  },
 });
 
 

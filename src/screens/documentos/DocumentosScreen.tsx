@@ -24,31 +24,20 @@ export default function DocumentosScreen() {
 
   const categorias = ['Todos', 'Catálogos', 'Contratos', 'Facturas', 'Informes', 'Otros'];
 
-  // URL del catálogo PDF
-  const catalogoUrl = config.catalogoPdfUrl || 'https://docs.google.com/spreadsheets/d/1KEeYssoGwAa_oEvHjfINP24cjTEZsHng8jik4Qs8hf8/edit?usp=sharing';
-
-  // Crear documento virtual del catálogo
-  const catalogoDocumento = useMemo(() => ({
-    id: 'CATALOGO-PDF',
-    nombre: 'Catálogo de Productos',
-    categoria: 'Catálogos',
-    fecha: 'Actualizado',
+  // Documentos del repositorio compartido de Google Drive (configurados en Admin Panel)
+  const documentosDrive = useMemo(() => (config.documentosDrive || []).map(doc => ({
+    id: doc.id,
+    nombre: doc.nombre,
+    categoria: doc.categoria || 'Catálogos',
+    fecha: 'Drive',
     tamano: 'Online',
     tipo: 'pdf' as const,
-    url: catalogoUrl,
-    esCatalogo: true // Flag para identificar que es el catálogo
-  }), [catalogoUrl]);
+    url: doc.url,
+    esCatalogo: true // Flag: abre directamente la URL en vez de simular descarga
+  })), [config.documentosDrive]);
 
-  // Combinar documentos reales con el catálogo
-  const documentosConCatalogo = useMemo(() => {
-    const docs = [...documentos];
-    // Agregar catálogo solo si no existe ya o si está filtrando por Catálogos
-    const existeCatalogo = docs.some(d => d.id === 'CATALOGO-PDF');
-    if (!existeCatalogo) {
-      docs.unshift(catalogoDocumento);
-    }
-    return docs;
-  }, [documentos, catalogoDocumento]);
+  // Combinar documentos locales (subidos/simulados) con los del repositorio Drive
+  const documentosConCatalogo = useMemo(() => [...documentosDrive, ...documentos], [documentosDrive, documentos]);
 
   // Helper fecha
   const getFechaHoy = () => {

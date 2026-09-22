@@ -2,7 +2,7 @@
  * Ventas Menu Screen - Optimizado para Tablet
  */
 
-import React from 'react';
+import React, { useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   TouchableOpacity,
   ScrollView,
 } from 'react-native';
-import { InteractionManager } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useResponsiveLayout } from '../../constants/layout';
@@ -19,6 +18,7 @@ import ScreenWithSidebar from '../../components/common/ScreenWithSidebar';
 export default function VentasMenuScreen() {
   const navigation = useNavigation<any>();
   const layout = useResponsiveLayout();
+  const isNavigatingRef = useRef(false);
   // Se asume vendedor activo a nivel de contexto; no lógica adicional aquí
 
   const menuItems = [
@@ -37,6 +37,16 @@ export default function VentasMenuScreen() {
   const fontSizeLabel = layout.isTablet ? 20 : 16;
   const gapSize = layout.isTablet ? 30 : 15;
 
+  const handleMenuPress = useCallback((screen: string) => {
+    // Evita doble tap que dispara navegación duplicada y da sensación de bloqueo.
+    if (isNavigatingRef.current) return;
+    isNavigatingRef.current = true;
+    navigation.navigate(screen);
+    setTimeout(() => {
+      isNavigatingRef.current = false;
+    }, 250);
+  }, [navigation]);
+
   return (
     <ScreenWithSidebar currentScreen="VentasMenu" scrollable={true}>
       <View style={styles.container}>
@@ -48,7 +58,7 @@ export default function VentasMenuScreen() {
             <TouchableOpacity
               key={index}
               activeOpacity={0.8}
-              onPress={() => InteractionManager.runAfterInteractions(() => navigation.navigate(item.screen))}
+              onPress={() => handleMenuPress(item.screen)}
               style={[styles.buttonWrapper, { width: buttonSize, height: buttonSize * 0.85 }]}
             >
               <LinearGradient

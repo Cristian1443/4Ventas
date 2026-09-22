@@ -8,4 +8,5 @@ export interface Visita {
     tipo: 'visita' | 'entrega' | 'cobro';
     completado: boolean;
     observaciones?: string;
+    vendedorId?: string;
 }

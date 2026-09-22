@@ -37,9 +37,12 @@ export const cobrosService = {
         const body = {
             sesionwcf: parseInt(erpConfig.getSessionId(), 10),
             ID_DocCli: pago.ID_DocCli || 0,
+            ID_Cliente: pago.ID_Cliente || 0,
             ID_MetodoPago: pago.ID_MetodoPago || 0,
+            ID_FormaPago: pago.ID_MetodoPago || 0, // Doble mapeo por compatibilidad
             Fecha: pago.Fecha || new Date().toISOString().split('T')[0],
-            Importe: pago.Importe || 0
+            Importe: pago.Importe || 0,
+            Referencia: pago.Referencia || ''
         };
         const response = await erpClient.post('/NuevoPagoWS', body);
         return response.data;
