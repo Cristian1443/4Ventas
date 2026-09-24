@@ -56,11 +56,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "5174a310-8108-4ccd-8e54-4fb75f8cca96"
+        "projectId": "947e3136-57f1-4e26-b030-050b079b9f07"
       }
     },
-    "updates": {
-      "url": "https://u.expo.dev/5174a310-8108-4ccd-8e54-4fb75f8cca96"
-    }
+    "owner": "investin"
   }
 }
