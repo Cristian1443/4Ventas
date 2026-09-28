@@ -27,7 +27,7 @@ const logoImage = require('../../../assets/logo-login.png');
 
 export default function LoginWithEmailScreen() {
   const ADMIN_EMAIL = 'teixidoflor@grupoteixido.es';
-  const ADMIN_PASSWORD = 'Teixido2026';
+  const ADMIN_PASSWORD = 'Flores1';
   const ADMIN_ERP_SESSION = '39';
 
   const navigation = useNavigation<any>();
